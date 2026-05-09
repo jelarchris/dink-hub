@@ -46,7 +46,12 @@ const PG_EXCLUSION_VIOLATION = "23P01";
 const PG_UNIQUE_VIOLATION = "23505";
 
 function isPgError(err: unknown, code: string): boolean {
-  return typeof err === "object" && err !== null && "code" in err && (err as { code: unknown }).code === code;
+  if (typeof err !== "object" || err === null) return false;
+  if ("code" in err && (err as { code: unknown }).code === code) return true;
+  // Drizzle wraps the underlying postgres error in a DrizzleQueryError;
+  // the original PG error (with `.code`) is on `.cause`.
+  if ("cause" in err) return isPgError((err as { cause: unknown }).cause, code);
+  return false;
 }
 
 function durationMinutes(start: Date, end: Date): number {
