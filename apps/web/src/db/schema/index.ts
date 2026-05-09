@@ -126,8 +126,10 @@ export const bookings = pgTable("bookings", {
   status: bookingStatusEnum("status").notNull().default("pending_payment"),
   courtFeeCentavos: bigint("court_fee_centavos", { mode: "bigint" }).notNull(),
   systemFeeCentavos: bigint("system_fee_centavos", { mode: "bigint" }).notNull(),
-  // total_centavos is a generated column in SQL — not insertable, read via query
-  totalCentavos: bigint("total_centavos", { mode: "bigint" }).notNull(),
+  // Generated column in SQL — read-only at the app layer.
+  totalCentavos: bigint("total_centavos", { mode: "bigint" })
+    .notNull()
+    .generatedAlwaysAs(sql`court_fee_centavos + system_fee_centavos`),
   cancellableUntil: timestamp("cancellable_until", { withTimezone: true }).notNull(),
   paymentDueAt: timestamp("payment_due_at", { withTimezone: true }).notNull(),
   notes: text("notes"),

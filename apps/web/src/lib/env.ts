@@ -33,25 +33,31 @@ const clientSchema = z.object({
  * Build an object containing only NEXT_PUBLIC_ vars at build/runtime.
  * Server vars are accessed via process.env directly during runtime resolution
  * (Next.js inlines NEXT_PUBLIC_ vars at build time).
+ *
+ * Empty strings are coerced to undefined so optional vars work whether the
+ * .env line is missing OR present-but-blank.
  */
+const blankToUndefined = (v: string | undefined): string | undefined =>
+  v === undefined || v === "" ? undefined : v;
+
 const processEnv = {
   NODE_ENV: process.env.NODE_ENV,
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-  NEXT_PUBLIC_APP_ENV: process.env.NEXT_PUBLIC_APP_ENV,
-  NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
-  NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-  TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  DATABASE_URL: process.env.DATABASE_URL,
-  DIRECT_URL: process.env.DIRECT_URL,
-  RESEND_API_KEY: process.env.RESEND_API_KEY,
-  SEMAPHORE_API_KEY: process.env.SEMAPHORE_API_KEY,
-  TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
-  UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-  UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-  SENTRY_DSN: process.env.SENTRY_DSN,
+  NEXT_PUBLIC_SUPABASE_URL: blankToUndefined(process.env.NEXT_PUBLIC_SUPABASE_URL),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: blankToUndefined(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  NEXT_PUBLIC_APP_URL: blankToUndefined(process.env.NEXT_PUBLIC_APP_URL),
+  NEXT_PUBLIC_APP_ENV: blankToUndefined(process.env.NEXT_PUBLIC_APP_ENV),
+  NEXT_PUBLIC_POSTHOG_KEY: blankToUndefined(process.env.NEXT_PUBLIC_POSTHOG_KEY),
+  NEXT_PUBLIC_POSTHOG_HOST: blankToUndefined(process.env.NEXT_PUBLIC_POSTHOG_HOST),
+  TURNSTILE_SITE_KEY: blankToUndefined(process.env.TURNSTILE_SITE_KEY),
+  SUPABASE_SERVICE_ROLE_KEY: blankToUndefined(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  DATABASE_URL: blankToUndefined(process.env.DATABASE_URL),
+  DIRECT_URL: blankToUndefined(process.env.DIRECT_URL),
+  RESEND_API_KEY: blankToUndefined(process.env.RESEND_API_KEY),
+  SEMAPHORE_API_KEY: blankToUndefined(process.env.SEMAPHORE_API_KEY),
+  TURNSTILE_SECRET_KEY: blankToUndefined(process.env.TURNSTILE_SECRET_KEY),
+  UPSTASH_REDIS_REST_URL: blankToUndefined(process.env.UPSTASH_REDIS_REST_URL),
+  UPSTASH_REDIS_REST_TOKEN: blankToUndefined(process.env.UPSTASH_REDIS_REST_TOKEN),
+  SENTRY_DSN: blankToUndefined(process.env.SENTRY_DSN),
 };
 
 const isServer = typeof window === "undefined";
