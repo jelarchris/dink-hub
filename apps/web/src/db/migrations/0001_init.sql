@@ -348,13 +348,15 @@ create table public.slot_holds (
 );
 alter table public.slot_holds enable row level security;
 
--- Same anti-overlap constraint, but only for non-expired holds
+-- Anti-overlap constraint applies to ALL hold rows. Expired holds are
+-- DELETED by the cron job (not marked expired) so they stop blocking new holds.
+-- We can't filter by `expires_at > now()` here because now() is STABLE,
+-- and Postgres requires index predicates to be IMMUTABLE.
 alter table public.slot_holds add constraint slot_holds_no_overlap
   exclude using gist (
     court_id with =,
     tstzrange(start_at, end_at, '[)') with &&
-  )
-  where (expires_at > now());
+  );
 
 create index slot_holds_expires_idx on public.slot_holds (expires_at);
 create index slot_holds_player_idx  on public.slot_holds (player_id);
