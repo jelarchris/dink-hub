@@ -1,0 +1,123 @@
+import "server-only";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { db } from "@/db/client";
+import { courts, venues, type Court, type Venue } from "@/db/schema";
+
+/**
+ * Read-only repo for the public venue browsing surface.
+ * Only returns active, non-deleted venues + active, non-deleted courts.
+ */
+
+export interface VenueListItem {
+  venue: Pick<
+    Venue,
+    | "id"
+    | "name"
+    | "slug"
+    | "city"
+    | "province"
+    | "addressLine"
+    | "coverImageUrl"
+    | "description"
+  >;
+  courtCount: number;
+  minHourlyRateCentavos: bigint | null;
+}
+
+export async function listActiveVenues(opts: {
+  limit: number;
+  offset?: number;
+}): Promise<VenueListItem[]> {
+  const rows = await db
+    .select({
+      id: venues.id,
+      name: venues.name,
+      slug: venues.slug,
+      city: venues.city,
+      province: venues.province,
+      addressLine: venues.addressLine,
+      coverImageUrl: venues.coverImageUrl,
+      description: venues.description,
+      courtCount: sql<number>`count(${courts.id})::int`,
+      minHourlyRateCentavos: sql<string | null>`min(${courts.hourlyRateCentavos})::text`,
+    })
+    .from(venues)
+    .leftJoin(
+      courts,
+      and(eq(courts.venueId, venues.id), eq(courts.isActive, true), isNull(courts.deletedAt)),
+    )
+    .where(and(eq(venues.status, "active"), isNull(venues.deletedAt)))
+    .groupBy(venues.id)
+    .orderBy(asc(venues.name))
+    .limit(opts.limit)
+    .offset(opts.offset ?? 0);
+
+  return rows.map((r) => ({
+    venue: {
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      city: r.city,
+      province: r.province,
+      addressLine: r.addressLine,
+      coverImageUrl: r.coverImageUrl,
+      description: r.description,
+    },
+    courtCount: r.courtCount,
+    minHourlyRateCentavos: r.minHourlyRateCentavos !== null ? BigInt(r.minHourlyRateCentavos) : null,
+  }));
+}
+
+export async function findActiveVenueBySlug(
+  slug: string,
+): Promise<{ venue: Venue; courts: Court[] } | null> {
+  const venueRows = await db
+    .select()
+    .from(venues)
+    .where(and(eq(venues.slug, slug), eq(venues.status, "active"), isNull(venues.deletedAt)))
+    .limit(1);
+  const venue = venueRows[0];
+  if (!venue) return null;
+
+  const courtRows = await db
+    .select()
+    .from(courts)
+    .where(and(eq(courts.venueId, venue.id), eq(courts.isActive, true), isNull(courts.deletedAt)))
+    .orderBy(asc(courts.name));
+
+  return { venue, courts: courtRows };
+}
+
+/**
+ * Find all bookings + holds that occupy a court's time on a given date (UTC date span).
+ * Used to render slot availability in the picker.
+ */
+export async function getCourtOccupancy(args: {
+  courtId: string;
+  fromUtc: Date;
+  toUtc: Date;
+}): Promise<{ ranges: Array<{ startAt: Date; endAt: Date; kind: "booking" | "hold" }> }> {
+  // Inline raw SQL for the union: faster + clearer than two queries.
+  const result = await db.execute<{ start_at: Date; end_at: Date; kind: "booking" | "hold" }>(sql`
+    select start_at, end_at, 'booking'::text as kind
+    from bookings
+    where court_id = ${args.courtId}
+      and status not in ('cancelled', 'no_show', 'expired')
+      and start_at < ${args.toUtc.toISOString()}
+      and end_at > ${args.fromUtc.toISOString()}
+    union all
+    select start_at, end_at, 'hold'::text as kind
+    from slot_holds
+    where court_id = ${args.courtId}
+      and expires_at > now()
+      and start_at < ${args.toUtc.toISOString()}
+      and end_at > ${args.fromUtc.toISOString()}
+  `);
+  return {
+    ranges: result.map((r) => ({
+      startAt: new Date(r.start_at),
+      endAt: new Date(r.end_at),
+      kind: r.kind,
+    })),
+  };
+}

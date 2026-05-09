@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  BookingError,
   cancelBooking,
   createBooking,
   expireUnpaidBookings,
@@ -10,7 +9,8 @@ import {
   releaseHold,
   submitPayment,
   verifyPayment,
-} from "@/features/booking";
+} from "@/features/booking/service";
+import { BookingError } from "@/features/booking";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 import { addMinutes, createFixtures, nextHalfHour, sha256Hex, type Fixtures } from "@/test/fixtures";
