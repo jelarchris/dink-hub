@@ -1,0 +1,19 @@
+{
+  "name": "dinkhub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DinkHub — pickleball court booking marketplace (Philippines)",
+  "scripts": {
+    "dev": "pnpm --filter @dinkhub/web dev",
+    "build": "pnpm --filter @dinkhub/web build",
+    "start": "pnpm --filter @dinkhub/web start",
+    "lint": "pnpm --filter @dinkhub/web lint",
+    "typecheck": "pnpm --filter @dinkhub/web typecheck",
+    "test": "pnpm --filter @dinkhub/web test"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@11.0.9"
+}
