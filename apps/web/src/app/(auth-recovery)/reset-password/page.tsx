@@ -43,28 +43,48 @@ export default function ResetPasswordPage() {
     null,
   );
 
-  // Verify the recovery session that the browser supabase client installed
-  // from the URL hash. Skip when the URL already carried an error.
+  // Recovery emails use the IMPLICIT flow (tokens in URL hash). The
+  // @supabase/ssr browser client defaults to PKCE and won't auto-install
+  // these. We manually parse access_token + refresh_token from the hash and
+  // call setSession() so the password update can authenticate.
   useEffect(() => {
     if (linkState !== "checking") return;
     let cancelled = false;
     const supabase = createClient();
-    const timer = setTimeout(async () => {
+    void (async () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      const params = new URLSearchParams(hash);
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (cancelled) return;
+        if (error) {
+          setLinkState("invalid");
+          return;
+        }
+        setLinkState("valid");
+        window.history.replaceState(null, "", window.location.pathname);
+        return;
+      }
+
+      // Fallback: a session may already exist (e.g. user refreshed after
+      // setSession ran). Honor it.
       const { data, error } = await supabase.auth.getUser();
       if (cancelled) return;
       if (error || !data.user) {
         setLinkState("invalid");
       } else {
         setLinkState("valid");
-        if (window.location.hash) {
-          window.history.replaceState(null, "", window.location.pathname);
-        }
       }
-    }, 250);
+    })();
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [linkState]);
 
