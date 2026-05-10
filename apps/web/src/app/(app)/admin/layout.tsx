@@ -5,8 +5,10 @@ import {
   BookOpen,
   Building2,
   ClipboardList,
+  Coins,
   LayoutDashboard,
   PercentCircle,
+  Receipt,
   Users,
 } from "lucide-react";
 import { getSessionUser } from "@/server/session";
@@ -55,6 +57,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </SidebarLink>
           <SidebarLink href="/admin/bookings" icon={<BookOpen className="size-4" />}>
             Bookings
+          </SidebarLink>
+          <SidebarLink href="/admin/payouts" icon={<Coins className="size-4" />}>
+            Payouts
+          </SidebarLink>
+          <SidebarLink href="/admin/ledger" icon={<Receipt className="size-4" />}>
+            Ledger
           </SidebarLink>
           <SidebarLink href="/admin/system-fee" icon={<PercentCircle className="size-4" />}>
             System fee

@@ -14,8 +14,16 @@ import {
   updateUserRole,
 } from "./service";
 import {
+  generatePayout,
+  markPayoutPaid,
+  togglePayoutHold,
+} from "./payouts";
+import {
   forceCancelBookingInputSchema,
+  generatePayoutInputSchema,
+  markPayoutPaidInputSchema,
   setUserSuspensionInputSchema,
+  togglePayoutHoldInputSchema,
   updateSystemFeeInputSchema,
   updateUserRoleInputSchema,
   venueReviewInputSchema,
@@ -214,5 +222,108 @@ export async function forceCancelBookingAction(
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${parsed.data.bookingId}`);
+  return { ok: true, data: undefined };
+}
+
+// ----------------------------------------------------------------------------
+// payouts
+// ----------------------------------------------------------------------------
+
+export async function generatePayoutAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  let admin;
+  try {
+    admin = await requireAdmin();
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  const parsed = generatePayoutInputSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the errors below.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  let payoutId: string;
+  try {
+    const payout = await generatePayout(admin, parsed.data);
+    payoutId = payout.id;
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  revalidatePath("/admin/payouts");
+  revalidatePath(`/admin/payouts/${payoutId}`);
+  return { ok: true, data: { payoutId } };
+}
+
+export async function markPayoutPaidAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  let admin;
+  try {
+    admin = await requireAdmin();
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  const parsed = markPayoutPaidInputSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the errors below.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  try {
+    await markPayoutPaid(admin, parsed.data);
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  revalidatePath("/admin/payouts");
+  revalidatePath(`/admin/payouts/${parsed.data.payoutId}`);
+  revalidatePath("/admin/ledger");
+  return { ok: true, data: undefined };
+}
+
+export async function togglePayoutHoldAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  let admin;
+  try {
+    admin = await requireAdmin();
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  const parsed = togglePayoutHoldInputSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the errors below.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  try {
+    await togglePayoutHold(admin, parsed.data);
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  revalidatePath("/admin/payouts");
+  revalidatePath(`/admin/payouts/${parsed.data.payoutId}`);
   return { ok: true, data: undefined };
 }

@@ -128,4 +128,79 @@ export const auditListFilterSchema = z.object({
 });
 export type AuditListFilter = z.infer<typeof auditListFilterSchema>;
 
+// ----------------------------------------------------------------------------
+// Payouts
+// ----------------------------------------------------------------------------
+const isoDateOnly = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
+
+export const payoutStatusValues = [
+  "pending",
+  "processing",
+  "paid",
+  "failed",
+  "on_hold",
+] as const;
+
+export const payoutListFilterSchema = z.object({
+  status: z.enum(["all", ...payoutStatusValues]).default("all"),
+  venueId: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type PayoutListFilter = z.infer<typeof payoutListFilterSchema>;
+
+export const generatePayoutInputSchema = z
+  .object({
+    venueId: uuidSchema,
+    periodStart: isoDateOnly,
+    periodEnd: isoDateOnly,
+    notes: optionalReason,
+  })
+  .refine((v) => v.periodStart < v.periodEnd, {
+    message: "Period start must be before end.",
+    path: ["periodEnd"],
+  });
+export type GeneratePayoutInput = z.infer<typeof generatePayoutInputSchema>;
+
+export const markPayoutPaidInputSchema = z.object({
+  payoutId: uuidSchema,
+  expectedVersion: z.coerce.number().int().min(1),
+  paidReference: z
+    .string()
+    .trim()
+    .min(3, "Reference is required (e.g. GCash transfer ref)")
+    .max(120),
+  notes: optionalReason,
+});
+export type MarkPayoutPaidInput = z.infer<typeof markPayoutPaidInputSchema>;
+
+export const togglePayoutHoldInputSchema = z.object({
+  payoutId: uuidSchema,
+  expectedVersion: z.coerce.number().int().min(1),
+  action: z.enum(["hold", "release"]),
+  reason: optionalReason,
+});
+export type TogglePayoutHoldInput = z.infer<typeof togglePayoutHoldInputSchema>;
+
+// ----------------------------------------------------------------------------
+// Ledger inspector
+// ----------------------------------------------------------------------------
+export const ledgerAccountValues = [
+  "venue_payable",
+  "platform_revenue",
+  "platform_cash",
+  "venue_refund",
+  "fee_writeoff",
+] as const;
+
+export const ledgerListFilterSchema = z.object({
+  account: z.enum(["all", ...ledgerAccountValues]).default("all"),
+  bookingId: z.string().uuid().optional(),
+  payoutId: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type LedgerListFilter = z.infer<typeof ledgerListFilterSchema>;
+
 export const PAGE_SIZE = 25;
