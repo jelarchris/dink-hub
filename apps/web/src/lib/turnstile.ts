@@ -66,7 +66,13 @@ export async function verifyTurnstileToken(
 
   const errorCodes = json["error-codes"];
   if (errorCodes && errorCodes.length > 0) {
+    if (json.success !== true) {
+      console.error("[turnstile] siteverify rejected", { errorCodes });
+    }
     return { success: json.success === true, skipped: false, reason: errorCodes.join(",") };
+  }
+  if (json.success !== true) {
+    console.error("[turnstile] siteverify success=false with no error codes");
   }
   return { success: json.success === true, skipped: false };
 }
