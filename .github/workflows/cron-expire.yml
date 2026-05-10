@@ -31,7 +31,7 @@ jobs:
             echo "::error::CRON_SECRET repo secret is not set"
             exit 1
           fi
-          base="${CRON_TARGET_URL:-https://dinkhub.vercel.app}"
+          base="${CRON_TARGET_URL:-https://dinkhub-one.vercel.app}"
           status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
             -X POST "$base/api/cron/expire" \
             -H "Authorization: Bearer $CRON_SECRET" \
