@@ -98,9 +98,9 @@ export function BookingFlow({
   }
 
   return (
-    <div className="pb-32">
+    <div className="pb-24">
       <Section label="Select court">
-        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+        <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
           {courts.map((c) => (
             <CourtCard
               key={c.id}
@@ -113,7 +113,7 @@ export function BookingFlow({
       </Section>
 
       <Section label="Select date">
-        <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+        <div className="-mx-4 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
           {days.map((d) => (
             <DateChip
               key={d.isoDate}
@@ -213,8 +213,8 @@ export function BookingFlow({
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section className="mb-6">
-      <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+    <section className="mb-3">
+      <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
         {label}
       </h2>
       {children}
@@ -237,13 +237,13 @@ function CourtCard({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        "group flex w-[140px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] text-left transition-colors sm:w-[160px]",
+        "group flex w-[120px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] text-left transition-colors sm:w-[140px]",
         selected
           ? "border-[var(--color-brand-500)] ring-2 ring-[var(--color-brand-500)]"
           : "border-[var(--color-border-default)] hover:border-[var(--color-brand-500)]",
       )}
     >
-      <div className="relative aspect-[4/3] w-full bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)]">
+      <div className="relative aspect-[5/4] w-full bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)]">
         {court.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={court.imageUrl} alt={court.name} className="h-full w-full object-cover" />

@@ -44,17 +44,17 @@ export default async function BookCourtPage({
   });
 
   return (
-    <Container className="py-4 sm:py-6">
-      <Link
-        href={`/venues/${venue.slug}`}
-        className="mb-3 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-      >
-        <ArrowLeft className="size-4" /> {venue.name}
-      </Link>
-
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Book a court</h1>
-        <p className="mt-1 text-sm text-[var(--color-fg-muted)]">{venue.name}</p>
+    <Container className="py-2 sm:py-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <Link
+          href={`/venues/${venue.slug}`}
+          className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-fg)] hover:text-[var(--color-brand-700)]"
+        >
+          <ArrowLeft className="size-4" /> {venue.name}
+        </Link>
+        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+          Book a court
+        </span>
       </div>
 
       <BookingFlow
