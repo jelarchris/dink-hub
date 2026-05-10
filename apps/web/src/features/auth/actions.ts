@@ -111,3 +111,39 @@ export async function signOutAction(): Promise<void> {
   revalidatePath("/", "layout");
   redirect("/");
 }
+
+export async function requestPasswordResetAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  const gate = await preflightAuthGate(form);
+  if (gate) return gate;
+  try {
+    await authService.requestPasswordReset({ email: s(form, "email") });
+  } catch (err) {
+    return toResult(err);
+  }
+  // Always report success regardless of whether the email exists.
+  return { ok: true, data: undefined };
+}
+
+export async function updatePasswordAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  // Per-IP rate limit, but no Turnstile here — the user already proved
+  // possession of a one-time recovery link to reach this screen.
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit(limiters.auth, `auth:${ip ?? "unknown"}`);
+  if (!rl.allowed) {
+    return { ok: false, code: "rate_limited", message: rateLimitMessage(rl.resetMs) };
+  }
+
+  try {
+    await authService.updatePassword({ password: s(form, "password") });
+  } catch (err) {
+    return toResult(err);
+  }
+  return { ok: true, data: undefined };
+}

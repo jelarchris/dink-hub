@@ -4,6 +4,7 @@ export type AuthErrorCode =
   | "email_taken"
   | "rate_limited"
   | "email_not_confirmed"
+  | "session_expired"
   | "unknown";
 
 export class AuthError extends Error {

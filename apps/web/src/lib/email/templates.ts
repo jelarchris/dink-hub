@@ -326,3 +326,30 @@ export function disputeResolvedEmail(ctx: BookingEmailContext & {
       `\nView: ${link}\n`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// password_reset \u2192 user
+// ---------------------------------------------------------------------------
+export function passwordResetEmail(ctx: {
+  displayName: string;
+  resetUrl: string;
+}) {
+  return {
+    subject: `Reset your DinkHub password`,
+    html: shell({
+      heading: `Reset your password`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.displayName)}, we got a request to reset the password on your DinkHub account.</p>
+        <p style="margin:0 0 12px 0;">Click the button below to choose a new one. This link expires in 1 hour and can only be used once.</p>
+        <p style="margin:16px 0 0 0;font-size:13px;color:#64748b;">If you didn't request this, you can safely ignore this email \u2014 your password won't change.</p>
+      `,
+      ctaHref: ctx.resetUrl,
+      ctaLabel: "Reset password",
+    }),
+    text:
+      `Reset your DinkHub password\n\n` +
+      `Hi ${ctx.displayName}, open this link to choose a new password (expires in 1 hour):\n\n` +
+      `${ctx.resetUrl}\n\n` +
+      `If you didn't request this, you can safely ignore this email.\n`,
+  };
+}

@@ -27,3 +27,23 @@ export const signInInputSchema = z
   })
   .strict();
 export type SignInInput = z.infer<typeof signInInputSchema>;
+
+export const requestPasswordResetInputSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  })
+  .strict();
+export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetInputSchema>;
+
+export const updatePasswordInputSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(72, "Password must be 72 characters or less")
+      .refine((v) => /[A-Za-z]/.test(v) && /\d/.test(v), {
+        message: "Use letters and at least one number",
+      }),
+  })
+  .strict();
+export type UpdatePasswordInput = z.infer<typeof updatePasswordInputSchema>;

@@ -1,11 +1,20 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { env } from "@/lib/env";
+import { sendEmail } from "@/lib/email/send";
+import { passwordResetEmail } from "@/lib/email/templates";
+import { captureException } from "@/lib/observability";
 import { AuthError } from "./errors";
 import {
+  requestPasswordResetInputSchema,
   signInInputSchema,
   signUpInputSchema,
+  updatePasswordInputSchema,
+  type RequestPasswordResetInput,
   type SignInInput,
   type SignUpInput,
+  type UpdatePasswordInput,
 } from "./schema";
 
 /**
@@ -94,4 +103,111 @@ export async function getCurrentUser(): Promise<{ id: string; email: string } | 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user || !data.user.email) return null;
   return { id: data.user.id, email: data.user.email };
+}
+
+/**
+ * Generate a Supabase recovery link via the admin API and dispatch a branded
+ * email through Resend. Always succeeds from the caller's perspective so we
+ * don't leak whether an email exists in the system (account-enumeration
+ * defense). Real errors are captured to Sentry.
+ */
+export async function requestPasswordReset(input: RequestPasswordResetInput): Promise<void> {
+  const parsed = requestPasswordResetInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new AuthError(
+      "validation_failed",
+      "Please check the form",
+      parsed.error.flatten().fieldErrors,
+    );
+  }
+
+  const redirectTo = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/reset-password`;
+  const admin = createServiceClient();
+
+  // generateLink does NOT send the email itself when admin API is used — we
+  // get back the action_link to embed in our own message.
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email: parsed.data.email,
+    options: { redirectTo },
+  });
+
+  // Treat "user not found" as a no-op success — never confirm account
+  // existence to the caller.
+  if (error) {
+    const status = (error as { status?: number }).status;
+    const msg = error.message.toLowerCase();
+    if (status === 404 || msg.includes("not found") || msg.includes("user_not_found")) {
+      return;
+    }
+    captureException(error, { scope: "auth.requestPasswordReset" });
+    // Generic failure shape — do not echo Supabase internals.
+    throw new AuthError("unknown", "Could not send reset email. Please try again.");
+  }
+
+  const actionLink = data.properties?.action_link;
+  if (!actionLink) {
+    captureException(new Error("generateLink returned no action_link"), {
+      scope: "auth.requestPasswordReset",
+    });
+    return;
+  }
+
+  const displayName =
+    typeof data.user?.user_metadata?.display_name === "string"
+      ? (data.user.user_metadata.display_name as string)
+      : parsed.data.email.split("@")[0]!;
+
+  const tpl = passwordResetEmail({ displayName, resetUrl: actionLink });
+  const result = await sendEmail({
+    to: parsed.data.email,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+    tag: "password_reset",
+  });
+  if (!result.ok) {
+    captureException(new Error(`password reset email failed: ${result.error}`), {
+      scope: "auth.requestPasswordReset",
+    });
+  }
+}
+
+/**
+ * Update the signed-in user's password. Requires an active recovery session
+ * (set client-side from the magic-link hash) — Supabase enforces this.
+ */
+export async function updatePassword(input: UpdatePasswordInput): Promise<void> {
+  const parsed = updatePasswordInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new AuthError(
+      "validation_failed",
+      "Please check the form",
+      parsed.error.flatten().fieldErrors,
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userData.user) {
+    throw new AuthError(
+      "session_expired",
+      "Your reset link has expired. Please request a new one.",
+    );
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) {
+    if (error.message.toLowerCase().includes("same") || (error as { code?: string }).code === "same_password") {
+      throw new AuthError(
+        "validation_failed",
+        "Choose a password different from your current one",
+        { password: ["Choose a different password"] },
+      );
+    }
+    throw new AuthError("unknown", "Could not update your password. Please try again.");
+  }
+
+  // Sign out so the user must log in again with the new password.
+  await supabase.auth.signOut();
 }
