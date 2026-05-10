@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
+import { PromoBanner } from "@/components/promo-banner";
 import { listActiveVenues, getMarketplaceStats } from "@/features/venues";
 import { formatPHP } from "@/lib/money";
 
@@ -114,6 +115,8 @@ function Hero({
         <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
           Free for players · Venue owners pay only when you book
         </p>
+
+        <PromoBanner variant="hero" />
 
         {stats.bookingsLast7d > 0 && (
           <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--color-brand-100)] px-3 py-1 text-xs font-medium text-[var(--color-brand-700)]">

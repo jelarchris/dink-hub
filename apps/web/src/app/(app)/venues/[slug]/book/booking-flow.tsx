@@ -181,7 +181,7 @@ export function BookingFlow({
                   <span className="font-semibold text-[var(--color-brand-700)]">
                     {formatPHP(slotPriceCentavos)}
                   </span>{" "}
-                  + system fee
+                  + booking fee
                 </div>
               </>
             ) : (

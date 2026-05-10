@@ -104,7 +104,15 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
             <SummaryRow label="Start" value={formatDateTimeManila(booking.startAt)} />
             <SummaryRow label="End" value={formatDateTimeManila(booking.endAt)} />
             <SummaryRow label="Court fee" value={formatPHP(booking.courtFeeCentavos)} />
-            <SummaryRow label="System fee" value={formatPHP(booking.systemFeeCentavos)} />
+            <SummaryRow
+              label="Booking fee"
+              value={
+                booking.systemFeeCentavos === 0n
+                  ? "₱0 (promo)"
+                  : formatPHP(booking.systemFeeCentavos)
+              }
+              muted={booking.systemFeeCentavos === 0n}
+            />
             <div className="flex items-center justify-between py-2 text-base">
               <dt className="font-semibold">Total</dt>
               <dd className="font-bold text-[var(--color-brand-700)]">{formatPHP(booking.totalCentavos)}</dd>
@@ -125,11 +133,13 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2">
       <dt className="text-[var(--color-fg-muted)]">{label}</dt>
-      <dd className="font-medium text-right">{value}</dd>
+      <dd className={muted ? "text-right font-medium text-[var(--color-fg-muted)]" : "text-right font-medium"}>
+        {value}
+      </dd>
     </div>
   );
 }

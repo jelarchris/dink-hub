@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  date,
   integer,
   jsonb,
   numeric,
@@ -244,6 +245,28 @@ export const adminUsers = pgTable("admin_users", {
 });
 
 // ----------------------------------------------------------------------------
+// system_settings — single-row platform settings (promo + DinkHub GCash + base fee)
+// ----------------------------------------------------------------------------
+export const systemSettings = pgTable("system_settings", {
+  id: boolean("id").primaryKey().default(true),
+  promoActive: boolean("promo_active").notNull().default(true),
+  promoHeadline: text("promo_headline").notNull(),
+  promoDescription: text("promo_description").notNull(),
+  promoUntilDate: date("promo_until_date"),
+  promoShowOnHome: boolean("promo_show_on_home").notNull().default(true),
+  promoShowOnBooking: boolean("promo_show_on_booking").notNull().default(true),
+  baseBookingFeeCentavos: bigint("base_booking_fee_centavos", { mode: "bigint" })
+    .notNull()
+    .default(2000n),
+  invoiceDueDays: integer("invoice_due_days").notNull().default(7),
+  dinkhubGcashAccountName: text("dinkhub_gcash_account_name"),
+  dinkhubGcashAccountNumber: text("dinkhub_gcash_account_number"),
+  dinkhubGcashQrImagePath: text("dinkhub_gcash_qr_image_path"),
+  updatedBy: uuid("updated_by").references(() => profiles.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ----------------------------------------------------------------------------
 // audit_log — append-only record of every privileged admin mutation.
 // ----------------------------------------------------------------------------
 export const auditLog = pgTable("audit_log", {
@@ -286,3 +309,5 @@ export type SystemFeeSetting = typeof systemFeeSettings.$inferSelect;
 export type NewSystemFeeSetting = typeof systemFeeSettings.$inferInsert;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type NewAuditLogEntry = typeof auditLog.$inferInsert;
+export type SystemSettings = typeof systemSettings.$inferSelect;
+export type NewSystemSettings = typeof systemSettings.$inferInsert;

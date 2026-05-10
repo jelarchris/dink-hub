@@ -40,7 +40,7 @@ function extFor(mime: string): string {
  * the URL for rendering.
  */
 export async function uploadVenueMedia(args: {
-  kind: "venue-cover" | "court" | "gcash-qr";
+  kind: "venue-cover" | "court" | "gcash-qr" | "system-qr";
   file: File;
 }): Promise<
   { ok: true; data: VenueMediaUploadResult } | { ok: false; error: VenueMediaUploadError }

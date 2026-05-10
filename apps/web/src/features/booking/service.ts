@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { db } from "@/db/client";
 import type { Booking, NewLedgerEntry, Payment, SlotHold } from "@/db/schema";
+import { getCurrentBookingFeeRule } from "@/features/system-settings/service";
 import { BookingError } from "./errors";
 import * as repo from "./repo";
 import {
@@ -152,9 +153,20 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
     throw new BookingError("venue_inactive", "Venue is not accepting bookings");
   }
 
-  const systemFee = await repo.findCurrentSystemFeeCentavos();
-  if (systemFee === null) {
-    throw new BookingError("system_fee_unavailable", "No active system fee configured");
+  // Booking-fee snapshot. During the launch promo this is 0; otherwise it's
+  // pulled from the platform settings singleton (admin-editable). Fall back to
+  // the legacy `system_fee_settings` table only if the new singleton hasn't
+  // been seeded yet — keeps test fixtures + older envs working.
+  let systemFee: bigint;
+  try {
+    const rule = await getCurrentBookingFeeRule();
+    systemFee = rule.snapshotCentavos;
+  } catch {
+    const legacy = await repo.findCurrentSystemFeeCentavos();
+    if (legacy === null) {
+      throw new BookingError("system_fee_unavailable", "No active booking fee configured");
+    }
+    systemFee = legacy;
   }
 
   const courtFee = computeCourtFeeCentavos(

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   PercentCircle,
   Receipt,
+  Settings,
   Users,
 } from "lucide-react";
 import { getSessionUser } from "@/server/session";
@@ -66,6 +67,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </SidebarLink>
           <SidebarLink href="/admin/system-fee" icon={<PercentCircle className="size-4" />}>
             System fee
+          </SidebarLink>
+          <SidebarLink href="/admin/settings" icon={<Settings className="size-4" />}>
+            Promo &amp; settings
           </SidebarLink>
           <SidebarLink href="/admin/audit" icon={<ClipboardList className="size-4" />}>
             Audit log

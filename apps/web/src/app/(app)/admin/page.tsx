@@ -93,16 +93,16 @@ export default async function AdminDashboardPage() {
 
         <Card>
           <CardContent className="space-y-3 pt-6">
-            <h2 className="font-semibold">System fee</h2>
+            <h2 className="font-semibold">Booking fee</h2>
             <p className="text-3xl font-bold tracking-tight">
               {fee ? formatPHP(fee.feeAmountCentavos) : "—"}
             </p>
             <p className="text-xs text-[var(--color-fg-muted)]">
               Snapshot to every new booking. Editing creates a new history row.
             </p>
-            <Link href="/admin/system-fee" className="block">
+            <Link href="/admin/settings" className="block">
               <Button variant="ghost" size="sm" className="w-full">
-                Edit fee <ArrowRight className="size-3.5" />
+                Promo &amp; settings <ArrowRight className="size-3.5" />
               </Button>
             </Link>
             <hr className="border-[var(--color-border-default)]" />
