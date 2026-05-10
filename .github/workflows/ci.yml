@@ -39,10 +39,14 @@ jobs:
       - name: Build
         run: pnpm build
         env:
+          # Placeholders just satisfy env.ts Zod validation at build time —
+          # no real services are contacted during static analysis.
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder_anon_key
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder_anon_key_at_least_20_chars
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           NEXT_PUBLIC_APP_ENV: ci
+          SUPABASE_SERVICE_ROLE_KEY: placeholder_service_role_key_at_least_20_chars
+          DATABASE_URL: postgres://user:pass@localhost:5432/db
 
   test:
     name: Unit Tests
