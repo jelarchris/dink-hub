@@ -4,6 +4,8 @@ export {
   forceCancelBookingAction,
   generatePayoutAction,
   markPayoutPaidAction,
+  openDisputeAction,
+  resolveDisputeAction,
   reviewVenueAction,
   setUserSuspensionAction,
   togglePayoutHoldAction,

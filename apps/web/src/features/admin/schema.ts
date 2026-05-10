@@ -203,4 +203,25 @@ export const ledgerListFilterSchema = z.object({
 });
 export type LedgerListFilter = z.infer<typeof ledgerListFilterSchema>;
 
+// ----------------------------------------------------------------------------
+// Disputes
+// ----------------------------------------------------------------------------
+export const disputeResolutionSchema = z.enum(["refund_full", "rejected"]);
+export type DisputeResolution = z.infer<typeof disputeResolutionSchema>;
+
+export const openDisputeInputSchema = z.object({
+  paymentId: uuidSchema,
+  expectedVersion: z.coerce.number().int().min(1),
+  reason: z.string().trim().min(3, "Reason is required").max(500),
+});
+export type OpenDisputeInput = z.infer<typeof openDisputeInputSchema>;
+
+export const resolveDisputeInputSchema = z.object({
+  paymentId: uuidSchema,
+  expectedVersion: z.coerce.number().int().min(1),
+  resolution: disputeResolutionSchema,
+  notes: optionalReason,
+});
+export type ResolveDisputeInput = z.infer<typeof resolveDisputeInputSchema>;
+
 export const PAGE_SIZE = 25;

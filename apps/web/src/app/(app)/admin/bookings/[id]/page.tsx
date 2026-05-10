@@ -10,6 +10,7 @@ import { getBookingDetail } from "@/features/admin/service";
 import { formatDateTimeManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
 import { ForceCancelForm } from "./force-cancel-form";
+import { OpenDisputeForm, ResolveDisputeForm } from "./dispute-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +119,67 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
               )}
             </CardContent>
           </Card>
+
+          {payment && payment.status === "verified" && (
+            <Card>
+              <CardContent className="space-y-3 pt-6">
+                <h2 className="font-semibold">Open dispute</h2>
+                <p className="text-xs text-[var(--color-fg-muted)]">
+                  Flags this payment for review. Booking stays confirmed until resolution.
+                </p>
+                <OpenDisputeForm
+                  paymentId={payment.id}
+                  version={payment.version}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {payment && payment.status === "disputed" && (
+            <Card>
+              <CardContent className="space-y-4 pt-6">
+                <div>
+                  <h2 className="font-semibold">Disputed</h2>
+                  {payment.disputeReason && (
+                    <p className="mt-1 text-xs text-[var(--color-fg-muted)]">
+                      Reason: {payment.disputeReason}
+                    </p>
+                  )}
+                  {payment.disputeOpenedAt && (
+                    <p className="text-xs text-[var(--color-fg-muted)]">
+                      Opened {formatDateTimeManila(payment.disputeOpenedAt)}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-3 border-t border-[var(--color-border-default)] pt-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-fg-muted)]">
+                    Refund player
+                  </p>
+                  <p className="text-xs text-[var(--color-fg-muted)]">
+                    Marks booking refunded and writes reversal ledger entries.
+                  </p>
+                  <ResolveDisputeForm
+                    paymentId={payment.id}
+                    version={payment.version}
+                    resolution="refund_full"
+                  />
+                </div>
+                <div className="space-y-3 border-t border-[var(--color-border-default)] pt-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-fg-muted)]">
+                    Reject dispute
+                  </p>
+                  <p className="text-xs text-[var(--color-fg-muted)]">
+                    Returns payment to verified. No ledger changes.
+                  </p>
+                  <ResolveDisputeForm
+                    paymentId={payment.id}
+                    version={payment.version}
+                    resolution="rejected"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="space-y-3 pt-6">

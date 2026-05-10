@@ -18,10 +18,13 @@ import {
   markPayoutPaid,
   togglePayoutHold,
 } from "./payouts";
+import { openDispute, resolveDispute } from "./disputes";
 import {
   forceCancelBookingInputSchema,
   generatePayoutInputSchema,
   markPayoutPaidInputSchema,
+  openDisputeInputSchema,
+  resolveDisputeInputSchema,
   setUserSuspensionInputSchema,
   togglePayoutHoldInputSchema,
   updateSystemFeeInputSchema,
@@ -325,5 +328,72 @@ export async function togglePayoutHoldAction(
 
   revalidatePath("/admin/payouts");
   revalidatePath(`/admin/payouts/${parsed.data.payoutId}`);
+  return { ok: true, data: undefined };
+}
+
+// ----------------------------------------------------------------------------
+// disputes
+// ----------------------------------------------------------------------------
+
+export async function openDisputeAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  let admin;
+  try {
+    admin = await requireAdmin();
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  const parsed = openDisputeInputSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the errors below.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  try {
+    await openDispute(admin, parsed.data);
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  revalidatePath("/admin/bookings");
+  return { ok: true, data: undefined };
+}
+
+export async function resolveDisputeAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  let admin;
+  try {
+    admin = await requireAdmin();
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  const parsed = resolveDisputeInputSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the errors below.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  try {
+    await resolveDispute(admin, parsed.data);
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/ledger");
   return { ok: true, data: undefined };
 }

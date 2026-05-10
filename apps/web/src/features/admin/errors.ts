@@ -6,6 +6,7 @@ export type AdminErrorCode =
   | "payout_not_found"
   | "payout_overlap"
   | "no_bookings"
+  | "payment_not_found"
   | "invalid_status_transition"
   | "cannot_self_modify"
   | "version_conflict"
