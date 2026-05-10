@@ -127,7 +127,7 @@ export function BookingFlow({
       </Section>
 
       <Section label={`Select time · ${pickedDateLabel}`}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
           {slots.map((s) => {
             const iso = s.toISOString();
             const available = isAvailable(s);
@@ -139,7 +139,7 @@ export function BookingFlow({
                 disabled={!available}
                 onClick={() => setPickedSlotIso(iso)}
                 className={cn(
-                  "flex flex-col items-start gap-1 rounded-[var(--radius-md)] border p-3 text-left transition-colors",
+                  "flex flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-2 py-2 text-center transition-colors",
                   isPicked &&
                     "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] ring-2 ring-[var(--color-brand-500)]",
                   !isPicked && available &&
@@ -148,21 +148,18 @@ export function BookingFlow({
                     "cursor-not-allowed border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] text-[var(--color-fg-subtle)] opacity-60",
                 )}
               >
-                <span className="text-base font-bold tracking-tight">
+                <span className="text-sm font-bold leading-tight tracking-tight">
                   {formatTimeManila(s)}
-                </span>
-                <span className="text-xs font-semibold text-[var(--color-brand-700)]">
-                  {formatPHP(slotPriceCentavos)}
                 </span>
                 <span
                   className={cn(
-                    "text-[10px] font-bold uppercase tracking-wide",
+                    "text-[10px] font-bold uppercase tracking-wide leading-none",
                     available
                       ? "text-[var(--color-success)]"
                       : "text-[var(--color-fg-subtle)]",
                   )}
                 >
-                  {available ? "Available" : "Booked"}
+                  {available ? formatPHP(slotPriceCentavos) : "Booked"}
                 </span>
               </button>
             );
@@ -240,7 +237,7 @@ function CourtCard({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        "group flex w-[180px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] text-left transition-colors sm:w-[220px]",
+        "group flex w-[140px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] text-left transition-colors sm:w-[160px]",
         selected
           ? "border-[var(--color-brand-500)] ring-2 ring-[var(--color-brand-500)]"
           : "border-[var(--color-border-default)] hover:border-[var(--color-brand-500)]",
@@ -256,17 +253,17 @@ function CourtCard({
           </div>
         )}
         {selected && (
-          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-[var(--color-brand-500)] px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-            <Zap className="size-3" /> Selected
+          <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-[var(--color-brand-500)] px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+            <Zap className="size-2.5" /> Selected
           </span>
         )}
       </div>
-      <div className="flex flex-col gap-0.5 p-3">
-        <span className="font-semibold leading-tight">{court.name}</span>
-        <span className="text-xs text-[var(--color-fg-muted)]">
+      <div className="flex flex-col gap-0.5 p-2">
+        <span className="truncate text-sm font-semibold leading-tight">{court.name}</span>
+        <span className="truncate text-[11px] text-[var(--color-fg-muted)]">
           {court.isIndoor ? "Indoor" : "Outdoor"} · {court.surface}
         </span>
-        <span className="mt-1 text-sm font-bold text-[var(--color-brand-700)]">
+        <span className="mt-0.5 text-sm font-bold text-[var(--color-brand-700)]">
           {formatPHP(BigInt(court.hourlyRateCentavos))}
           <span className="ml-0.5 text-[10px] font-medium text-[var(--color-fg-muted)]">/hr</span>
         </span>
@@ -291,6 +288,7 @@ function DateChip({
   const dow = date.toLocaleDateString("en-PH", { weekday: "short", timeZone: "UTC" });
   const dayNum = date.getUTCDate();
   const mon = date.toLocaleDateString("en-PH", { month: "short", timeZone: "UTC" });
+  const isToday = label === "Today";
 
   return (
     <button
@@ -298,7 +296,7 @@ function DateChip({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        "flex w-[64px] shrink-0 snap-start flex-col items-center justify-center rounded-[var(--radius-md)] border px-2 py-2 text-center transition-colors sm:w-[72px]",
+        "flex w-[54px] shrink-0 snap-start flex-col items-center justify-center rounded-[var(--radius-md)] border px-1 py-1.5 text-center transition-colors sm:w-[60px]",
         selected
           ? "border-[var(--color-brand-500)] bg-[var(--color-brand-500)] text-white"
           : "border-[var(--color-border-default)] bg-[var(--color-bg)] text-[var(--color-fg)] hover:border-[var(--color-brand-500)]",
@@ -310,9 +308,9 @@ function DateChip({
           selected ? "text-white/85" : "text-[var(--color-fg-muted)]",
         )}
       >
-        {label === "Today" || label === "Tomorrow" ? label : dow}
+        {dow}
       </span>
-      <span className="text-xl font-extrabold leading-tight">{dayNum}</span>
+      <span className="text-lg font-extrabold leading-tight">{dayNum}</span>
       <span
         className={cn(
           "text-[10px] uppercase",
@@ -321,6 +319,15 @@ function DateChip({
       >
         {mon}
       </span>
+      {isToday && (
+        <span
+          aria-hidden
+          className={cn(
+            "mt-0.5 size-1 rounded-full",
+            selected ? "bg-white" : "bg-[var(--color-brand-500)]",
+          )}
+        />
+      )}
     </button>
   );
 }
