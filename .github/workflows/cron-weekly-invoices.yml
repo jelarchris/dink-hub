@@ -1,0 +1,44 @@
+name: cron-weekly-invoices
+
+# Generates weekly DinkHub booking-fee invoices for venue owners.
+# Runs Monday 06:00 Asia/Manila (= Sunday 22:00 UTC).
+#
+# Required repo secret: CRON_SECRET (must match the value set in Vercel env).
+# Optional repo secret: CRON_TARGET_URL (defaults to https://dinkhub.ph).
+
+on:
+  schedule:
+    - cron: "0 22 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: cron-weekly-invoices
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/weekly-invoices
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_TARGET_URL: ${{ secrets.CRON_TARGET_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set"
+            exit 1
+          fi
+          base="${CRON_TARGET_URL:-https://dinkhub.ph}"
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "$base/api/cron/weekly-invoices" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json" \
+            --max-time 120 --retry 2 --retry-delay 10)
+          echo "status=$status"
+          cat /tmp/body.json || true
+          if [ "$status" != "200" ]; then
+            echo "::error::cron-weekly-invoices returned non-200 status"
+            exit 1
+          fi

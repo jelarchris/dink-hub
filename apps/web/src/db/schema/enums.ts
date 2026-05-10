@@ -57,3 +57,11 @@ export const payoutStatusEnum = pgEnum("payout_status", [
   "failed",
   "on_hold",
 ]);
+
+export const ownerInvoiceStatusEnum = pgEnum("owner_invoice_status", [
+  "open",
+  "submitted",
+  "verified",
+  "rejected",
+  "void",
+]);

@@ -16,6 +16,7 @@ import {
   courtSurfaceEnum,
   ledgerAccountEnum,
   ledgerDirectionEnum,
+  ownerInvoiceStatusEnum,
   paymentStatusEnum,
   payoutStatusEnum,
   userRoleEnum,
@@ -267,8 +268,37 @@ export const systemSettings = pgTable("system_settings", {
 });
 
 // ----------------------------------------------------------------------------
-// audit_log — append-only record of every privileged admin mutation.
 // ----------------------------------------------------------------------------
+// owner_invoices — weekly DinkHub booking-fee invoices billed to venue owners.
+// ----------------------------------------------------------------------------
+export const ownerInvoices = pgTable("owner_invoices", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  venueId: uuid("venue_id").notNull().references(() => venues.id),
+  periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+  bookingCount: integer("booking_count").notNull(),
+  feesCentavos: bigint("fees_centavos", { mode: "bigint" }).notNull(),
+  carryoverCentavos: bigint("carryover_centavos", { mode: "bigint" }).notNull().default(0n),
+  totalCentavos: bigint("total_centavos", { mode: "bigint" })
+    .notNull()
+    .generatedAlwaysAs(sql`fees_centavos + carryover_centavos`),
+  dueDate: date("due_date").notNull(),
+  status: ownerInvoiceStatusEnum("status").notNull().default("open"),
+  receiptImagePath: text("receipt_image_path"),
+  receiptHash: text("receipt_hash"),
+  gcashReferenceNumber: text("gcash_reference_number"),
+  amountPaidCentavos: bigint("amount_paid_centavos", { mode: "bigint" }),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  submittedBy: uuid("submitted_by").references(() => profiles.id),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  verifiedBy: uuid("verified_by").references(() => profiles.id),
+  rejectionReason: text("rejection_reason"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// audit_log — append-only record of every privileged admin mutation.
 export const auditLog = pgTable("audit_log", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   actorId: uuid("actor_id")
@@ -311,3 +341,5 @@ export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type NewAuditLogEntry = typeof auditLog.$inferInsert;
 export type SystemSettings = typeof systemSettings.$inferSelect;
 export type NewSystemSettings = typeof systemSettings.$inferInsert;
+export type OwnerInvoice = typeof ownerInvoices.$inferSelect;
+export type NewOwnerInvoice = typeof ownerInvoices.$inferInsert;

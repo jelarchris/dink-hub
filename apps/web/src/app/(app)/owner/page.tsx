@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardCheck, Layers } from "lucide-react";
+import { ClipboardCheck, Layers, Receipt } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Alert } from "@/components/ui/alert";
 import { listPendingPaymentsForOwner } from "@/features/bookings-view";
+import { OwnerBalanceCard } from "@/features/owner-invoices/components/owner-balance-card";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Owner dashboard" };
@@ -42,13 +43,23 @@ export default async function OwnerDashboard() {
         }
       />
 
-      <ul className="divide-y divide-[var(--color-border-default)]">
+      <div className="mt-3">
+        <OwnerBalanceCard ownerId={profile.id} />
+      </div>
+
+      <ul className="mt-4 divide-y divide-[var(--color-border-default)]">
         <NavRow
           href="/owner/payments"
           icon={<ClipboardCheck className="size-4" />}
           title="Verify payments"
           subtitle="Confirm receipts so bookings move to confirmed"
           right={pendingCount > 0 ? `${pendingCount} pending` : "Empty queue"}
+        />
+        <NavRow
+          href="/owner/invoices"
+          icon={<Receipt className="size-4" />}
+          title="DinkHub invoices"
+          subtitle="Weekly booking-fee invoices and payment history"
         />
         <NavRow
           href="/owner/venues"
