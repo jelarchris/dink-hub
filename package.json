@@ -9,7 +9,8 @@
     "start": "pnpm --filter @dinkhub/web start",
     "lint": "pnpm --filter @dinkhub/web lint",
     "typecheck": "pnpm --filter @dinkhub/web typecheck",
-    "test": "pnpm --filter @dinkhub/web test"
+    "test": "pnpm --filter @dinkhub/web test",
+    "prepare": "husky"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -17,6 +18,17 @@
   },
   "packageManager": "pnpm@11.0.9",
   "pnpm": {
-    "onlyBuiltDependencies": ["@sentry/cli"]
+    "onlyBuiltDependencies": [
+      "@sentry/cli"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.3"
+  },
+  "lint-staged": {
+    "apps/web/**/*.{ts,tsx,js,mjs,cjs}": [
+      "pnpm --filter @dinkhub/web exec eslint --fix --max-warnings=0"
+    ]
   }
 }

@@ -45,3 +45,74 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder_anon_key
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           NEXT_PUBLIC_APP_ENV: ci
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Tests need a real Supabase Postgres (cross-schema writes to auth.users
+    # plus the EXCLUDE constraint cannot run on a stub). Skip when the
+    # secret is not configured (forks, dependabot) so CI stays green.
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        if: ${{ env.DIRECT_URL != '' }}
+        run: pnpm test
+        env:
+          DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+          DATABASE_URL: ${{ secrets.TEST_DIRECT_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_ENV: ci
+
+      - name: Skip tests notice
+        if: ${{ env.DIRECT_URL == '' }}
+        env:
+          DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+        run: echo "::notice::TEST_DIRECT_URL secret not set — unit tests skipped. Configure it in repo Settings → Secrets to gate merges on tests."
+
+  security-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Advisory only — known CVEs in transitive deps shouldn't block a merge,
+    # but they should be visible in the run summary.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit
+        run: pnpm audit --prod --audit-level=high
+
