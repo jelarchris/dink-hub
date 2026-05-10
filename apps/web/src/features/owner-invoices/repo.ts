@@ -10,6 +10,8 @@ import {
   type Venue,
 } from "@/db/schema";
 
+type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
  * Aggregate one row per venue: number of confirmed bookings whose START falls
  * inside [periodStart, periodEnd) and the sum of their snapshotted system fees.
@@ -115,4 +117,84 @@ export async function listInvoicesForOwner(
     .innerJoin(venues, eq(venues.id, ownerInvoices.venueId))
     .where(and(eq(venues.ownerId, ownerId), sql`${venues.deletedAt} is null`))
     .orderBy(sql`${ownerInvoices.periodStart} desc`);
+}
+
+/**
+ * Look up a single invoice + its venue, scoped to the requesting owner.
+ *
+ * Returns `null` for both "not found" and "not yours" so the caller cannot
+ * distinguish — prevents id-enumeration disclosure.
+ */
+export async function findInvoiceForOwner(
+  invoiceId: string,
+  ownerId: string,
+  exec: Executor = db,
+): Promise<{ invoice: OwnerInvoice; venue: Venue } | null> {
+  const rows = await exec
+    .select({ invoice: ownerInvoices, venue: venues })
+    .from(ownerInvoices)
+    .innerJoin(venues, eq(venues.id, ownerInvoices.venueId))
+    .where(
+      and(
+        eq(ownerInvoices.id, invoiceId),
+        eq(venues.ownerId, ownerId),
+        sql`${venues.deletedAt} is null`,
+      ),
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/**
+ * Atomically attach receipt details and flip an invoice from open|rejected → submitted.
+ *
+ * Optimistic concurrency via `version` — a parallel submit (or admin verify)
+ * will lose the race and the caller must surface `concurrent_modification`.
+ *
+ * The accepted prior statuses (`open`, `rejected`) are also enforced in the
+ * WHERE clause as defence-in-depth: even if the application checks the status
+ * before calling this, a race against admin verification cannot slip through.
+ */
+export interface ApplyReceiptToInvoiceInput {
+  invoiceId: string;
+  expectedVersion: number;
+  receiptImagePath: string;
+  receiptHash: string;
+  amountPaidCentavos: bigint;
+  gcashReferenceNumber: string | null;
+  submittedBy: string;
+}
+
+export async function applyReceiptToInvoice(
+  input: ApplyReceiptToInvoiceInput,
+  exec: Executor = db,
+): Promise<OwnerInvoice | null> {
+  const rows = await exec
+    .update(ownerInvoices)
+    .set({
+      status: "submitted",
+      receiptImagePath: input.receiptImagePath,
+      receiptHash: input.receiptHash,
+      amountPaidCentavos: input.amountPaidCentavos,
+      gcashReferenceNumber: input.gcashReferenceNumber,
+      submittedAt: new Date(),
+      submittedBy: input.submittedBy,
+      // Re-submission after rejection: clear the old rejection so the UI
+      // doesn't keep showing it once the owner has acted on it.
+      rejectionReason: null,
+      verifiedAt: null,
+      verifiedBy: null,
+      version: input.expectedVersion + 1,
+    })
+    .where(
+      and(
+        eq(ownerInvoices.id, input.invoiceId),
+        eq(ownerInvoices.version, input.expectedVersion),
+        sql`${ownerInvoices.status} in ('open','rejected')`,
+      ),
+    )
+    .returning();
+
+  return rows[0] ?? null;
 }

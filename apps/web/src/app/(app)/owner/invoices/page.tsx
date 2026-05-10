@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { Receipt, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Receipt, Sparkles } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { PageHeader } from "@/components/ui/page-header";
@@ -85,9 +86,12 @@ export default async function OwnerInvoicesPage() {
           {rows.map(({ invoice, venue }) => (
             <li
               key={invoice.id}
-              className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4 shadow-[var(--shadow-sm)] transition-shadow hover:shadow-md"
+              className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] shadow-[var(--shadow-sm)] transition-shadow hover:shadow-md focus-within:shadow-md"
             >
-              <div className="flex items-start justify-between gap-3">
+              <Link
+                href={`/owner/invoices/${invoice.id}`}
+                className="flex items-start justify-between gap-3 rounded-[var(--radius-lg)] p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
+              >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-semibold">{venue.name}</span>
@@ -99,8 +103,9 @@ export default async function OwnerInvoicesPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-base font-semibold tabular-nums">
+                  <div className="flex items-center justify-end gap-1 text-base font-semibold tabular-nums">
                     {formatPHP(invoice.totalCentavos)}
+                    <ArrowUpRight className="size-4 text-[var(--color-fg-muted)]" />
                   </div>
                   <p className="mt-0.5 text-xs text-[var(--color-fg-muted)]">
                     {invoice.status === "verified" && invoice.verifiedAt
@@ -108,7 +113,7 @@ export default async function OwnerInvoicesPage() {
                       : `Due ${formatDueDate(invoice.dueDate)}`}
                   </p>
                 </div>
-              </div>
+              </Link>
             </li>
           ))}
         </ol>

@@ -1,11 +1,26 @@
 import "server-only";
 import { getSystemSettings } from "@/features/system-settings";
-import { aggregateBookingFeesForPeriod, upsertOpenInvoice } from "./repo";
+import { db } from "@/db/client";
+import type { OwnerInvoice } from "@/db/schema";
+import {
+  aggregateBookingFeesForPeriod,
+  applyReceiptToInvoice,
+  findInvoiceForOwner,
+  upsertOpenInvoice,
+} from "./repo";
+import { OwnerInvoiceError } from "./errors";
+import {
+  submitInvoicePaymentInputSchema,
+  type SubmitInvoicePaymentInput,
+} from "./schema";
 
 export {
   findOutstandingInvoiceForOwner,
   listInvoicesForOwner,
+  findInvoiceForOwner,
 } from "./repo";
+export { OwnerInvoiceError, isOwnerInvoiceError } from "./errors";
+export { submitInvoicePaymentInputSchema, type SubmitInvoicePaymentInput } from "./schema";
 
 /** Minimum invoice value (₱100). Anything below rolls forward via carryover. */
 const MIN_INVOICE_CENTAVOS = 10_000n;
@@ -112,4 +127,82 @@ export async function generateWeeklyInvoices(args: {
     invoicesSkippedBelowMin,
   };
   return result;
+}
+
+// ============================================================================
+// Owner pays an invoice — uploads GCash receipt
+// ============================================================================
+
+export interface SubmitInvoicePaymentArgs extends SubmitInvoicePaymentInput {
+  /** Authenticated owner submitting the payment. Re-validated server-side. */
+  ownerId: string;
+}
+
+/**
+ * Atomically attach a receipt to an invoice and flip it to `submitted`.
+ *
+ * Authorisation, status, amount, and concurrency are all re-checked here even
+ * though the action layer also checks them — defence in depth so the service
+ * can never produce a corrupt state regardless of how it is called.
+ */
+export async function submitInvoicePayment(args: SubmitInvoicePaymentArgs): Promise<OwnerInvoice> {
+  const parsed = submitInvoicePaymentInputSchema.safeParse({
+    invoiceId: args.invoiceId,
+    receiptImagePath: args.receiptImagePath,
+    receiptHash: args.receiptHash,
+    amountPaidCentavos: args.amountPaidCentavos,
+    ...(args.gcashReferenceNumber !== undefined && {
+      gcashReferenceNumber: args.gcashReferenceNumber,
+    }),
+  });
+  if (!parsed.success) {
+    throw new OwnerInvoiceError("validation_failed", "Invalid receipt submission", {
+      issues: parsed.error.flatten(),
+    });
+  }
+  const input = parsed.data;
+
+  return db.transaction(async (tx) => {
+    const detail = await findInvoiceForOwner(input.invoiceId, args.ownerId, tx);
+    if (!detail) {
+      throw new OwnerInvoiceError("invoice_not_found", "Invoice not found");
+    }
+    const { invoice } = detail;
+    if (invoice.status !== "open" && invoice.status !== "rejected") {
+      throw new OwnerInvoiceError(
+        "invoice_wrong_status",
+        `Cannot submit — invoice status is ${invoice.status.replace("_", " ")}`,
+      );
+    }
+    if (input.amountPaidCentavos !== invoice.totalCentavos) {
+      throw new OwnerInvoiceError(
+        "amount_mismatch",
+        "Receipt amount does not match invoice total",
+        {
+          expected: invoice.totalCentavos.toString(),
+          received: input.amountPaidCentavos.toString(),
+        },
+      );
+    }
+
+    const updated = await applyReceiptToInvoice(
+      {
+        invoiceId: invoice.id,
+        expectedVersion: invoice.version,
+        receiptImagePath: input.receiptImagePath,
+        receiptHash: input.receiptHash,
+        amountPaidCentavos: input.amountPaidCentavos,
+        gcashReferenceNumber: input.gcashReferenceNumber ?? null,
+        submittedBy: args.ownerId,
+      },
+      tx,
+    );
+    if (!updated) {
+      throw new OwnerInvoiceError(
+        "concurrent_modification",
+        "Invoice was modified by someone else — refresh and try again",
+      );
+    }
+    return updated;
+  });
 }

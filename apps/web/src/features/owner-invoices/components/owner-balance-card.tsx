@@ -132,7 +132,7 @@ export async function OwnerBalanceCard({ ownerId }: { ownerId: string }) {
           kicker="DinkHub balance"
           headline={<>Receipt rejected — re-upload {amount}</>}
           body={invoice.rejectionReason ?? "Please upload a clearer GCash receipt."}
-          cta={{ href: "/owner/invoices", label: "Resubmit" }}
+          cta={{ href: `/owner/invoices/${invoice.id}`, label: "Resubmit" }}
         />
       );
     }
@@ -144,7 +144,7 @@ export async function OwnerBalanceCard({ ownerId }: { ownerId: string }) {
           kicker="DinkHub balance"
           headline={<>{amount} awaiting verification</>}
           body={`Submitted${invoice.submittedAt ? ` ${DATE_FMT.format(invoice.submittedAt)}` : ""}. We'll email you when it's verified — usually within 1 business day.`}
-          cta={{ href: "/owner/invoices", label: "View" }}
+          cta={{ href: `/owner/invoices/${invoice.id}`, label: "View" }}
         />
       );
     }
@@ -172,7 +172,7 @@ export async function OwnerBalanceCard({ ownerId }: { ownerId: string }) {
             {invoice.bookingCount} booking{invoice.bookingCount === 1 ? "" : "s"}
           </span>
         }
-        cta={{ href: "/owner/invoices", label: "Pay invoice" }}
+        cta={{ href: `/owner/invoices/${invoice.id}`, label: "Pay invoice" }}
       />
     );
   }

@@ -3,6 +3,7 @@ export {
   ALLOWED_RECEIPT_MIME,
   MAX_RECEIPT_BYTES,
   uploadReceipt,
+  uploadInvoiceReceipt,
   getReceiptSignedUrl,
   type ReceiptUploadError,
   type ReceiptUploadResult,

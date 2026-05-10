@@ -27,16 +27,10 @@ function extFor(mime: string): string {
   return "bin";
 }
 
-/**
- * Validates and uploads a single receipt image to the private receipts bucket.
- * Returns the storage path + content hash for the caller to attach to a Payment row.
- */
-export async function uploadReceipt(args: {
-  bookingId: string;
-  file: File;
-}): Promise<{ ok: true; data: ReceiptUploadResult } | { ok: false; error: ReceiptUploadError }> {
-  const { bookingId, file } = args;
-
+async function uploadReceiptToPath(
+  pathPrefix: string,
+  file: File,
+): Promise<{ ok: true; data: ReceiptUploadResult } | { ok: false; error: ReceiptUploadError }> {
   if (!file || file.size === 0) {
     return { ok: false, error: { code: "file_missing", message: "Receipt image is required" } };
   }
@@ -59,7 +53,7 @@ export async function uploadReceipt(args: {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const hashHex = createHash("sha256").update(bytes).digest("hex");
-  const path = `bookings/${bookingId}/${Date.now()}-${randomUUID()}.${extFor(mime)}`;
+  const path = `${pathPrefix}/${Date.now()}-${randomUUID()}.${extFor(mime)}`;
 
   const supabase = createServiceClient();
   const { error } = await supabase.storage.from(RECEIPTS_BUCKET).upload(path, bytes, {
@@ -75,6 +69,29 @@ export async function uploadReceipt(args: {
     ok: true,
     data: { path, hashHex, byteSize: bytes.byteLength, mimeType: mime },
   };
+}
+
+/**
+ * Validates and uploads a single receipt image to the private receipts bucket.
+ * Returns the storage path + content hash for the caller to attach to a Payment row.
+ */
+export async function uploadReceipt(args: {
+  bookingId: string;
+  file: File;
+}): Promise<{ ok: true; data: ReceiptUploadResult } | { ok: false; error: ReceiptUploadError }> {
+  return uploadReceiptToPath(`bookings/${args.bookingId}`, args.file);
+}
+
+/**
+ * Validates and uploads an owner's GCash receipt for a weekly invoice payment.
+ * Stored alongside booking receipts in the same private bucket but under an
+ * `invoices/` prefix so RLS / signed-URL policies can be reasoned about per-prefix.
+ */
+export async function uploadInvoiceReceipt(args: {
+  invoiceId: string;
+  file: File;
+}): Promise<{ ok: true; data: ReceiptUploadResult } | { ok: false; error: ReceiptUploadError }> {
+  return uploadReceiptToPath(`invoices/${args.invoiceId}`, args.file);
 }
 
 /**
