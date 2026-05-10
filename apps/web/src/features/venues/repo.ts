@@ -121,3 +121,40 @@ export async function getCourtOccupancy(args: {
     })),
   };
 }
+
+export interface MarketplaceStats {
+  venueCount: number;
+  courtCount: number;
+  bookingsLast7d: number;
+}
+
+/**
+ * Aggregate counters used as social proof on the homepage. All scoped to
+ * active, non-deleted records. Counted in a single round-trip via three
+ * scalar subqueries — fast even without supporting indexes thanks to small
+ * launch-market data volume.
+ */
+export async function getMarketplaceStats(): Promise<MarketplaceStats> {
+  const result = await db.execute<{
+    venue_count: number;
+    court_count: number;
+    bookings_last_7d: number;
+  }>(sql`
+    select
+      (select count(*)::int from venues
+        where status = 'active' and deleted_at is null) as venue_count,
+      (select count(*)::int from courts c
+        join venues v on v.id = c.venue_id
+        where c.is_active = true and c.deleted_at is null
+          and v.status = 'active' and v.deleted_at is null) as court_count,
+      (select count(*)::int from bookings
+        where status not in ('cancelled', 'no_show', 'expired')
+          and created_at >= now() - interval '7 days') as bookings_last_7d
+  `);
+  const row = result[0];
+  return {
+    venueCount: row?.venue_count ?? 0,
+    courtCount: row?.court_count ?? 0,
+    bookingsLast7d: row?.bookings_last_7d ?? 0,
+  };
+}

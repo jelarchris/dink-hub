@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useActionState, useState } from "react";
 import { signUpAction, type ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
@@ -16,7 +17,9 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 type Role = "player" | "venue_owner";
 
 export default function SignUpPage() {
-  const [role, setRole] = useState<Role>("player");
+  const params = useSearchParams();
+  const initialRole: Role = params.get("role") === "venue_owner" ? "venue_owner" : "player";
+  const [role, setRole] = useState<Role>(initialRole);
   const [state, formAction] = useActionState<ActionResult | null, FormData>(
     signUpAction,
     null,
