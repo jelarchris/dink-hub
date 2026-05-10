@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Container } from "@/components/ui/container";
-import { findActiveVenueBySlug, getCourtOccupancy } from "@/features/venues";
+import { findActiveVenueBySlug, getCourtsOccupancy } from "@/features/venues";
 import { fromManilaWallClock, manilaUpcomingDays } from "@/lib/date";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
 import { BookingFlow } from "./booking-flow";
@@ -19,30 +19,26 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function BookCourtPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ courtId?: string; date?: string }>;
 }) {
   const { slug } = await params;
-  const sp = await searchParams;
-
   const found = await findActiveVenueBySlug(slug);
   if (!found) notFound();
   const { venue, courts } = found;
   if (courts.length === 0) notFound();
 
   const days = manilaUpcomingDays(DAYS_AHEAD);
-  const todayIso = days[0]!.isoDate;
-  const selectedDateIso =
-    sp.date && days.some((d) => d.isoDate === sp.date) ? sp.date : todayIso;
-  const selectedCourt = courts.find((c) => c.id === sp.courtId) ?? courts[0]!;
-
-  const [y, m, d] = selectedDateIso.split("-").map(Number);
-  const fromUtc = fromManilaWallClock(y!, m!, d!, 0, 0);
-  const toUtc = fromManilaWallClock(y!, m!, d!, 24, 0);
-  const { ranges } = await getCourtOccupancy({
-    courtId: selectedCourt.id,
+  // Pre-load occupancy across the entire 14-day window for every court so
+  // client-side switching never hits the network.
+  const firstDay = days[0]!;
+  const lastDay = days[days.length - 1]!;
+  const [fy, fm, fd] = firstDay.isoDate.split("-").map(Number);
+  const [ly, lm, ld] = lastDay.isoDate.split("-").map(Number);
+  const fromUtc = fromManilaWallClock(fy!, fm!, fd!, 0, 0);
+  const toUtc = fromManilaWallClock(ly!, lm!, ld!, 24, 0);
+  const occupancy = await getCourtsOccupancy({
+    courtIds: courts.map((c) => c.id),
     fromUtc,
     toUtc,
   });
@@ -64,8 +60,6 @@ export default async function BookCourtPage({
       <BookingFlow
         venueSlug={venue.slug}
         days={days.map((d) => ({ isoDate: d.isoDate, label: d.label, isToday: d.isToday }))}
-        selectedDateIso={selectedDateIso}
-        selectedCourtId={selectedCourt.id}
         courts={courts.map((c) => ({
           id: c.id,
           name: c.name,
@@ -74,7 +68,8 @@ export default async function BookCourtPage({
           hourlyRateCentavos: c.hourlyRateCentavos.toString(),
           imageUrl: venueMediaPublicUrl(c.imagePath),
         }))}
-        occupancy={ranges.map((r) => ({
+        occupancy={occupancy.map((r) => ({
+          courtId: r.courtId,
           startAtIso: r.startAt.toISOString(),
           endAtIso: r.endAt.toISOString(),
         }))}

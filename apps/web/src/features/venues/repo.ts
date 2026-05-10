@@ -130,6 +130,49 @@ export async function getCourtOccupancy(args: {
   };
 }
 
+/**
+ * Batch variant of getCourtOccupancy: returns occupancy for many courts
+ * across a single time window in one round-trip. Used by the booking page
+ * to pre-load 14 days × N courts so client-side switching is instant.
+ */
+export async function getCourtsOccupancy(args: {
+  courtIds: ReadonlyArray<string>;
+  fromUtc: Date;
+  toUtc: Date;
+}): Promise<Array<{ courtId: string; startAt: Date; endAt: Date; kind: "booking" | "hold" }>> {
+  if (args.courtIds.length === 0) return [];
+  const ids = sql.join(
+    args.courtIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const result = await db.execute<{
+    court_id: string;
+    start_at: Date;
+    end_at: Date;
+    kind: "booking" | "hold";
+  }>(sql`
+    select court_id, start_at, end_at, 'booking'::text as kind
+    from bookings
+    where court_id in (${ids})
+      and status not in ('cancelled', 'no_show', 'expired')
+      and start_at < ${args.toUtc.toISOString()}
+      and end_at > ${args.fromUtc.toISOString()}
+    union all
+    select court_id, start_at, end_at, 'hold'::text as kind
+    from slot_holds
+    where court_id in (${ids})
+      and expires_at > now()
+      and start_at < ${args.toUtc.toISOString()}
+      and end_at > ${args.fromUtc.toISOString()}
+  `);
+  return result.map((r) => ({
+    courtId: r.court_id,
+    startAt: new Date(r.start_at),
+    endAt: new Date(r.end_at),
+    kind: r.kind,
+  }));
+}
+
 export interface MarketplaceStats {
   venueCount: number;
   courtCount: number;

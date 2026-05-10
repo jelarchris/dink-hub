@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Trophy, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { startBookingFormAction } from "@/features/booking/actions";
@@ -10,13 +9,11 @@ import { formatPHP } from "@/lib/money";
 
 const OPEN_HOUR = 6;
 const CLOSE_HOUR = 22;
-const SLOT_MINUTES = 60; // Locked: 1-hour bookings only.
+const SLOT_MINUTES = 60;
 
 export interface BookingFlowProps {
   venueSlug: string;
   days: ReadonlyArray<{ isoDate: string; label: string; isToday: boolean }>;
-  selectedDateIso: string;
-  selectedCourtId: string;
   courts: ReadonlyArray<{
     id: string;
     name: string;
@@ -26,22 +23,39 @@ export interface BookingFlowProps {
     hourlyRateCentavos: string;
     imageUrl: string | null;
   }>;
-  occupancy: ReadonlyArray<{ startAtIso: string; endAtIso: string }>;
+  /** Occupancy for ALL courts across the full 14-day window. */
+  occupancy: ReadonlyArray<{ courtId: string; startAtIso: string; endAtIso: string }>;
+}
+
+interface OccupiedRange {
+  start: number;
+  end: number;
 }
 
 export function BookingFlow({
   venueSlug,
   days,
-  selectedDateIso,
-  selectedCourtId,
   courts,
   occupancy,
 }: BookingFlowProps) {
-  const selectedCourt = courts.find((c) => c.id === selectedCourtId) ?? courts[0]!;
+  const [selectedCourtId, setSelectedCourtId] = useState<string>(courts[0]!.id);
+  const [selectedDateIso, setSelectedDateIso] = useState<string>(days[0]!.isoDate);
   const [pickedSlotIso, setPickedSlotIso] = useState<string | null>(null);
 
+  const selectedCourt = courts.find((c) => c.id === selectedCourtId) ?? courts[0]!;
   const hourlyRate = BigInt(selectedCourt.hourlyRateCentavos);
   const slotPriceCentavos = (BigInt(SLOT_MINUTES) * hourlyRate) / 60n;
+
+  // Index occupancy once: courtId -> sorted ranges (millis).
+  const occupancyByCourt = useMemo(() => {
+    const map = new Map<string, OccupiedRange[]>();
+    for (const r of occupancy) {
+      const arr = map.get(r.courtId) ?? [];
+      arr.push({ start: new Date(r.startAtIso).getTime(), end: new Date(r.endAtIso).getTime() });
+      map.set(r.courtId, arr);
+    }
+    return map;
+  }, [occupancy]);
 
   const slots = useMemo(
     () =>
@@ -49,91 +63,69 @@ export function BookingFlow({
         isoDate: selectedDateIso,
         startHour: OPEN_HOUR,
         endHour: CLOSE_HOUR,
-      }).filter((d) => d.getMinutes() === 0), // Hourly slots only.
+      }).filter((d) => d.getMinutes() === 0),
     [selectedDateIso],
   );
 
-  const occupiedRanges = useMemo(
-    () =>
-      occupancy.map((o) => ({
-        start: new Date(o.startAtIso).getTime(),
-        end: new Date(o.endAtIso).getTime(),
-      })),
-    [occupancy],
-  );
-
-  // Frozen at mount — page re-mounts on day/court change via routing.
   const [now] = useState(() => Date.now());
+  const courtRanges = occupancyByCourt.get(selectedCourtId) ?? [];
 
   function isAvailable(slotStart: Date): boolean {
     const start = slotStart.getTime();
     const end = start + SLOT_MINUTES * 60_000;
     if (start <= now) return false;
-    if (
-      end >
-      new Date(`${selectedDateIso}T23:59:59+08:00`).getTime() + 60_000
-    ) {
-      return false;
-    }
-    for (const r of occupiedRanges) {
+    for (const r of courtRanges) {
       if (r.start < end && r.end > start) return false;
     }
     return true;
   }
 
-  function buildHref(patch: { courtId?: string; date?: string }): string {
-    const params = new URLSearchParams({
-      courtId: patch.courtId ?? selectedCourtId,
-      date: patch.date ?? selectedDateIso,
-    });
-    return `/venues/${venueSlug}/book?${params.toString()}`;
-  }
-
-  // Reset picked slot if the user changes day/court (URL navigation re-mounts
-  // this component, so this only matters for the in-memory selection).
-  // Selected date/court are props.
-
   const pickedDateLabel =
     days.find((d) => d.isoDate === selectedDateIso)?.label ?? selectedDateIso;
   const pickedSlotDate = pickedSlotIso ? new Date(pickedSlotIso) : null;
-  const pickedEndDate = pickedSlotDate
-    ? addMinutes(pickedSlotDate, SLOT_MINUTES)
-    : null;
-
+  const pickedEndDate = pickedSlotDate ? addMinutes(pickedSlotDate, SLOT_MINUTES) : null;
   const canContinue = pickedSlotIso !== null;
+
+  function pickCourt(id: string): void {
+    if (id === selectedCourtId) return;
+    setSelectedCourtId(id);
+    setPickedSlotIso(null);
+  }
+  function pickDate(iso: string): void {
+    if (iso === selectedDateIso) return;
+    setSelectedDateIso(iso);
+    setPickedSlotIso(null);
+  }
 
   return (
     <div className="pb-32">
-      {/* SELECT COURT */}
       <Section label="Select court">
         <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
           {courts.map((c) => (
             <CourtCard
               key={c.id}
-              href={buildHref({ courtId: c.id })}
               court={c}
               selected={c.id === selectedCourtId}
+              onSelect={() => pickCourt(c.id)}
             />
           ))}
         </div>
       </Section>
 
-      {/* SELECT DATE */}
       <Section label="Select date">
         <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
           {days.map((d) => (
             <DateChip
               key={d.isoDate}
-              href={buildHref({ date: d.isoDate })}
               isoDate={d.isoDate}
               label={d.label}
               selected={d.isoDate === selectedDateIso}
+              onSelect={() => pickDate(d.isoDate)}
             />
           ))}
         </div>
       </Section>
 
-      {/* SELECT TIME */}
       <Section label={`Select time · ${pickedDateLabel}`}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {slots.map((s) => {
@@ -147,11 +139,10 @@ export function BookingFlow({
                 disabled={!available}
                 onClick={() => setPickedSlotIso(iso)}
                 className={cn(
-                  "flex flex-col items-start gap-1 rounded-[var(--radius-md)] border p-3 text-left transition-all",
+                  "flex flex-col items-start gap-1 rounded-[var(--radius-md)] border p-3 text-left transition-colors",
                   isPicked &&
                     "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] ring-2 ring-[var(--color-brand-500)]",
-                  !isPicked &&
-                    available &&
+                  !isPicked && available &&
                     "border-[var(--color-border-default)] bg-[var(--color-bg)] hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)]",
                   !available &&
                     "cursor-not-allowed border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] text-[var(--color-fg-subtle)] opacity-60",
@@ -179,7 +170,6 @@ export function BookingFlow({
         </div>
       </Section>
 
-      {/* Sticky footer */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border-default)] bg-[var(--color-bg)]/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgb(0_0_0/_0.15)] backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div className="min-w-0 text-xs sm:text-sm">
@@ -197,20 +187,14 @@ export function BookingFlow({
                 </div>
               </>
             ) : (
-              <div className="text-[var(--color-fg-muted)]">
-                Pick a time to continue
-              </div>
+              <div className="text-[var(--color-fg-muted)]">Pick a time to continue</div>
             )}
           </div>
           <form action={startBookingFormAction}>
             <input type="hidden" name="venueSlug" value={venueSlug} />
             <input type="hidden" name="courtId" value={selectedCourtId} />
             <input type="hidden" name="startAt" value={pickedSlotIso ?? ""} />
-            <input
-              type="hidden"
-              name="endAt"
-              value={pickedEndDate?.toISOString() ?? ""}
-            />
+            <input type="hidden" name="endAt" value={pickedEndDate?.toISOString() ?? ""} />
             <button
               type="submit"
               disabled={!canContinue}
@@ -242,20 +226,21 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 function CourtCard({
-  href,
   court,
   selected,
+  onSelect,
 }: {
-  href: string;
   court: BookingFlowProps["courts"][number];
   selected: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <Link
-      href={href}
-      prefetch={false}
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
       className={cn(
-        "group flex w-[180px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] transition-all sm:w-[220px]",
+        "group flex w-[180px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] text-left transition-colors sm:w-[220px]",
         selected
           ? "border-[var(--color-brand-500)] ring-2 ring-[var(--color-brand-500)]"
           : "border-[var(--color-border-default)] hover:border-[var(--color-brand-500)]",
@@ -286,23 +271,21 @@ function CourtCard({
           <span className="ml-0.5 text-[10px] font-medium text-[var(--color-fg-muted)]">/hr</span>
         </span>
       </div>
-    </Link>
+    </button>
   );
 }
 
 function DateChip({
-  href,
   isoDate,
   label,
   selected,
+  onSelect,
 }: {
-  href: string;
   isoDate: string;
   label: string;
   selected: boolean;
+  onSelect: () => void;
 }) {
-  // Build a stable Manila-aware display: DOW / day / month abbreviation.
-  // The ISO date is "YYYY-MM-DD" — parse without timezone shenanigans.
   const [y, m, d] = isoDate.split("-").map(Number);
   const date = new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1));
   const dow = date.toLocaleDateString("en-PH", { weekday: "short", timeZone: "UTC" });
@@ -310,10 +293,10 @@ function DateChip({
   const mon = date.toLocaleDateString("en-PH", { month: "short", timeZone: "UTC" });
 
   return (
-    <Link
-      href={href}
-      prefetch={false}
-      aria-current={selected ? "true" : undefined}
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
       className={cn(
         "flex w-[64px] shrink-0 snap-start flex-col items-center justify-center rounded-[var(--radius-md)] border px-2 py-2 text-center transition-colors sm:w-[72px]",
         selected
@@ -338,6 +321,6 @@ function DateChip({
       >
         {mon}
       </span>
-    </Link>
+    </button>
   );
 }
