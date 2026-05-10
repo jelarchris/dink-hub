@@ -5,7 +5,7 @@ name: cron-expire
 # so the booking-expire + hold-release loops keep their designed cadence.
 #
 # Required repo secret: CRON_SECRET (must match the value set in Vercel env).
-# Optional repo secret: CRON_TARGET_URL (defaults to https://dinkhub.vercel.app).
+# Optional repo secret: CRON_TARGET_URL (defaults to https://dinkhub.ph).
 
 on:
   schedule:
@@ -31,7 +31,7 @@ jobs:
             echo "::error::CRON_SECRET repo secret is not set"
             exit 1
           fi
-          base="${CRON_TARGET_URL:-https://dinkhub-one.vercel.app}"
+          base="${CRON_TARGET_URL:-https://dinkhub.ph}"
           status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
             -X POST "$base/api/cron/expire" \
             -H "Authorization: Bearer $CRON_SECRET" \

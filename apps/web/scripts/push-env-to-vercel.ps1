@@ -12,7 +12,7 @@ $rename = @{
   'TURNSTILE_SITE_KEY' = 'NEXT_PUBLIC_TURNSTILE_SITE_KEY'
 }
 $override = @{
-  'NEXT_PUBLIC_APP_URL' = 'https://dinkhub-one.vercel.app'
+  'NEXT_PUBLIC_APP_URL' = 'https://dinkhub.ph'
   'NEXT_PUBLIC_APP_ENV' = 'production'
 }
 
