@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { TurnstileWidget } from "@/components/turnstile-widget";
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function SignInPage() {
   const params = useSearchParams();
@@ -67,6 +70,8 @@ export default function SignInPage() {
           <Button type="submit" size="lg" disabled={pending} className="mt-2">
             {pending ? "Signing in…" : "Sign in"}
           </Button>
+
+          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signin" />
 
           <p className="text-center text-sm text-[var(--color-fg-muted)]">
             New to DinkHub?{" "}

@@ -27,7 +27,7 @@ const clientSchema = z.object({
   NEXT_PUBLIC_APP_ENV: z.enum(["development", "preview", "production", "ci"]).default("development"),
   NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
   NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
-  TURNSTILE_SITE_KEY: z.string().optional(),
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
 });
 
 /**
@@ -49,7 +49,7 @@ const processEnv = {
   NEXT_PUBLIC_APP_ENV: blankToUndefined(process.env.NEXT_PUBLIC_APP_ENV),
   NEXT_PUBLIC_POSTHOG_KEY: blankToUndefined(process.env.NEXT_PUBLIC_POSTHOG_KEY),
   NEXT_PUBLIC_POSTHOG_HOST: blankToUndefined(process.env.NEXT_PUBLIC_POSTHOG_HOST),
-  TURNSTILE_SITE_KEY: blankToUndefined(process.env.TURNSTILE_SITE_KEY),
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: blankToUndefined(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
   SUPABASE_SERVICE_ROLE_KEY: blankToUndefined(process.env.SUPABASE_SERVICE_ROLE_KEY),
   DATABASE_URL: blankToUndefined(process.env.DATABASE_URL),
   DIRECT_URL: blankToUndefined(process.env.DIRECT_URL),

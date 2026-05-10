@@ -12,6 +12,7 @@ import {
 import { isBookingError } from "@/features/booking/errors";
 import { getCurrentUser } from "@/features/auth/service";
 import { type ActionResult } from "@/features/auth";
+import { checkRateLimit, limiters, rateLimitMessage } from "@/lib/rate-limit";
 
 const isoDateSchema = z
   .string()
@@ -48,6 +49,16 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
   if (!user) {
     const next = encodeURIComponent(`/venues/${(form.get("venueSlug") as string) ?? ""}`);
     redirect(`/sign-in?next=${next}`);
+  }
+
+  // Rate limit booking creation per user. CAPTCHA is intentionally NOT used
+  // here: the slot picker renders one <form> per slot which makes a single
+  // shared Turnstile widget impractical. The flow is auth-gated and the
+  // database EXCLUDE constraint guarantees no double-bookings, so per-user
+  // rate limiting is the proportional defense against abuse.
+  const rl = await checkRateLimit(limiters.bookingCreate, `booking:${user.id}`);
+  if (!rl.allowed) {
+    return { ok: false, code: "rate_limited", message: rateLimitMessage(rl.resetMs) };
   }
 
   const parsed = startBookingSchema.safeParse({
