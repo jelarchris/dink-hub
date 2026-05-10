@@ -99,7 +99,7 @@ export function TurnstileWidget({
     }
 
     if (window.turnstile) {
-      window.turnstile.ready(mount);
+      mount();
     } else {
       window.onTurnstileReady = mount;
     }
@@ -146,8 +146,6 @@ export function TurnstileWidget({
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileReady&render=explicit"
         strategy="afterInteractive"
-        async
-        defer
       />
       <div ref={containerRef} className={className} />
     </>
