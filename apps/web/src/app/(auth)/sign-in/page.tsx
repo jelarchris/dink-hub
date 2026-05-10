@@ -76,11 +76,11 @@ export default function SignInPage() {
             </Link>
           </div>
 
+          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signin" />
+
           <SubmitButton size="lg" pendingLabel="Signing in" className="mt-2">
             Sign in
           </SubmitButton>
-
-          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signin" />
 
           <p className="text-center text-sm text-[var(--color-fg-muted)]">
             New to DinkHub?{" "}

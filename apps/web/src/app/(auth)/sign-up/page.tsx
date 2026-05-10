@@ -124,11 +124,11 @@ export default function SignUpPage() {
             )}
           </FormField>
 
+          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signup" />
+
           <SubmitButton size="lg" pendingLabel="Creating account" className="mt-2">
             Create account
           </SubmitButton>
-
-          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signup" />
 
           <p className="text-center text-sm text-[var(--color-fg-muted)]">
             Already have an account?{" "}

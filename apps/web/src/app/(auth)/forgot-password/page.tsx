@@ -83,11 +83,11 @@ export default function ForgotPasswordPage() {
             )}
           </FormField>
 
+          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="forgot_password" />
+
           <SubmitButton size="lg" pendingLabel="Sending" className="mt-2">
             Send reset link
           </SubmitButton>
-
-          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="forgot_password" />
 
           <p className="text-center text-sm text-[var(--color-fg-muted)]">
             Remembered it?{" "}
