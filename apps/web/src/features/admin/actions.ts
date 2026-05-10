@@ -20,6 +20,11 @@ import {
 } from "./payouts";
 import { openDispute, resolveDispute } from "./disputes";
 import {
+  notifyBookingForceCancelled,
+  notifyDisputeOpened,
+  notifyDisputeResolved,
+} from "@/features/booking/notifications";
+import {
   forceCancelBookingInputSchema,
   generatePayoutInputSchema,
   markPayoutPaidInputSchema,
@@ -223,6 +228,8 @@ export async function forceCancelBookingAction(
     return unwrap(err);
   }
 
+  await notifyBookingForceCancelled(parsed.data.bookingId, parsed.data.reason);
+
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${parsed.data.bookingId}`);
   return { ok: true, data: undefined };
@@ -362,6 +369,8 @@ export async function openDisputeAction(
     return unwrap(err);
   }
 
+  await notifyDisputeOpened(parsed.data.paymentId, parsed.data.reason);
+
   revalidatePath("/admin/bookings");
   return { ok: true, data: undefined };
 }
@@ -392,6 +401,8 @@ export async function resolveDisputeAction(
   } catch (err) {
     return unwrap(err);
   }
+
+  await notifyDisputeResolved(parsed.data.paymentId, parsed.data.resolution, parsed.data.notes ?? null);
 
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/ledger");

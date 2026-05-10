@@ -4,6 +4,10 @@ import { db } from "@/db/client";
 import { bookings, courts, payments, profiles, venues } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
 import {
+  bookingCancelledByPlayerEmail,
+  bookingForceCancelledEmail,
+  disputeOpenedEmail,
+  disputeResolvedEmail,
   paymentRejectedEmail,
   paymentSubmittedEmail,
   paymentVerifiedEmail,
@@ -144,5 +148,103 @@ export async function notifyPaymentRejected(bookingId: string, reason: string): 
     await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "payment_rejected" });
   } catch (err) {
     captureException(err, { scope: "notify.payment_rejected", extra: { bookingId } });
+  }
+}
+
+export async function notifyBookingCancelledByPlayer(bookingId: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const tpl = bookingCancelledByPlayerEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      ownerDisplayName: ctx.ownerDisplayName,
+      playerDisplayName: ctx.playerDisplayName,
+    });
+    await sendEmail({ to: ctx.ownerEmail, ...tpl, tag: "booking_cancelled_by_player" });
+  } catch (err) {
+    captureException(err, { scope: "notify.booking_cancelled_by_player", extra: { bookingId } });
+  }
+}
+
+export async function notifyBookingForceCancelled(bookingId: string, reason: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const tpl = bookingForceCancelledEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      playerDisplayName: ctx.playerDisplayName,
+      reason,
+    });
+    await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "booking_force_cancelled" });
+  } catch (err) {
+    captureException(err, { scope: "notify.booking_force_cancelled", extra: { bookingId } });
+  }
+}
+
+async function bookingIdFromPaymentId(paymentId: string): Promise<string | null> {
+  const rows = await db
+    .select({ bookingId: payments.bookingId })
+    .from(payments)
+    .where(eq(payments.id, paymentId))
+    .limit(1);
+  return rows[0]?.bookingId ?? null;
+}
+
+export async function notifyDisputeOpened(paymentId: string, reason: string): Promise<void> {
+  try {
+    const bookingId = await bookingIdFromPaymentId(paymentId);
+    if (!bookingId) return;
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const tpl = disputeOpenedEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      playerDisplayName: ctx.playerDisplayName,
+      reason,
+    });
+    await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "dispute_opened" });
+  } catch (err) {
+    captureException(err, { scope: "notify.dispute_opened", extra: { paymentId } });
+  }
+}
+
+export async function notifyDisputeResolved(
+  paymentId: string,
+  resolution: "refund_full" | "rejected",
+  notes?: string | null,
+): Promise<void> {
+  try {
+    const bookingId = await bookingIdFromPaymentId(paymentId);
+    if (!bookingId) return;
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const tpl = disputeResolvedEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      playerDisplayName: ctx.playerDisplayName,
+      resolution,
+      notes: notes ?? null,
+    });
+    await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "dispute_resolved" });
+  } catch (err) {
+    captureException(err, { scope: "notify.dispute_resolved", extra: { paymentId } });
   }
 }

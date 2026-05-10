@@ -10,6 +10,7 @@ import {
   releaseHold,
 } from "@/features/booking/service";
 import { isBookingError } from "@/features/booking/errors";
+import { notifyBookingCancelledByPlayer } from "@/features/booking/notifications";
 import { getCurrentUser } from "@/features/auth/service";
 import { type ActionResult } from "@/features/auth";
 import { checkRateLimit, limiters, rateLimitMessage } from "@/lib/rate-limit";
@@ -106,6 +107,7 @@ export async function cancelBookingAction(_prev: ActionResult | null, form: Form
   } catch (err) {
     return unwrap(err);
   }
+  await notifyBookingCancelledByPlayer(parsed.data.bookingId);
   revalidatePath("/me/bookings");
   return { ok: true, data: null };
 }

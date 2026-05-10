@@ -175,3 +175,154 @@ export function paymentRejectedEmail(ctx: BookingEmailContext & {
       `Your slot is still held. Re-upload a valid receipt:\n${link}\n`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// booking_cancelled_by_player \u2192 venue owner
+// ---------------------------------------------------------------------------
+export function bookingCancelledByPlayerEmail(ctx: BookingEmailContext & {
+  ownerDisplayName: string;
+  playerDisplayName: string;
+}) {
+  const when = formatDateTimeManila(ctx.startAt);
+  const link = `${APP_URL}/owner/bookings`;
+
+  return {
+    subject: `Booking cancelled \u2014 ${ctx.venueName} on ${when}`,
+    html: shell({
+      heading: `A booking was cancelled`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.ownerDisplayName)}, ${escapeHtml(ctx.playerDisplayName)} cancelled their booking within the 15-minute cancellation window.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+        </div>
+        <p style="margin:0;">The slot is now available again on your calendar.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "View bookings",
+    }),
+    text:
+      `Booking cancelled\n\n` +
+      `${ctx.playerDisplayName} cancelled their booking.\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\n\n` +
+      `View: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// booking_force_cancelled \u2192 player (admin force-cancel)
+// ---------------------------------------------------------------------------
+export function bookingForceCancelledEmail(ctx: BookingEmailContext & {
+  playerDisplayName: string;
+  reason: string;
+}) {
+  const when = formatDateTimeManila(ctx.startAt);
+  const link = `${APP_URL}/me/bookings`;
+
+  return {
+    subject: `Your booking was cancelled \u2014 ${ctx.venueName}`,
+    html: shell({
+      heading: `Your booking was cancelled by support`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, our team cancelled your booking on ${escapeHtml(when)} at ${escapeHtml(ctx.venueName)}.</p>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 4px 0;"><strong>Reason:</strong></p>
+          <p style="margin:0;color:#991b1b;">${escapeHtml(ctx.reason)}</p>
+        </div>
+        <p style="margin:0;">If you've already paid and a refund is owed, our team will contact you separately to coordinate it.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "View my bookings",
+    }),
+    text:
+      `Your booking was cancelled by support\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\n\n` +
+      `Reason: ${ctx.reason}\n\n` +
+      `If a refund is owed, our team will contact you separately.\n\n` +
+      `View: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// dispute_opened \u2192 player
+// ---------------------------------------------------------------------------
+export function disputeOpenedEmail(ctx: BookingEmailContext & {
+  playerDisplayName: string;
+  reason: string;
+}) {
+  const when = formatDateTimeManila(ctx.startAt);
+  const link = `${APP_URL}/me/bookings`;
+
+  return {
+    subject: `Payment dispute opened \u2014 ${ctx.venueName}`,
+    html: shell({
+      heading: `A dispute was opened on your payment`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, our team opened a dispute on the payment for your booking on ${escapeHtml(when)} at ${escapeHtml(ctx.venueName)}. Your booking is still confirmed while we investigate.</p>
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 4px 0;"><strong>Reason:</strong></p>
+          <p style="margin:0;color:#92400e;">${escapeHtml(ctx.reason)}</p>
+        </div>
+        <p style="margin:0;">We'll email you again once the dispute is resolved. No action is needed from you right now.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "View my bookings",
+    }),
+    text:
+      `Payment dispute opened\n\n` +
+      `Venue: ${ctx.venueName}\nWhen: ${when}\n\n` +
+      `Reason: ${ctx.reason}\n\n` +
+      `Your booking is still confirmed while we investigate. No action needed.\n\n` +
+      `View: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// dispute_resolved \u2192 player
+// ---------------------------------------------------------------------------
+export function disputeResolvedEmail(ctx: BookingEmailContext & {
+  playerDisplayName: string;
+  resolution: "refund_full" | "rejected";
+  notes?: string | null;
+}) {
+  const when = formatDateTimeManila(ctx.startAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const isRefund = ctx.resolution === "refund_full";
+  const link = `${APP_URL}/me/bookings`;
+  const headline = isRefund ? `Your refund has been approved` : `Dispute resolved \u2014 booking upheld`;
+  const banner = isRefund
+    ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+         <p style="margin:0 0 6px 0;"><strong>Refund amount:</strong> ${escapeHtml(total)}</p>
+         <p style="margin:0;">Our team will coordinate the refund transfer with you separately.</p>
+       </div>`
+    : `<div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+         <p style="margin:0;">After review, the original payment stands and your booking remains confirmed.</p>
+       </div>`;
+  const notesBlock = ctx.notes
+    ? `<p style="margin:0 0 4px 0;"><strong>Notes from our team:</strong></p>
+       <p style="margin:0 0 12px 0;color:#334155;">${escapeHtml(ctx.notes)}</p>`
+    : "";
+
+  return {
+    subject: isRefund
+      ? `Refund approved \u2014 ${ctx.venueName}`
+      : `Dispute resolved \u2014 ${ctx.venueName}`,
+    html: shell({
+      heading: headline,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, the dispute on your booking on ${escapeHtml(when)} at ${escapeHtml(ctx.venueName)} has been resolved.</p>
+        ${banner}
+        ${notesBlock}
+      `,
+      ctaHref: link,
+      ctaLabel: "View my bookings",
+    }),
+    text:
+      `${headline}\n\n` +
+      `Venue: ${ctx.venueName}\nWhen: ${when}\n` +
+      (isRefund ? `Refund amount: ${total}\n` : "") +
+      (ctx.notes ? `\nNotes: ${ctx.notes}\n` : "") +
+      `\nView: ${link}\n`,
+  };
+}
