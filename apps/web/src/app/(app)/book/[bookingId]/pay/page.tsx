@@ -3,11 +3,13 @@ import { Check, Clock, CreditCard } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
+import { CopyButton } from "@/components/ui/copy-button";
 import { PageHeader, SectionLabel } from "@/components/ui/page-header";
 import { findBookingDetailForPlayer } from "@/features/bookings-view";
 import { getCurrentUser } from "@/features/auth/service";
 import { formatDateTimeManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
+import { venueMediaPublicUrl } from "@/lib/venue-media";
 import { ReceiptUploadForm } from "./receipt-form";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +58,7 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
                   venueName={venue.name}
                   gcashAccountName={venue.gcashAccountName}
                   gcashAccountNumber={venue.gcashAccountNumber}
+                  gcashQrImageUrl={venueMediaPublicUrl(venue.gcashQrImagePath)}
                   totalCentavos={booking.totalCentavos}
                   bookingId={booking.id}
                 />
@@ -135,42 +138,93 @@ function PaymentInstructions({
   venueName,
   gcashAccountName,
   gcashAccountNumber,
+  gcashQrImageUrl,
   totalCentavos,
   bookingId,
 }: {
   venueName: string;
   gcashAccountName: string | null;
   gcashAccountNumber: string | null;
+  gcashQrImageUrl: string | null;
   totalCentavos: bigint;
   bookingId: string;
 }) {
+  const totalLabel = formatPHP(totalCentavos);
+  const shortRef = bookingId.slice(0, 8);
   return (
     <ol className="space-y-3 text-sm">
       <Step n={1}>
-        Open GCash and send{" "}
-        <span className="font-bold text-[var(--color-brand-700)]">{formatPHP(totalCentavos)}</span>
-        {" "}to:
-        {gcashAccountNumber ? (
-          <div className="mt-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2">
-            <div className="text-xs text-[var(--color-fg-muted)]">Account</div>
-            <div className="font-mono text-base font-semibold">{gcashAccountNumber}</div>
-            {gcashAccountName && (
-              <div className="mt-1 text-xs text-[var(--color-fg-muted)]">{gcashAccountName}</div>
-            )}
+        <div className="space-y-2">
+          <div>
+            Open GCash and send{" "}
+            <span className="font-bold text-[var(--color-brand-700)]">{totalLabel}</span>
+            {" "}to:
           </div>
-        ) : (
-          <span className="text-[var(--color-fg-muted)]"> {venueName} (account info unavailable — contact the venue)</span>
-        )}
+          {gcashQrImageUrl && (
+            <div className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3">
+              <div className="mx-auto max-w-[240px]">
+                {/* QR codes need exact pixels for scanability — let the browser
+                    handle native sizing instead of next/image transforms. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={gcashQrImageUrl}
+                  alt={`GCash QR code for ${venueName}`}
+                  className="h-auto w-full rounded-[var(--radius-sm)] bg-white object-contain"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <p className="mt-2 text-center text-[11px] text-[var(--color-fg-muted)]">
+                Scan with GCash → Pay QR
+              </p>
+            </div>
+          )}
+          {gcashAccountNumber ? (
+            <div className="rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--color-fg-muted)]">
+                    GCash number
+                  </div>
+                  <div className="truncate font-mono text-base font-semibold tabular-nums">
+                    {gcashAccountNumber}
+                  </div>
+                  {gcashAccountName && (
+                    <div className="mt-0.5 truncate text-xs text-[var(--color-fg-muted)]">
+                      {gcashAccountName}
+                    </div>
+                  )}
+                </div>
+                <CopyButton value={gcashAccountNumber} label="GCash number" size="sm" />
+              </div>
+            </div>
+          ) : !gcashQrImageUrl ? (
+            <div className="text-[var(--color-fg-muted)]">
+              {venueName} (account info unavailable — contact the venue)
+            </div>
+          ) : null}
+        </div>
       </Step>
       <Step n={2}>
+        Enter exactly{" "}
+        <span className="font-bold text-[var(--color-brand-700)]">{totalLabel}</span> as the amount.
         In the GCash receipt screenshot, make sure the <strong>amount</strong> and{" "}
         <strong>reference number</strong> are visible.
       </Step>
       <Step n={3}>
-        Upload your receipt below. Booking ID:{" "}
-        <code className="rounded bg-[var(--color-bg-muted)] px-1.5 py-0.5 text-xs">
-          {bookingId.slice(0, 8)}
-        </code>
+        <div className="space-y-2">
+          <div>
+            Add this <strong>booking ID</strong> in the GCash message field so the venue can match
+            your payment quickly:
+          </div>
+          <div className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2">
+            <code className="truncate font-mono text-sm font-semibold">{shortRef}</code>
+            <CopyButton value={shortRef} label="booking ID" size="sm" />
+          </div>
+          <div className="text-xs text-[var(--color-fg-muted)]">
+            Then upload your receipt below.
+          </div>
+        </div>
       </Step>
     </ol>
   );

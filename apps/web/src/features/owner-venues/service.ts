@@ -138,6 +138,7 @@ export async function createVenue(args: {
       longitude: args.input.longitude,
       gcashAccountName: args.input.gcashAccountName,
       gcashAccountNumber: args.input.gcashAccountNumber,
+      gcashQrImagePath: args.input.gcashQrImagePath,
       coverImagePath: args.input.coverImagePath,
       status: "draft",
     })
@@ -172,6 +173,7 @@ export async function updateVenue(args: {
       longitude: args.input.longitude,
       gcashAccountName: args.input.gcashAccountName,
       gcashAccountNumber: args.input.gcashAccountNumber,
+      gcashQrImagePath: args.input.gcashQrImagePath,
       coverImagePath: args.input.coverImagePath,
       updatedAt: new Date(),
     })

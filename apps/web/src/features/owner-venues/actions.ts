@@ -73,7 +73,7 @@ async function resolveImagePath(args: {
   fileField: string;
   existingField: string;
   removeField: string;
-  kind: "venue-cover" | "court";
+  kind: "venue-cover" | "court" | "gcash-qr";
 }): Promise<{ ok: true; path: string | null } | { ok: false; result: ActionResult<never> }> {
   const { form, fileField, existingField, removeField, kind } = args;
   const fileEntry = form.get(fileField);
@@ -131,6 +131,16 @@ export async function createVenueAction(
   if (!img.ok) return img.result;
   if (img.path) form.set("coverImagePath", img.path);
 
+  const qr = await resolveImagePath({
+    form,
+    fileField: "gcashQrImageFile",
+    existingField: "gcashQrImagePath",
+    removeField: "gcashQrImageFile__remove",
+    kind: "gcash-qr",
+  });
+  if (!qr.ok) return qr.result;
+  if (qr.path) form.set("gcashQrImagePath", qr.path);
+
   const parsed = venueUpsertSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
     return {
@@ -175,6 +185,16 @@ export async function updateVenueAction(
   if (!img.ok) return img.result;
   // Always set the resolved path (may be null) so the schema sees the final value.
   form.set("coverImagePath", img.path ?? "");
+
+  const qr = await resolveImagePath({
+    form,
+    fileField: "gcashQrImageFile",
+    existingField: "gcashQrImagePath",
+    removeField: "gcashQrImageFile__remove",
+    kind: "gcash-qr",
+  });
+  if (!qr.ok) return qr.result;
+  form.set("gcashQrImagePath", qr.path ?? "");
 
   const parsed = updateVenueFormSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {

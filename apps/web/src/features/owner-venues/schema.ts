@@ -67,6 +67,12 @@ export const venueUpsertSchema = z.object({
     .max(500)
     .optional()
     .transform((v) => (v && v.length > 0 ? v : null)),
+  gcashQrImagePath: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
 });
 
 export type VenueUpsertInput = z.infer<typeof venueUpsertSchema>;

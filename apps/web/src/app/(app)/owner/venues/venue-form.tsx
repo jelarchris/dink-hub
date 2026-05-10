@@ -32,6 +32,7 @@ export interface VenueFormProps {
     | "longitude"
     | "gcashAccountName"
     | "gcashAccountNumber"
+    | "gcashQrImagePath"
     | "coverImagePath"
     | "version"
   >;
@@ -257,6 +258,16 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
             )}
           </FormField>
         </div>
+        <ImageUpload
+          name="gcashQrImageFile"
+          label="GCash QR code (optional but recommended)"
+          hint="Players scan this with the GCash app to pay instantly. Use the QR you save from GCash → Show QR."
+          aspect="square"
+          existingPathName="gcashQrImagePath"
+          initialPath={initial?.gcashQrImagePath ?? null}
+          initialUrl={venueMediaPublicUrl(initial?.gcashQrImagePath)}
+          invalid={Boolean(err("gcashQrImageFile") ?? err("gcashQrImagePath"))}
+        />
       </section>
 
       <div className="flex items-center gap-3 pt-2">

@@ -72,6 +72,7 @@ export const venues = pgTable("venues", {
   longitude: numeric("longitude", { precision: 9, scale: 6 }),
   gcashAccountName: text("gcash_account_name"),
   gcashAccountNumber: text("gcash_account_number"),
+  gcashQrImagePath: text("gcash_qr_image_path"),
   coverImageUrl: text("cover_image_url"),
   coverImagePath: text("cover_image_path"),
   status: venueStatusEnum("status").notNull().default("draft"),
