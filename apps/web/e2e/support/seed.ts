@@ -1,11 +1,13 @@
 /**
- * E2E seed/cleanup helpers — anonymous-flow scope.
+ * E2E seed/cleanup helpers.
  *
- * Inserts auth.users + profiles + one venue + one court + a known system fee.
+ * Inserts auth.users (with bcrypt password + confirmed email so signInWithPassword
+ * works) + profiles + one venue + one court + a known system fee.
  * Idempotent: stable email + slug, deletes old rows before re-inserting.
  *
- * Auth-required specs are deferred to Phase 2.10b — see ./README.md for the
- * unlock path (legacy JWT service-role key OR a test-only signin route).
+ * Authenticated specs sign in via POST /api/test/signin (gated by E2E_TEST_TOKEN
+ * and NODE_ENV !== "production"). The route does a normal signInWithPassword
+ * with the password defined here, so no Admin API or service-role JWT is needed.
  */
 import { config as loadEnv } from "dotenv";
 import path from "node:path";
@@ -15,6 +17,9 @@ import postgres from "postgres";
 const webRoot = process.cwd();
 loadEnv({ path: path.resolve(webRoot, ".env.local") });
 loadEnv({ path: path.resolve(webRoot, ".env.test.local"), override: false });
+
+/** Single shared password for every E2E persona. Never used outside test env. */
+export const E2E_PASSWORD = "e2e-test-Pw_2026";
 
 export const E2E = {
   admin: { email: "e2e-admin@dinkhub.test", displayName: "E2E Admin" },
@@ -47,14 +52,57 @@ async function ensureUser(
   `) as Array<{ id: string }>;
   const id = existing[0]?.id ?? randomUUID();
 
+  // Insert/refresh the auth row with a bcrypt password (via pgcrypto.crypt) and
+  // a confirmed email so signInWithPassword succeeds without a confirmation step.
+  // `instance_id` is the GoTrue default '00000000-...'.
   await sql`
-    insert into auth.users (id, email, instance_id, aud, role)
-    values (
-      ${id}::uuid, ${email},
-      '00000000-0000-0000-0000-000000000000'::uuid,
-      'authenticated', 'authenticated'
+    insert into auth.users (
+      id, instance_id, aud, role,
+      email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data,
+      confirmation_token, recovery_token,
+      email_change_token_new, email_change,
+      created_at, updated_at
     )
-    on conflict (id) do nothing
+    values (
+      ${id}::uuid,
+      '00000000-0000-0000-0000-000000000000'::uuid,
+      'authenticated', 'authenticated',
+      ${email},
+      extensions.crypt(${E2E_PASSWORD}, extensions.gen_salt('bf')),
+      now(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      '{}'::jsonb,
+      '', '', '', '',
+      now(), now()
+    )
+    on conflict (id) do update set
+      email                  = excluded.email,
+      encrypted_password     = excluded.encrypted_password,
+      email_confirmed_at     = coalesce(auth.users.email_confirmed_at, excluded.email_confirmed_at),
+      confirmation_token     = '',
+      recovery_token         = '',
+      email_change_token_new = '',
+      email_change           = '',
+      updated_at             = now()
+  `;
+
+  // GoTrue's signInWithPassword expects an `auth.identities` row for the email
+  // provider; without it the post-auth schema query returns null and the SDK
+  // surfaces a misleading "Database error querying schema" 500.
+  const identityData = {
+    sub: id,
+    email,
+    email_verified: true,
+    phone_verified: false,
+    provider: "email",
+  };
+  await sql`
+    insert into auth.identities (provider, provider_id, user_id, identity_data, last_sign_in_at, created_at, updated_at)
+    values ('email', ${id}, ${id}::uuid, ${sql.json(identityData)}, now(), now(), now())
+    on conflict (provider, provider_id) do update set
+      identity_data = excluded.identity_data,
+      updated_at    = now()
   `;
 
   // The on_auth_user_created trigger inserts a default profile; upsert role.
@@ -173,6 +221,7 @@ export async function teardownWorld(): Promise<void> {
       )`;
       await sql`delete from public.venues where owner_id = ${u.id}::uuid`;
       await sql`delete from public.profiles where id = ${u.id}::uuid`;
+      await sql`delete from auth.identities where user_id = ${u.id}::uuid`;
       await sql`delete from auth.users where id = ${u.id}::uuid`;
     }
   } finally {
