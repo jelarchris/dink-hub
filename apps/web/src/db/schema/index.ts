@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -45,6 +46,8 @@ export const profiles = pgTable("profiles", {
   province: text("province"),
   ratingGlicko: numeric("rating_glicko", { precision: 6, scale: 2 }).default("1500.00"),
   ratingRd: numeric("rating_rd", { precision: 6, scale: 2 }).default("350.00"),
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+  suspensionReason: text("suspension_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -71,6 +74,7 @@ export const venues = pgTable("venues", {
   gcashAccountNumber: text("gcash_account_number"),
   coverImageUrl: text("cover_image_url"),
   status: venueStatusEnum("status").notNull().default("draft"),
+  rejectionReason: text("rejection_reason"),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -231,6 +235,26 @@ export const adminUsers = pgTable("admin_users", {
 });
 
 // ----------------------------------------------------------------------------
+// audit_log — append-only record of every privileged admin mutation.
+// ----------------------------------------------------------------------------
+export const auditLog = pgTable("audit_log", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  actorId: uuid("actor_id")
+    .notNull()
+    .references(() => profiles.id),
+  actorEmail: text("actor_email").notNull(),
+  action: text("action").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: uuid("target_id"),
+  before: jsonb("before"),
+  after: jsonb("after"),
+  reason: text("reason"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ----------------------------------------------------------------------------
 // Inferred types — single source of truth for app code
 // ----------------------------------------------------------------------------
 export type Profile = typeof profiles.$inferSelect;
@@ -250,3 +274,6 @@ export type NewLedgerEntry = typeof ledgerEntries.$inferInsert;
 export type VenuePayout = typeof venuePayouts.$inferSelect;
 export type NewVenuePayout = typeof venuePayouts.$inferInsert;
 export type SystemFeeSetting = typeof systemFeeSettings.$inferSelect;
+export type NewSystemFeeSetting = typeof systemFeeSettings.$inferInsert;
+export type AuditLogEntry = typeof auditLog.$inferSelect;
+export type NewAuditLogEntry = typeof auditLog.$inferInsert;

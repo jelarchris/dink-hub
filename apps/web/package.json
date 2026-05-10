@@ -13,7 +13,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "promote-role": "tsx --tsconfig ./tsconfig.json scripts/promote-role.ts",
+    "migrate-run": "tsx --tsconfig ./tsconfig.json scripts/migrate-run.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

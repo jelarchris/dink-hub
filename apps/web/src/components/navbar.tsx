@@ -31,6 +31,11 @@ export function Navbar({ user }: NavbarProps) {
                 Owner dashboard
               </Link>
             )}
+            {user?.role === "admin" && (
+              <Link href="/admin" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+                Admin
+              </Link>
+            )}
             {user && (
               <Link href="/me/bookings" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
                 My bookings

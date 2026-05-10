@@ -12,6 +12,7 @@ export const venueStatusEnum = pgEnum("venue_status", [
   "pending_review",
   "active",
   "suspended",
+  "rejected",
 ]);
 
 export const courtSurfaceEnum = pgEnum("court_surface", [
