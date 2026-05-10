@@ -342,7 +342,9 @@ export async function verifyPayment(input: VerifyPaymentInput): Promise<Payment>
 
     // Double-entry: we owe the venue the court fee; we earned the system fee.
     // Sum of debits === sum of credits === total_centavos.
-    const entries: NewLedgerEntry[] = [
+    // Zero-amount entries are skipped — the ledger CHECK requires amount >= 1
+    // and a 0 entry carries no information (e.g. promo / waived system fee).
+    const allEntries: NewLedgerEntry[] = [
       {
         bookingId: booking.id,
         account: "venue_payable",
@@ -371,6 +373,7 @@ export async function verifyPayment(input: VerifyPaymentInput): Promise<Payment>
         createdBy: verifierId,
       },
     ];
+    const entries = allEntries.filter((e) => e.amountCentavos > 0n);
     await repo.insertLedgerEntries(entries, tx);
 
     return verifiedPayment;

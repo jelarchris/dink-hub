@@ -55,11 +55,20 @@ export async function createFixtures(opts?: { hourlyRateCentavos?: bigint }): Pr
   await insertAuthUser(ownerId, `owner-${ownerId.slice(0, 8)}@dinkhub.test`);
   await insertAuthUser(playerId, `player-${playerId.slice(0, 8)}@dinkhub.test`);
 
+  // NOTE: an `on_auth_user_created` trigger (migration 0002) inserts a default
+  // `profiles` row when we insert into `auth.users` above. Upsert to set the
+  // role + display name we actually want for tests.
   await db.execute(sql`
     insert into public.profiles (id, display_name, email, role)
     values
       (${ownerId}::uuid, 'Test Owner', ${`owner-${ownerId.slice(0, 8)}@dinkhub.test`}, 'venue_owner'),
       (${playerId}::uuid, 'Test Player', ${`player-${playerId.slice(0, 8)}@dinkhub.test`}, 'player')
+    on conflict (id) do update set
+      display_name = excluded.display_name,
+      email = excluded.email,
+      role = excluded.role,
+      deleted_at = null,
+      suspended_at = null
   `);
 
   await db.execute(sql`
@@ -70,6 +79,13 @@ export async function createFixtures(opts?: { hourlyRateCentavos?: bigint }): Pr
   await db.execute(sql`
     insert into public.courts (id, venue_id, name, hourly_rate_centavos, is_active)
     values (${courtId}::uuid, ${venueId}::uuid, 'Court 1', ${hourly}, true)
+  `);
+
+  // Ensure a known, non-zero current system fee. Tests assert against this value.
+  // We insert a fresh row with effective_from = now() so it wins the "current" query.
+  await db.execute(sql`
+    insert into public.system_fee_settings (fee_amount_centavos, effective_from, notes)
+    values (2000, now(), 'test fixture')
   `);
 
   const cleanup = async (): Promise<void> => {
