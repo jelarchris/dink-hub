@@ -1,7 +1,8 @@
 "use client";
 
-import { Trophy, Zap } from "lucide-react";
+import { Loader2, Trophy, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { startBookingFormAction } from "@/features/booking/actions";
 import { cn } from "@/lib/cn";
 import { addMinutes, formatTimeManila, generateDaySlotsManila } from "@/lib/date";
@@ -192,18 +193,7 @@ export function BookingFlow({
             <input type="hidden" name="courtId" value={selectedCourtId} />
             <input type="hidden" name="startAt" value={pickedSlotIso ?? ""} />
             <input type="hidden" name="endAt" value={pickedEndDate?.toISOString() ?? ""} />
-            <button
-              type="submit"
-              disabled={!canContinue}
-              className={cn(
-                "inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] px-5 text-sm font-semibold transition-colors",
-                canContinue
-                  ? "bg-[var(--color-brand-500)] text-white shadow-[var(--shadow-md)] hover:bg-[var(--color-brand-600)]"
-                  : "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
-              )}
-            >
-              Continue
-            </button>
+            <ContinueButton disabled={!canContinue} />
           </form>
         </div>
       </div>
@@ -219,6 +209,37 @@ function Section({ label, children }: { label: string; children: React.ReactNode
       </h2>
       {children}
     </section>
+  );
+}
+
+function ContinueButton({ disabled }: { disabled: boolean }) {
+  // useFormStatus reads the parent <form>'s submission state, so the button
+  // flips to a loading state the instant React fires the action — no waiting
+  // for the server round-trip + redirect to feel responsive.
+  const { pending } = useFormStatus();
+  const isDisabled = disabled || pending;
+  return (
+    <button
+      type="submit"
+      disabled={isDisabled}
+      aria-busy={pending}
+      className={cn(
+        "inline-flex h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-5 text-sm font-semibold transition-colors",
+        !isDisabled &&
+          "bg-[var(--color-brand-500)] text-white shadow-[var(--shadow-md)] hover:bg-[var(--color-brand-600)]",
+        pending && "bg-[var(--color-brand-600)] text-white",
+        disabled && !pending &&
+          "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
+      )}
+    >
+      {pending ? (
+        <>
+          <Loader2 className="size-4 animate-spin" aria-hidden /> Loading…
+        </>
+      ) : (
+        "Continue"
+      )}
+    </button>
   );
 }
 

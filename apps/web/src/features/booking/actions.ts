@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
   cancelBooking,
   createBooking,
-  holdSlot,
   releaseHold,
 } from "@/features/booking/service";
 import { isBookingError } from "@/features/booking/errors";
@@ -73,25 +72,22 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
 
   let bookingId: string;
   try {
-    const hold = await holdSlot({
-      playerId: user.id,
-      courtId: parsed.data.courtId,
-      startAt: parsed.data.startAt,
-      endAt: parsed.data.endAt,
-    });
+    // No separate holdSlot call: createBooking inserts atomically and the
+    // bookings EXCLUDE constraint prevents double-bookings at the DB level.
+    // Holds only matter when there's a wait between picker and submit; this
+    // action commits immediately, so the extra round-trip + court lookup
+    // were pure latency.
     const booking = await createBooking({
       playerId: user.id,
       courtId: parsed.data.courtId,
       startAt: parsed.data.startAt,
       endAt: parsed.data.endAt,
-      holdId: hold.id,
     });
     bookingId = booking.id;
   } catch (err) {
     return unwrap(err);
   }
 
-  revalidatePath(`/venues/${parsed.data.venueSlug}`);
   redirect(`/book/${bookingId}/pay`);
 }
 
