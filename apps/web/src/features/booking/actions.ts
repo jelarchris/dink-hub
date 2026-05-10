@@ -13,6 +13,7 @@ import { isBookingError } from "@/features/booking/errors";
 import { getCurrentUser } from "@/features/auth/service";
 import { type ActionResult } from "@/features/auth";
 import { checkRateLimit, limiters, rateLimitMessage } from "@/lib/rate-limit";
+import { captureException } from "@/lib/observability";
 
 const isoDateSchema = z
   .string()
@@ -36,7 +37,7 @@ function unwrap(err: unknown): ActionResult<never> {
   if (isBookingError(err)) {
     return { ok: false, code: err.code, message: err.message };
   }
-  console.error("[booking-action]", err);
+  captureException(err, { scope: "booking.action" });
   return fail("Something went wrong. Please try again.");
 }
 

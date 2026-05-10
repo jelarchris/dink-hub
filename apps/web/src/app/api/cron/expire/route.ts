@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { captureException } from "@/lib/observability";
 import { expireUnpaidBookings, releaseExpiredHolds } from "@/features/booking/service";
 
 /**
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
       bookings,
     });
   } catch (err) {
-    console.error("[cron/expire]", err);
+    captureException(err, { scope: "cron.expire" });
     return NextResponse.json(
       { ok: false, error: "internal_error" },
       { status: 500 },

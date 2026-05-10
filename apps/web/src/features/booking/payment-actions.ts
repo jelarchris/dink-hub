@@ -19,6 +19,7 @@ import {
   getClientIp,
   verifyTurnstileToken,
 } from "@/lib/turnstile";
+import { captureException } from "@/lib/observability";
 
 function fail(message: string, code = "unknown"): ActionResult<never> {
   return { ok: false, code, message };
@@ -28,7 +29,7 @@ function unwrap(err: unknown): ActionResult<never> {
   if (isBookingError(err)) {
     return { ok: false, code: err.code, message: err.message };
   }
-  console.error("[payment-action]", err);
+  captureException(err, { scope: "payment.action" });
   return fail("Something went wrong. Please try again.");
 }
 

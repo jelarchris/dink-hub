@@ -9,6 +9,7 @@ import {
   getClientIp,
   verifyTurnstileToken,
 } from "@/lib/turnstile";
+import { captureException } from "@/lib/observability";
 import { AuthError, isAuthError } from "./errors";
 import * as authService from "./service";
 
@@ -33,7 +34,7 @@ function toResult(err: unknown): ActionResult<never> {
     }
     return result;
   }
-  console.error("[auth-action] unexpected error", err);
+  captureException(err, { scope: "auth.action" });
   return { ok: false, code: "unknown", message: "Something went wrong. Please try again." };
 }
 

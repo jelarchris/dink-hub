@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { type ActionResult } from "@/features/auth";
+import { captureException } from "@/lib/observability";
 import { isAdminError } from "./errors";
 import {
   forceCancelBooking,
@@ -26,7 +27,7 @@ function fail(message: string, code = "unknown"): ActionResult {
 
 function unwrap(err: unknown): ActionResult {
   if (isAdminError(err)) return { ok: false, code: err.code, message: err.message };
-  console.error("[admin-action]", err);
+  captureException(err, { scope: "admin.action" });
   return fail("Something went wrong. Please try again.");
 }
 
