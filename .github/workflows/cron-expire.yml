@@ -1,0 +1,45 @@
+name: cron-expire
+
+# Hits /api/cron/expire on production every minute.
+# Vercel Hobby caps cron jobs at once-per-day; we run it from GitHub Actions
+# so the booking-expire + hold-release loops keep their designed cadence.
+#
+# Required repo secret: CRON_SECRET (must match the value set in Vercel env).
+# Optional repo secret: CRON_TARGET_URL (defaults to https://dinkhub.vercel.app).
+
+on:
+  schedule:
+    - cron: "* * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: cron-expire
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: POST /api/cron/expire
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_TARGET_URL: ${{ secrets.CRON_TARGET_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set"
+            exit 1
+          fi
+          base="${CRON_TARGET_URL:-https://dinkhub.vercel.app}"
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "$base/api/cron/expire" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json" \
+            --max-time 60 --retry 2 --retry-delay 5)
+          echo "status=$status"
+          cat /tmp/body.json || true
+          if [ "$status" != "200" ]; then
+            echo "::error::cron-expire returned non-200 status"
+            exit 1
+          fi
