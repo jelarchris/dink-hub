@@ -29,7 +29,7 @@ export default function SignUpPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>You're in</CardTitle>
+          <CardTitle>You&apos;re in</CardTitle>
           <CardDescription>
             {needsConfirmation
               ? "Check your email to confirm your account, then sign in."

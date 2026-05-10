@@ -39,7 +39,7 @@ export default async function OwnerPaymentsPage() {
 
       <h1 className="text-2xl font-bold tracking-tight">Payment verification</h1>
       <p className="mt-1 text-[var(--color-fg-muted)]">
-        Approve receipts to confirm bookings. Reject if the amount or reference doesn't match.
+        Approve receipts to confirm bookings. Reject if the amount or reference doesn&apos;t match.
       </p>
 
       <div className="mt-6 space-y-4">

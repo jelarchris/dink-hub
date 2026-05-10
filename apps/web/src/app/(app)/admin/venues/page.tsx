@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
-import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { listVenues } from "@/features/admin/service";
 import { venueListFilterSchema, type VenueListFilter } from "@/features/admin/schema";

@@ -21,7 +21,7 @@ export default async function OwnerVenuesPage() {
     return (
       <Container className="py-10">
         <Alert variant="warning" title="Owner access required">
-          Your account isn't set up as a venue owner.
+          Your account isn&apos;t set up as a venue owner.
         </Alert>
       </Container>
     );

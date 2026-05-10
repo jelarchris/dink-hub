@@ -146,7 +146,7 @@ export default async function VenuePage({
                   <span className="font-medium">GCash · {venue.gcashAccountName}</span>
                 </p>
                 <p className="text-[var(--color-fg-muted)]">
-                  After you pick a time, you'll get the payment number and 15 minutes to send the
+                  After you pick a time, you&apos;ll get the payment number and 15 minutes to send the
                   receipt.
                 </p>
               </CardContent>

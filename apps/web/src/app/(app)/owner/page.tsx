@@ -18,7 +18,7 @@ export default async function OwnerDashboard() {
     return (
       <Container className="py-10">
         <Alert variant="warning" title="Owner access required">
-          Your account isn't set up as a venue owner. Contact us to list a venue.
+          Your account isn&apos;t set up as a venue owner. Contact us to list a venue.
         </Alert>
       </Container>
     );

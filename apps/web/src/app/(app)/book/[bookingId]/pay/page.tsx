@@ -5,7 +5,6 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { findBookingDetailForPlayer } from "@/features/bookings-view";
 import { getCurrentUser } from "@/features/auth/service";
 import { formatDateTimeManila } from "@/lib/date";
@@ -24,6 +23,8 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
   if (!detail) notFound();
 
   const { booking, venue, court, payment } = detail;
+  // RSC: runs once per request — not a render-loop hazard.
+  // eslint-disable-next-line react-hooks/purity
   const minutesLeft = Math.max(0, Math.floor((booking.paymentDueAt.getTime() - Date.now()) / 60_000));
   // After rejection the booking status flips back to pending_payment but the
   // payment row carries `status: "rejected"` + the rejection reason. Detect
@@ -77,14 +78,14 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
           {booking.status === "payment_submitted" && payment && (
             <Alert variant="info" icon={<Clock />} title="Waiting for venue verification">
               Your receipt was uploaded {formatDateTimeManila(payment.submittedAt)}. The venue
-              owner will confirm your payment shortly. You'll see your booking move to{" "}
+              owner will confirm your payment shortly. You&apos;ll see your booking move to{" "}
               <strong>Confirmed</strong> here once approved.
             </Alert>
           )}
 
           {booking.status === "confirmed" && (
             <Alert variant="success" icon={<Check />} title="Booking confirmed">
-              You're all set! Show up at {venue.name} a few minutes early. See you on the court.
+              You&apos;re all set! Show up at {venue.name} a few minutes early. See you on the court.
             </Alert>
           )}
 

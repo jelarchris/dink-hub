@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { startBookingFormAction } from "@/features/booking/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -64,7 +64,9 @@ export function SlotPicker({
       })),
     [occupancy],
   );
-  const now = Date.now();
+  // Frozen at mount: filter past slots without a live ticker. Page is meant
+  // to be navigated (which re-mounts via routing), not idled on for hours.
+  const [now] = useState(() => Date.now());
 
   function buildHref(patch: Partial<{ date: string; courtId: string; duration: number }>) {
     const params = new URLSearchParams({

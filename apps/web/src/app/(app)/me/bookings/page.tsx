@@ -20,6 +20,8 @@ export default async function MyBookingsPage() {
   if (!user) redirect(`/sign-in?next=${encodeURIComponent("/me/bookings")}`);
 
   const items = await listBookingsForPlayer(user.id);
+  // RSC: runs once per request.
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
 
   return (
