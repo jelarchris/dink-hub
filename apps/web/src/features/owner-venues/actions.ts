@@ -19,6 +19,7 @@ import {
   venueStatusActionSchema,
   venueUpsertSchema,
 } from "@/features/owner-venues/schema";
+import { deleteVenueMedia, uploadVenueMedia } from "@/features/storage/venue-media";
 
 function fail(message: string, code = "unknown"): ActionResult<never> {
   return { ok: false, code, message };
@@ -56,6 +57,59 @@ async function ensureOwner(): Promise<
   return { ok: true, userId: profile.id };
 }
 
+/**
+ * Resolve the storage path for an image field carried in a FormData submission:
+ *
+ *   - If a non-empty File was picked → upload, return its new path (and best-
+ *     effort delete the previous one).
+ *   - Else if the user clicked Remove → return null (and delete the previous).
+ *   - Else → keep the existing path unchanged.
+ *
+ * Mutates the form by deleting the file/flag fields so downstream
+ * `Object.fromEntries(form)` parsing sees a clean record.
+ */
+async function resolveImagePath(args: {
+  form: FormData;
+  fileField: string;
+  existingField: string;
+  removeField: string;
+  kind: "venue-cover" | "court";
+}): Promise<{ ok: true; path: string | null } | { ok: false; result: ActionResult<never> }> {
+  const { form, fileField, existingField, removeField, kind } = args;
+  const fileEntry = form.get(fileField);
+  const existing = (form.get(existingField) ?? "").toString() || null;
+  const removed = (form.get(removeField) ?? "").toString() === "1";
+
+  // Strip from FormData so the schema parse never sees these.
+  form.delete(fileField);
+  form.delete(existingField);
+  form.delete(removeField);
+
+  if (fileEntry instanceof File && fileEntry.size > 0) {
+    const result = await uploadVenueMedia({ kind, file: fileEntry });
+    if (!result.ok) {
+      return {
+        ok: false,
+        result: {
+          ok: false,
+          code: "validation",
+          message: result.error.message,
+          fieldErrors: { [fileField]: [result.error.message] },
+        },
+      };
+    }
+    if (existing) await deleteVenueMedia(existing);
+    return { ok: true, path: result.data.path };
+  }
+
+  if (removed) {
+    if (existing) await deleteVenueMedia(existing);
+    return { ok: true, path: null };
+  }
+
+  return { ok: true, path: existing };
+}
+
 // ----------------------------------------------------------------------------
 // venue actions
 // ----------------------------------------------------------------------------
@@ -66,6 +120,16 @@ export async function createVenueAction(
 ): Promise<ActionResult<never>> {
   const guard = await ensureOwner();
   if (!guard.ok) return guard.result;
+
+  const img = await resolveImagePath({
+    form,
+    fileField: "coverImageFile",
+    existingField: "coverImagePath",
+    removeField: "coverImageFile__remove",
+    kind: "venue-cover",
+  });
+  if (!img.ok) return img.result;
+  if (img.path) form.set("coverImagePath", img.path);
 
   const parsed = venueUpsertSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
@@ -100,6 +164,17 @@ export async function updateVenueAction(
 ): Promise<ActionResult<never>> {
   const guard = await ensureOwner();
   if (!guard.ok) return guard.result;
+
+  const img = await resolveImagePath({
+    form,
+    fileField: "coverImageFile",
+    existingField: "coverImagePath",
+    removeField: "coverImageFile__remove",
+    kind: "venue-cover",
+  });
+  if (!img.ok) return img.result;
+  // Always set the resolved path (may be null) so the schema sees the final value.
+  form.set("coverImagePath", img.path ?? "");
 
   const parsed = updateVenueFormSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
@@ -169,6 +244,17 @@ export async function createCourtAction(
 ): Promise<ActionResult<never>> {
   const guard = await ensureOwner();
   if (!guard.ok) return guard.result;
+
+  const img = await resolveImagePath({
+    form,
+    fileField: "imageFile",
+    existingField: "imagePath",
+    removeField: "imageFile__remove",
+    kind: "court",
+  });
+  if (!img.ok) return img.result;
+  if (img.path) form.set("imagePath", img.path);
+
   const parsed = createCourtFormSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
     return {
@@ -199,6 +285,17 @@ export async function updateCourtAction(
 ): Promise<ActionResult<never>> {
   const guard = await ensureOwner();
   if (!guard.ok) return guard.result;
+
+  const img = await resolveImagePath({
+    form,
+    fileField: "imageFile",
+    existingField: "imagePath",
+    removeField: "imageFile__remove",
+    kind: "court",
+  });
+  if (!img.ok) return img.result;
+  form.set("imagePath", img.path ?? "");
+
   const parsed = updateCourtFormSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
     return {

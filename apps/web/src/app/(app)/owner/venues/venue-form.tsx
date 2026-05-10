@@ -6,8 +6,10 @@ import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageUpload } from "@/components/image-upload";
 import type { ActionResult } from "@/features/auth";
 import type { Venue } from "@/db/schema";
+import { venueMediaPublicUrl } from "@/lib/venue-media";
 
 type VenueAction = (
   prev: ActionResult<never> | null,
@@ -30,7 +32,7 @@ export interface VenueFormProps {
     | "longitude"
     | "gcashAccountName"
     | "gcashAccountNumber"
-    | "coverImageUrl"
+    | "coverImagePath"
     | "version"
   >;
   submitLabel?: string;
@@ -51,7 +53,7 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
   }
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-6" encType="multipart/form-data">
       {initial && (
         <>
           <input type="hidden" name="venueId" value={initial.id} />
@@ -106,25 +108,16 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
             />
           )}
         </FormField>
-        <FormField
-          id="coverImageUrl"
-          label="Cover image URL"
-          hint="Public https URL to a landscape image."
-          error={err("coverImageUrl")}
-        >
-          {({ id, describedBy, invalid }) => (
-            <Input
-              id={id}
-              name="coverImageUrl"
-              type="url"
-              inputMode="url"
-              placeholder="https://…"
-              defaultValue={initial?.coverImageUrl ?? ""}
-              aria-describedby={describedBy}
-              invalid={invalid}
-            />
-          )}
-        </FormField>
+        <ImageUpload
+          name="coverImageFile"
+          label="Cover image"
+          hint="Landscape works best — shown at the top of your venue page."
+          aspect="video"
+          existingPathName="coverImagePath"
+          initialPath={initial?.coverImagePath ?? null}
+          initialUrl={venueMediaPublicUrl(initial?.coverImagePath)}
+          invalid={Boolean(err("coverImageFile") ?? err("coverImagePath"))}
+        />
       </section>
 
       <section className="space-y-4">

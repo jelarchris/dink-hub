@@ -1,21 +1,15 @@
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
+import { ArrowLeft, ArrowRight, MapPin, Phone, Trophy, Wifi, ParkingCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { findActiveVenueBySlug, getCourtOccupancy } from "@/features/venues";
-import {
-  fromManilaWallClock,
-  manilaCalendarParts,
-  manilaUpcomingDays,
-} from "@/lib/date";
+import { findActiveVenueBySlug } from "@/features/venues";
+import { venueMediaPublicUrl } from "@/lib/venue-media";
 import { formatPHP } from "@/lib/money";
-import { SlotPicker } from "./slot-picker";
 
 export const dynamic = "force-dynamic";
-
-type SearchParams = Promise<{ date?: string; courtId?: string; duration?: string }>;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -28,57 +22,21 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function VenuePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: SearchParams;
 }) {
   const { slug } = await params;
-  const sp = await searchParams;
-
   const found = await findActiveVenueBySlug(slug);
   if (!found) notFound();
   const { venue, courts } = found;
 
-  if (courts.length === 0) {
-    return (
-      <Container className="py-10">
-        <VenueHeader venue={venue} />
-        <Card className="mt-6">
-          <CardContent className="py-12 text-center text-[var(--color-fg-muted)]">
-            This venue has no active courts yet.
-          </CardContent>
-        </Card>
-      </Container>
-    );
-  }
-
-  // Pick the day + court (default: today + first court)
-  const days = manilaUpcomingDays(7);
-  const todayIso = days[0]!.isoDate;
-  const selectedDateIso = sp.date && days.some((d) => d.isoDate === sp.date) ? sp.date : todayIso;
-  const selectedCourt = courts.find((c) => c.id === sp.courtId) ?? courts[0]!;
-  const durationMin = clampDuration(sp.duration);
-
-  // Compute the day's UTC range (Manila midnight → next Manila midnight)
-  const [y, m, d] = selectedDateIso.split("-").map(Number);
-  const fromUtc = fromManilaWallClock(y!, m!, d!, 0, 0);
-  const toUtc = fromManilaWallClock(y!, m!, d!, 24, 0);
-
-  const { ranges } = await getCourtOccupancy({
-    courtId: selectedCourt.id,
-    fromUtc,
-    toUtc,
-  });
-
-  // Strip server Date objects to ISO strings + bigints to strings for the client component.
-  const occupancy = ranges.map((r) => ({
-    startAtIso: r.startAt.toISOString(),
-    endAtIso: r.endAt.toISOString(),
-  }));
+  const minRate = courts.reduce<bigint | null>((acc, c) => {
+    const r = c.hourlyRateCentavos;
+    return acc === null || r < acc ? r : acc;
+  }, null);
 
   return (
-    <Container className="py-8">
+    <Container className="py-6 sm:py-8">
       <Link
         href="/venues"
         className="mb-4 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
@@ -86,121 +44,157 @@ export default async function VenuePage({
         <ArrowLeft className="size-4" /> All venues
       </Link>
 
-      <VenueHeader venue={venue} />
+      <div className="relative h-52 w-full overflow-hidden rounded-[var(--radius-lg)] bg-gradient-to-br from-[var(--color-brand-300)] via-[var(--color-brand-500)] to-[var(--color-accent-500)] sm:h-72">
+        {venue.coverImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={venue.coverImageUrl} alt={venue.name} className="h-full w-full object-cover" />
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute bottom-4 left-4 right-4 text-white">
+          <Badge variant="success" className="mb-2">Open for bookings</Badge>
+          <h1 className="text-2xl font-bold leading-tight drop-shadow sm:text-4xl">{venue.name}</h1>
+          <p className="mt-1 inline-flex items-center gap-1 text-sm drop-shadow">
+            <MapPin className="size-4" />
+            {venue.city}, {venue.province}
+          </p>
+        </div>
+      </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pick your time</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SlotPicker
-              venueSlug={venue.slug}
-              days={days}
-              selectedDateIso={selectedDateIso}
-              courts={courts.map((c) => ({
-                id: c.id,
-                name: c.name,
-                surface: c.surface,
-                isIndoor: c.isIndoor,
-                hourlyRateCentavos: c.hourlyRateCentavos.toString(),
-              }))}
-              selectedCourtId={selectedCourt.id}
-              durationMin={durationMin}
-              occupancy={occupancy}
-            />
-          </CardContent>
-        </Card>
-
-        <aside className="space-y-4">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Court details</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">
-              <dl className="space-y-2">
-                <div className="flex justify-between">
-                  <dt className="text-[var(--color-fg-muted)]">Surface</dt>
-                  <dd className="font-medium capitalize">{selectedCourt.surface}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[var(--color-fg-muted)]">Type</dt>
-                  <dd className="font-medium">{selectedCourt.isIndoor ? "Indoor" : "Outdoor"}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[var(--color-fg-muted)]">Hourly rate</dt>
-                  <dd className="font-semibold">{formatPHP(selectedCourt.hourlyRateCentavos)}</dd>
-                </div>
-              </dl>
+            <CardContent className="grid grid-cols-3 gap-4 py-5 text-center">
+              <Fact label="Courts" value={String(courts.length)} />
+              <Fact
+                label="From"
+                value={minRate !== null ? formatPHP(minRate) : "—"}
+                {...(minRate !== null ? { suffix: "/hr" } : {})}
+              />
+              <Fact label="Address" value={venue.addressLine} small />
             </CardContent>
           </Card>
 
-          {venue.gcashAccountName && (
+          {venue.description && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Payment</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                <p className="flex items-center gap-2">
-                  <Phone className="size-4 text-[var(--color-fg-muted)]" />
-                  <span className="font-medium">GCash · {venue.gcashAccountName}</span>
-                </p>
-                <p className="text-[var(--color-fg-muted)]">
-                  After you pick a time, you&apos;ll get the payment number and 15 minutes to send the
-                  receipt.
-                </p>
+              <CardHeader><CardTitle>About this venue</CardTitle></CardHeader>
+              <CardContent className="whitespace-pre-line text-[var(--color-fg)]">
+                {venue.description}
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Courts ({courts.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {courts.length === 0 ? (
+                <p className="text-sm text-[var(--color-fg-muted)]">No active courts yet.</p>
+              ) : (
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {courts.map((c) => {
+                    const img = venueMediaPublicUrl(c.imagePath);
+                    return (
+                      <li
+                        key={c.id}
+                        className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)]"
+                      >
+                        <div className="relative aspect-[4/3] w-full bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)]">
+                          {img ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={img} alt={c.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-white/85">
+                              <Trophy className="size-8" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 p-3">
+                          <div>
+                            <div className="font-semibold leading-tight">{c.name}</div>
+                            <div className="text-xs text-[var(--color-fg-muted)]">
+                              {c.isIndoor ? "Indoor" : "Outdoor"} · {c.surface}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-bold">{formatPHP(c.hourlyRateCentavos)}</div>
+                            <div className="text-[10px] uppercase tracking-wide text-[var(--color-fg-muted)]">per hour</div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <Card>
+            <CardContent className="space-y-4 py-5">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-[var(--color-fg-muted)]">
+                  Hourly rate from
+                </div>
+                <div className="text-3xl font-extrabold text-[var(--color-brand-700)]">
+                  {minRate !== null ? formatPHP(minRate) : "—"}
+                  <span className="ml-1 text-sm font-medium text-[var(--color-fg-muted)]">/ hr</span>
+                </div>
+              </div>
+              {courts.length > 0 ? (
+                <Link
+                  href={`/venues/${venue.slug}/book`}
+                  className={`${buttonVariants({ size: "lg" })} w-full justify-center`}
+                >
+                  Book a court <ArrowRight className="size-4" />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className={`${buttonVariants({ size: "lg" })} w-full cursor-not-allowed justify-center opacity-50`}
+                >
+                  No courts available
+                </button>
+              )}
+              <ul className="space-y-1.5 text-xs text-[var(--color-fg-muted)]">
+                <li className="flex items-center gap-2"><Wifi className="size-3.5" /> Real-time availability</li>
+                <li className="flex items-center gap-2"><ParkingCircle className="size-3.5" /> GCash payment</li>
+                <li className="flex items-center gap-2"><Phone className="size-3.5" /> 15-min cancellation window</li>
+              </ul>
+            </CardContent>
+          </Card>
         </aside>
       </div>
     </Container>
   );
 }
 
-function clampDuration(raw: string | undefined): 30 | 60 | 90 | 120 | 180 | 240 {
-  const n = Number(raw);
-  if ([30, 60, 90, 120, 180, 240].includes(n)) return n as 30 | 60 | 90 | 120 | 180 | 240;
-  return 60;
-}
-
-function VenueHeader({
-  venue,
+function Fact({
+  label,
+  value,
+  suffix,
+  small,
 }: {
-  venue: {
-    name: string;
-    description: string | null;
-    addressLine: string;
-    city: string;
-    province: string;
-    coverImageUrl: string | null;
-  };
+  label: string;
+  value: string;
+  suffix?: string;
+  small?: boolean;
 }) {
   return (
     <div>
       <div
-        className="h-44 w-full rounded-[var(--radius-lg)] bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-700)] bg-cover bg-center sm:h-56"
-        style={
-          venue.coverImageUrl
-            ? { backgroundImage: `url(${JSON.stringify(venue.coverImageUrl)})` }
-            : undefined
+        className={
+          small ? "line-clamp-2 text-sm font-semibold" : "text-2xl font-extrabold tracking-tight"
         }
-        aria-hidden="true"
-      />
-      <div className="mt-4 flex flex-col gap-1.5">
-        <Badge variant="success" className="self-start">
-          Open
-        </Badge>
-        <h1 className="text-3xl font-bold tracking-tight">{venue.name}</h1>
-        <p className="flex items-center gap-1 text-sm text-[var(--color-fg-muted)]">
-          <MapPin className="size-4" />
-          {venue.addressLine}, {venue.city}, {venue.province}
-        </p>
-        {venue.description && <p className="mt-2 max-w-2xl text-[var(--color-fg)]">{venue.description}</p>}
+      >
+        {value}
+        {suffix && (
+          <span className="ml-1 text-sm font-medium text-[var(--color-fg-muted)]">{suffix}</span>
+        )}
       </div>
+      <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--color-fg-muted)]">{label}</div>
     </div>
   );
 }
-
-// Touch unused import to avoid stripping
-void manilaCalendarParts;

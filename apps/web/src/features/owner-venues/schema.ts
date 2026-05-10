@@ -61,15 +61,12 @@ export const venueUpsertSchema = z.object({
     .refine((v) => v === null || /^[0-9+\-\s()]{6,40}$/.test(v), {
       message: "Use digits and basic punctuation only",
     }),
-  coverImageUrl: z
+  coverImagePath: z
     .string()
     .trim()
-    .max(2_000)
+    .max(500)
     .optional()
-    .transform((v) => (v && v.length > 0 ? v : null))
-    .refine((v) => v === null || /^https:\/\//.test(v), {
-      message: "Cover image must be an https URL",
-    }),
+    .transform((v) => (v && v.length > 0 ? v : null)),
 });
 
 export type VenueUpsertInput = z.infer<typeof venueUpsertSchema>;
@@ -92,6 +89,12 @@ export const courtUpsertSchema = z.object({
     .union([z.literal("on"), z.literal("true"), z.literal("false"), z.undefined()])
     .transform((v) => v === "on" || v === "true"),
   hourlyRatePhp: phpAmountSchema,
+  imagePath: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
 });
 
 export type CourtUpsertInput = z.infer<typeof courtUpsertSchema>;

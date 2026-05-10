@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { courts, venues, type Court, type Venue } from "@/db/schema";
+import { venueMediaPublicUrl } from "@/lib/venue-media";
 
 /**
  * Read-only repo for the public venue browsing surface.
@@ -37,6 +38,7 @@ export async function listActiveVenues(opts: {
       province: venues.province,
       addressLine: venues.addressLine,
       coverImageUrl: venues.coverImageUrl,
+      coverImagePath: venues.coverImagePath,
       description: venues.description,
       courtCount: sql<number>`count(${courts.id})::int`,
       minHourlyRateCentavos: sql<string | null>`min(${courts.hourlyRateCentavos})::text`,
@@ -60,7 +62,7 @@ export async function listActiveVenues(opts: {
       city: r.city,
       province: r.province,
       addressLine: r.addressLine,
-      coverImageUrl: r.coverImageUrl,
+      coverImageUrl: venueMediaPublicUrl(r.coverImagePath) ?? r.coverImageUrl,
       description: r.description,
     },
     courtCount: r.courtCount,
@@ -85,7 +87,13 @@ export async function findActiveVenueBySlug(
     .where(and(eq(courts.venueId, venue.id), eq(courts.isActive, true), isNull(courts.deletedAt)))
     .orderBy(asc(courts.name));
 
-  return { venue, courts: courtRows };
+  // Derive a final coverImageUrl from the storage path when present.
+  const venueWithImage: Venue = {
+    ...venue,
+    coverImageUrl: venueMediaPublicUrl(venue.coverImagePath) ?? venue.coverImageUrl,
+  };
+
+  return { venue: venueWithImage, courts: courtRows };
 }
 
 /**

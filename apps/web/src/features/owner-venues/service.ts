@@ -138,7 +138,7 @@ export async function createVenue(args: {
       longitude: args.input.longitude,
       gcashAccountName: args.input.gcashAccountName,
       gcashAccountNumber: args.input.gcashAccountNumber,
-      coverImageUrl: args.input.coverImageUrl,
+      coverImagePath: args.input.coverImagePath,
       status: "draft",
     })
     .returning();
@@ -172,7 +172,7 @@ export async function updateVenue(args: {
       longitude: args.input.longitude,
       gcashAccountName: args.input.gcashAccountName,
       gcashAccountNumber: args.input.gcashAccountNumber,
-      coverImageUrl: args.input.coverImageUrl,
+      coverImagePath: args.input.coverImagePath,
       updatedAt: new Date(),
     })
     .where(and(eq(venues.id, args.venueId), eq(venues.version, args.expectedVersion)))
@@ -253,6 +253,7 @@ export async function createCourt(args: {
       surface: args.input.surface,
       isIndoor: args.input.isIndoor,
       hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
+      imagePath: args.input.imagePath,
       isActive: true,
     })
     .returning();
@@ -273,6 +274,7 @@ export async function updateCourt(args: {
       surface: args.input.surface,
       isIndoor: args.input.isIndoor,
       hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
+      imagePath: args.input.imagePath,
       updatedAt: new Date(),
     })
     .where(eq(courts.id, court.id))

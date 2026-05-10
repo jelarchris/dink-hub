@@ -6,9 +6,11 @@ import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { ImageUpload } from "@/components/image-upload";
 import type { ActionResult } from "@/features/auth";
 import type { Court } from "@/db/schema";
 import { centavosToPhpString, courtSurfaceValues } from "@/features/owner-venues/schema";
+import { venueMediaPublicUrl } from "@/lib/venue-media";
 
 type CourtAction = (
   prev: ActionResult<never> | null,
@@ -19,7 +21,7 @@ export interface CourtFormProps {
   action: CourtAction;
   mode: "create" | "edit";
   venueId: string;
-  initial?: Pick<Court, "id" | "name" | "surface" | "isIndoor" | "hourlyRateCentavos">;
+  initial?: Pick<Court, "id" | "name" | "surface" | "isIndoor" | "hourlyRateCentavos" | "imagePath">;
 }
 
 const initialState: ActionResult<never> | null = null;
@@ -43,7 +45,7 @@ export function CourtForm({ action, mode, venueId, initial }: CourtFormProps) {
   }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-5" encType="multipart/form-data">
       <input type="hidden" name="venueId" value={venueId} />
       {initial && <input type="hidden" name="courtId" value={initial.id} />}
 
@@ -121,6 +123,17 @@ export function CourtForm({ action, mode, venueId, initial }: CourtFormProps) {
         />
         <span>Indoor court</span>
       </label>
+
+      <ImageUpload
+        name="imageFile"
+        label="Court photo"
+        hint="Help players recognise the court at a glance."
+        aspect="card"
+        existingPathName="imagePath"
+        initialPath={initial?.imagePath ?? null}
+        initialUrl={venueMediaPublicUrl(initial?.imagePath)}
+        invalid={Boolean(err("imageFile") ?? err("imagePath"))}
+      />
 
       <div className="flex items-center gap-3 pt-2">
         <SubmitButton pendingLabel="Saving">
