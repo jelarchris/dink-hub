@@ -7,7 +7,6 @@ import { signUpAction, type ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { TurnstileWidget } from "@/components/turnstile-widget";
@@ -34,114 +33,113 @@ export default function SignUpPage() {
 
   if (success) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>You&apos;re in</CardTitle>
-          <CardDescription>
+      <div className="space-y-4">
+        <header className="space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">Welcome</p>
+          <h1 className="text-2xl font-bold tracking-tight">You&apos;re in</h1>
+          <p className="text-sm text-[var(--color-fg-muted)]">
             {needsConfirmation
               ? "Check your email to confirm your account, then sign in."
               : "Account created. Let's find you a court."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href={needsConfirmation ? "/sign-in" : "/venues"}>
-            <Button size="lg" className="w-full">
-              {needsConfirmation ? "Go to sign in" : "Browse courts"}
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
+          </p>
+        </header>
+        <Link href={needsConfirmation ? "/sign-in" : "/venues"}>
+          <Button size="lg" className="w-full">
+            {needsConfirmation ? "Go to sign in" : "Browse courts"}
+          </Button>
+        </Link>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create your account</CardTitle>
-        <CardDescription>Free for players. Venue owners pay only on bookings.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form action={formAction} className="flex flex-col gap-4" noValidate>
-          {formError && <Alert variant="danger">{formError}</Alert>}
+    <div className="space-y-5">
+      <header className="space-y-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">Get started</p>
+        <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
+        <p className="text-sm text-[var(--color-fg-muted)]">Free for players. Owners pay only on bookings.</p>
+      </header>
 
-          <fieldset className="grid grid-cols-2 gap-2">
-            <legend className="sr-only">I am a</legend>
-            <RoleOption value="player" current={role} onSelect={setRole} label="Player" hint="Book courts" />
-            <RoleOption value="venue_owner" current={role} onSelect={setRole} label="Venue owner" hint="List my courts" />
-          </fieldset>
-          <input type="hidden" name="role" value={role} />
+      <form action={formAction} className="flex flex-col gap-4" noValidate>
+        {formError && <Alert variant="danger">{formError}</Alert>}
 
-          <FormField
-            id="displayName"
-            label="Name"
-            hint="Shown to venue owners on bookings"
-            error={fieldErrors?.displayName?.[0]}
-          >
-            {({ id, describedBy, invalid }) => (
-              <Input
-                id={id}
-                name="displayName"
-                type="text"
-                autoComplete="name"
-                required
-                placeholder="Juan dela Cruz"
-                aria-describedby={describedBy}
-                invalid={invalid}
-              />
-            )}
-          </FormField>
+        <fieldset className="grid grid-cols-2 gap-2">
+          <legend className="sr-only">I am a</legend>
+          <RoleOption value="player" current={role} onSelect={setRole} label="Player" hint="Book courts" />
+          <RoleOption value="venue_owner" current={role} onSelect={setRole} label="Venue owner" hint="List my courts" />
+        </fieldset>
+        <input type="hidden" name="role" value={role} />
 
-          <FormField id="email" label="Email" error={fieldErrors?.email?.[0]}>
-            {({ id, describedBy, invalid }) => (
-              <Input
-                id={id}
-                name="email"
-                type="email"
-                autoComplete="email"
-                inputMode="email"
-                required
-                placeholder="you@example.com"
-                aria-describedby={describedBy}
-                invalid={invalid}
-              />
-            )}
-          </FormField>
+        <FormField
+          id="displayName"
+          label="Name"
+          hint="Shown to venue owners on bookings"
+          error={fieldErrors?.displayName?.[0]}
+        >
+          {({ id, describedBy, invalid }) => (
+            <Input
+              id={id}
+              name="displayName"
+              type="text"
+              autoComplete="name"
+              required
+              placeholder="Juan dela Cruz"
+              aria-describedby={describedBy}
+              invalid={invalid}
+            />
+          )}
+        </FormField>
 
-          <FormField
-            id="password"
-            label="Password"
-            hint="At least 8 characters with letters and a number"
-            error={fieldErrors?.password?.[0]}
-          >
-            {({ id, describedBy, invalid }) => (
-              <Input
-                id={id}
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                aria-describedby={describedBy}
-                invalid={invalid}
-              />
-            )}
-          </FormField>
+        <FormField id="email" label="Email" error={fieldErrors?.email?.[0]}>
+          {({ id, describedBy, invalid }) => (
+            <Input
+              id={id}
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              required
+              placeholder="you@example.com"
+              aria-describedby={describedBy}
+              invalid={invalid}
+            />
+          )}
+        </FormField>
 
-          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signup" />
+        <FormField
+          id="password"
+          label="Password"
+          hint="At least 8 characters with letters and a number"
+          error={fieldErrors?.password?.[0]}
+        >
+          {({ id, describedBy, invalid }) => (
+            <Input
+              id={id}
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              aria-describedby={describedBy}
+              invalid={invalid}
+            />
+          )}
+        </FormField>
 
-          <SubmitButton size="lg" pendingLabel="Creating account" className="mt-2">
-            Create account
-          </SubmitButton>
+        <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signup" />
 
-          <p className="text-center text-sm text-[var(--color-fg-muted)]">
-            Already have an account?{" "}
-            <Link href="/sign-in" className="font-medium text-[var(--color-brand-600)] hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+        <SubmitButton size="lg" pendingLabel="Creating account" className="mt-1">
+          Create account
+        </SubmitButton>
+
+        <p className="text-center text-sm text-[var(--color-fg-muted)]">
+          Already have an account?{" "}
+          <Link href="/sign-in" className="font-medium text-[var(--color-brand-600)] hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </div>
   );
 }
 

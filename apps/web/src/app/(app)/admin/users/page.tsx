@@ -38,8 +38,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const result = await listUsers(filter);
 
   return (
-    <Container className="py-8">
-      <h1 className="text-2xl font-bold tracking-tight">Users</h1>
+    <Container className="py-3 sm:py-4">
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Users</h1>
       <p className="text-sm text-[var(--color-fg-muted)]">
         {result.total} total · page {result.page}
       </p>

@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import { PageHeader, SectionLabel } from "@/components/ui/page-header";
 import { createVenueAction } from "@/features/owner-venues/actions";
 import { VenueForm } from "../venue-form";
 
@@ -16,7 +14,7 @@ export default async function NewVenuePage() {
   if (!profile) redirect(`/sign-in?next=${encodeURIComponent("/owner/venues/new")}`);
   if (profile.role !== "venue_owner" && profile.role !== "admin") {
     return (
-      <Container className="py-10">
+      <Container className="py-4">
         <Alert variant="warning" title="Owner access required">
           Your account isn&apos;t set up as a venue owner.
         </Alert>
@@ -25,27 +23,15 @@ export default async function NewVenuePage() {
   }
 
   return (
-    <Container className="max-w-3xl py-8">
-      <Link
-        href="/owner/venues"
-        className="inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-      >
-        <ChevronLeft className="size-4" /> Back to venues
-      </Link>
-
-      <h1 className="mt-2 text-2xl font-bold tracking-tight">Add a venue</h1>
-      <p className="text-[var(--color-fg-muted)]">
-        Save it as a draft first, then add courts before submitting for review.
-      </p>
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Venue details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VenueForm action={createVenueAction} mode="create" />
-        </CardContent>
-      </Card>
+    <Container className="max-w-3xl py-3 sm:py-4">
+      <PageHeader
+        back={{ href: "/owner/venues", label: "Venues" }}
+        kicker="New venue"
+        title="Add a venue"
+        subtitle="Save it as a draft, then add courts before submitting for review."
+      />
+      <SectionLabel className="mb-2 block">Venue details</SectionLabel>
+      <VenueForm action={createVenueAction} mode="create" />
     </Container>
   );
 }

@@ -37,10 +37,10 @@ export default async function AdminPayoutsPage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <Container className="py-8">
+    <Container className="py-3 sm:py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Payouts</h1>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Payouts</h1>
           <p className="text-sm text-[var(--color-fg-muted)]">
             {result.total} total · page {result.page}
           </p>

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { ArrowLeft, Inbox } from "lucide-react";
-import Link from "next/link";
+import { Inbox } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { getSessionUser } from "@/server/session";
 import { listPendingPaymentsForOwner } from "@/features/bookings-view";
 import { getReceiptSignedUrl } from "@/features/storage";
@@ -19,8 +19,6 @@ export default async function OwnerPaymentsPage() {
   }
 
   const pending = await listPendingPaymentsForOwner(profile.id);
-  // Pre-sign all receipt URLs in parallel (5-min TTL). Authorized by upstream query
-  // (only payments belonging to venues this owner controls).
   const withUrls = await Promise.all(
     pending.map(async (p) => ({
       ...p,
@@ -29,20 +27,15 @@ export default async function OwnerPaymentsPage() {
   );
 
   return (
-    <Container className="max-w-3xl py-8">
-      <Link
-        href="/owner"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-      >
-        <ArrowLeft className="size-4" /> Dashboard
-      </Link>
+    <Container className="max-w-3xl py-3 sm:py-4">
+      <PageHeader
+        back={{ href: "/owner", label: "Owner" }}
+        kicker="Verify payments"
+        title={`${withUrls.length} pending`}
+        subtitle="Approve receipts to confirm bookings"
+      />
 
-      <h1 className="text-2xl font-bold tracking-tight">Payment verification</h1>
-      <p className="mt-1 text-[var(--color-fg-muted)]">
-        Approve receipts to confirm bookings. Reject if the amount or reference doesn&apos;t match.
-      </p>
-
-      <div className="mt-6 space-y-4">
+      <div className="space-y-3">
         {withUrls.length === 0 ? (
           <EmptyState
             icon={<Inbox />}

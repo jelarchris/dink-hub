@@ -30,7 +30,7 @@ export default async function AdminVenueDetailPage({ params }: PageProps) {
   const { venue, owner, courtCount, bookingCount } = detail;
 
   return (
-    <Container className="py-8">
+    <Container className="py-3 sm:py-4">
       <Link
         href="/admin/venues"
         className="mb-4 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
@@ -40,7 +40,7 @@ export default async function AdminVenueDetailPage({ params }: PageProps) {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{venue.name}</h1>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{venue.name}</h1>
           <p className="mt-1 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)]">
             <MapPin className="size-3.5" /> {venue.addressLine}, {venue.city}, {venue.province}
           </p>

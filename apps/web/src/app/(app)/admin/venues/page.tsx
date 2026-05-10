@@ -34,10 +34,10 @@ export default async function AdminVenuesPage({ searchParams }: PageProps) {
   const result = await listVenues(filter);
 
   return (
-    <Container className="py-8">
+    <Container className="py-3 sm:py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Venues</h1>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Venues</h1>
           <p className="text-sm text-[var(--color-fg-muted)]">
             {result.total} total · showing page {result.page}
           </p>

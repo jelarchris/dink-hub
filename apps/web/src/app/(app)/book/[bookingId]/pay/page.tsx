@@ -1,10 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { Check, Clock, CreditCard } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader, SectionLabel } from "@/components/ui/page-header";
 import { findBookingDetailForPlayer } from "@/features/bookings-view";
 import { getCurrentUser } from "@/features/auth/service";
 import { formatDateTimeManila } from "@/lib/date";
@@ -26,28 +25,19 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
   // RSC: runs once per request — not a render-loop hazard.
   // eslint-disable-next-line react-hooks/purity
   const minutesLeft = Math.max(0, Math.floor((booking.paymentDueAt.getTime() - Date.now()) / 60_000));
-  // After rejection the booking status flips back to pending_payment but the
-  // payment row carries `status: "rejected"` + the rejection reason. Detect
-  // that combination to show the "rejected — try again" banner above the upload form.
   const wasRejected = booking.status === "pending_payment" && payment?.status === "rejected";
 
   return (
-    <Container className="max-w-3xl py-8">
-      <Link
-        href="/me/bookings"
-        className="mb-4 inline-block text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-      >
-        ← My bookings
-      </Link>
+    <Container className="max-w-4xl py-3 sm:py-4">
+      <PageHeader
+        back={{ href: "/me/bookings", label: "My bookings" }}
+        kicker="Pay"
+        title="Complete your payment"
+        subtitle={`Single GCash transfer to ${venue.name}, then upload the receipt.`}
+      />
 
-      <h1 className="text-2xl font-bold tracking-tight">Complete your payment</h1>
-      <p className="mt-1 text-[var(--color-fg-muted)]">
-        Send a single GCash transfer to <span className="font-medium">{venue.name}</span>, then
-        upload the receipt.
-      </p>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
+      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-5">
           {booking.status === "pending_payment" && (
             <>
               {wasRejected && payment && (
@@ -57,21 +47,24 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
                     : "Please upload a corrected receipt below."}
                 </Alert>
               )}
-              <PaymentInstructions
-                venueName={venue.name}
-                gcashAccountName={venue.gcashAccountName}
-                gcashAccountNumber={venue.gcashAccountNumber}
-                totalCentavos={booking.totalCentavos}
-                bookingId={booking.id}
-              />
-              <Card>
-                <CardHeader>
-                  <CardTitle>Upload your receipt</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ReceiptUploadForm bookingId={booking.id} />
-                </CardContent>
-              </Card>
+
+              <section>
+                <SectionLabel className="mb-2 inline-flex items-center gap-1.5">
+                  <CreditCard className="size-3.5" /> Send via GCash
+                </SectionLabel>
+                <PaymentInstructions
+                  venueName={venue.name}
+                  gcashAccountName={venue.gcashAccountName}
+                  gcashAccountNumber={venue.gcashAccountNumber}
+                  totalCentavos={booking.totalCentavos}
+                  bookingId={booking.id}
+                />
+              </section>
+
+              <section>
+                <SectionLabel className="mb-2 block">Upload your receipt</SectionLabel>
+                <ReceiptUploadForm bookingId={booking.id} />
+              </section>
             </>
           )}
 
@@ -98,43 +91,43 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
           )}
         </div>
 
-        <aside className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Booking summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div>
-                <div className="font-medium">{venue.name}</div>
-                <div className="text-[var(--color-fg-muted)]">{court.name}</div>
+        <aside>
+          <SectionLabel className="mb-2 block">Booking summary</SectionLabel>
+          <dl className="divide-y divide-[var(--color-border-default)] text-sm">
+            <div className="pb-2">
+              <div className="font-semibold">{venue.name}</div>
+              <div className="text-[var(--color-fg-muted)]">{court.name}</div>
+            </div>
+            <SummaryRow label="Start" value={formatDateTimeManila(booking.startAt)} />
+            <SummaryRow label="End" value={formatDateTimeManila(booking.endAt)} />
+            <SummaryRow label="Court fee" value={formatPHP(booking.courtFeeCentavos)} />
+            <SummaryRow label="System fee" value={formatPHP(booking.systemFeeCentavos)} />
+            <div className="flex items-center justify-between py-2 text-base">
+              <dt className="font-semibold">Total</dt>
+              <dd className="font-bold text-[var(--color-brand-700)]">{formatPHP(booking.totalCentavos)}</dd>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <dt className="text-[var(--color-fg-muted)]">Status</dt>
+              <dd><StatusBadge status={booking.status} /></dd>
+            </div>
+            {booking.status === "pending_payment" && (
+              <div className="pt-2 text-xs text-[var(--color-fg-muted)]">
+                Payment due in <strong className="text-[var(--color-fg)]">{minutesLeft} min</strong>.
               </div>
-              <div className="border-t border-[var(--color-border-default)] pt-3">
-                <div className="text-[var(--color-fg-muted)]">Start</div>
-                <div className="font-medium">{formatDateTimeManila(booking.startAt)}</div>
-              </div>
-              <div>
-                <div className="text-[var(--color-fg-muted)]">End</div>
-                <div className="font-medium">{formatDateTimeManila(booking.endAt)}</div>
-              </div>
-              <div className="border-t border-[var(--color-border-default)] pt-3 space-y-1">
-                <Row label="Court fee" value={formatPHP(booking.courtFeeCentavos)} />
-                <Row label="System fee" value={formatPHP(booking.systemFeeCentavos)} />
-                <Row label="Total" value={formatPHP(booking.totalCentavos)} bold />
-              </div>
-              <div className="flex items-center justify-between border-t border-[var(--color-border-default)] pt-3">
-                <span className="text-[var(--color-fg-muted)]">Status</span>
-                <StatusBadge status={booking.status} />
-              </div>
-              {booking.status === "pending_payment" && (
-                <div className="text-xs text-[var(--color-fg-muted)]">
-                  Payment due in <strong className="text-[var(--color-fg)]">{minutesLeft} min</strong>.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            )}
+          </dl>
         </aside>
       </div>
     </Container>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <dt className="text-[var(--color-fg-muted)]">{label}</dt>
+      <dd className="font-medium text-right">{value}</dd>
+    </div>
   );
 }
 
@@ -152,43 +145,34 @@ function PaymentInstructions({
   bookingId: string;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CreditCard className="size-5" /> Send via GCash
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <ol className="space-y-3 text-sm">
-          <Step n={1}>
-            Open GCash and send{" "}
-            <span className="font-bold text-[var(--color-brand-700)]">{formatPHP(totalCentavos)}</span>
-            {" "}to:
-            {gcashAccountNumber ? (
-              <div className="mt-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2">
-                <div className="text-xs text-[var(--color-fg-muted)]">Account</div>
-                <div className="font-mono text-base font-semibold">{gcashAccountNumber}</div>
-                {gcashAccountName && (
-                  <div className="mt-1 text-xs text-[var(--color-fg-muted)]">{gcashAccountName}</div>
-                )}
-              </div>
-            ) : (
-              <span className="text-[var(--color-fg-muted)]">{venueName} (account info unavailable — contact the venue)</span>
+    <ol className="space-y-3 text-sm">
+      <Step n={1}>
+        Open GCash and send{" "}
+        <span className="font-bold text-[var(--color-brand-700)]">{formatPHP(totalCentavos)}</span>
+        {" "}to:
+        {gcashAccountNumber ? (
+          <div className="mt-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2">
+            <div className="text-xs text-[var(--color-fg-muted)]">Account</div>
+            <div className="font-mono text-base font-semibold">{gcashAccountNumber}</div>
+            {gcashAccountName && (
+              <div className="mt-1 text-xs text-[var(--color-fg-muted)]">{gcashAccountName}</div>
             )}
-          </Step>
-          <Step n={2}>
-            In the GCash receipt screenshot, make sure the <strong>amount</strong> and{" "}
-            <strong>reference number</strong> are visible.
-          </Step>
-          <Step n={3}>
-            Upload your receipt below. Booking ID:{" "}
-            <code className="rounded bg-[var(--color-bg-muted)] px-1.5 py-0.5 text-xs">
-              {bookingId.slice(0, 8)}
-            </code>
-          </Step>
-        </ol>
-      </CardContent>
-    </Card>
+          </div>
+        ) : (
+          <span className="text-[var(--color-fg-muted)]"> {venueName} (account info unavailable — contact the venue)</span>
+        )}
+      </Step>
+      <Step n={2}>
+        In the GCash receipt screenshot, make sure the <strong>amount</strong> and{" "}
+        <strong>reference number</strong> are visible.
+      </Step>
+      <Step n={3}>
+        Upload your receipt below. Booking ID:{" "}
+        <code className="rounded bg-[var(--color-bg-muted)] px-1.5 py-0.5 text-xs">
+          {bookingId.slice(0, 8)}
+        </code>
+      </Step>
+    </ol>
   );
 }
 
@@ -200,15 +184,6 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
       </span>
       <span>{children}</span>
     </li>
-  );
-}
-
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div className={"flex items-center justify-between" + (bold ? " text-base" : "")}>
-      <span className={bold ? "font-semibold" : "text-[var(--color-fg-muted)]"}>{label}</span>
-      <span className={bold ? "font-bold" : ""}>{value}</span>
-    </div>
   );
 }
 

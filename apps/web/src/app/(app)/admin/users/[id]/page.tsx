@@ -34,7 +34,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
   const isSelf = admin.id === profile.id;
 
   return (
-    <Container className="py-8">
+    <Container className="py-3 sm:py-4">
       <Link
         href="/admin/users"
         className="mb-4 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
@@ -44,7 +44,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{profile.displayName}</h1>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{profile.displayName}</h1>
           <p className="text-sm text-[var(--color-fg-muted)]">{profile.email}</p>
         </div>
         <div className="flex items-center gap-2">

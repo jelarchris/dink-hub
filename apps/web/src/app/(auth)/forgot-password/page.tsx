@@ -5,13 +5,6 @@ import { useActionState } from "react";
 import { requestPasswordResetAction, type ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
 import { SubmitButton } from "@/components/ui/submit-button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { TurnstileWidget } from "@/components/turnstile-widget";
@@ -31,75 +24,67 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>
-            If an account with that email exists, we&apos;ve sent a reset link. It expires in 1
-            hour.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="space-y-3">
+        <header className="space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">Reset link sent</p>
+          <h1 className="text-2xl font-bold tracking-tight">Check your email</h1>
           <p className="text-sm text-[var(--color-fg-muted)]">
-            Didn&apos;t receive it? Check your spam folder, then{" "}
-            <Link
-              href="/forgot-password"
-              className="font-medium text-[var(--color-brand-600)] hover:underline"
-            >
-              try again
-            </Link>
-            .
+            If an account with that email exists, we&apos;ve sent a reset link. It expires in 1 hour.
           </p>
-        </CardContent>
-      </Card>
+        </header>
+        <p className="text-sm text-[var(--color-fg-muted)]">
+          Didn&apos;t receive it? Check your spam folder, then{" "}
+          <Link href="/forgot-password" className="font-medium text-[var(--color-brand-600)] hover:underline">
+            try again
+          </Link>
+          .
+        </p>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Forgot your password?</CardTitle>
-        <CardDescription>
-          Enter the email on your account and we&apos;ll send you a link to reset it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form action={formAction} className="flex flex-col gap-4" noValidate>
-          {formError && <Alert variant="danger">{formError}</Alert>}
+    <div className="space-y-5">
+      <header className="space-y-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">Account recovery</p>
+        <h1 className="text-2xl font-bold tracking-tight">Forgot your password?</h1>
+        <p className="text-sm text-[var(--color-fg-muted)]">
+          Enter the email on your account and we&apos;ll send a reset link.
+        </p>
+      </header>
 
-          <FormField id="email" label="Email" error={fieldErrors?.email?.[0]}>
-            {({ id, describedBy, invalid }) => (
-              <Input
-                id={id}
-                name="email"
-                type="email"
-                autoComplete="email"
-                inputMode="email"
-                required
-                placeholder="you@example.com"
-                aria-describedby={describedBy}
-                invalid={invalid}
-              />
-            )}
-          </FormField>
+      <form action={formAction} className="flex flex-col gap-4" noValidate>
+        {formError && <Alert variant="danger">{formError}</Alert>}
 
-          <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="forgot_password" />
+        <FormField id="email" label="Email" error={fieldErrors?.email?.[0]}>
+          {({ id, describedBy, invalid }) => (
+            <Input
+              id={id}
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              required
+              placeholder="you@example.com"
+              aria-describedby={describedBy}
+              invalid={invalid}
+            />
+          )}
+        </FormField>
 
-          <SubmitButton size="lg" pendingLabel="Sending" className="mt-2">
-            Send reset link
-          </SubmitButton>
+        <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="forgot_password" />
 
-          <p className="text-center text-sm text-[var(--color-fg-muted)]">
-            Remembered it?{" "}
-            <Link
-              href="/sign-in"
-              className="font-medium text-[var(--color-brand-600)] hover:underline"
-            >
-              Sign in
-            </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+        <SubmitButton size="lg" pendingLabel="Sending" className="mt-1">
+          Send reset link
+        </SubmitButton>
+
+        <p className="text-center text-sm text-[var(--color-fg-muted)]">
+          Remembered it?{" "}
+          <Link href="/sign-in" className="font-medium text-[var(--color-brand-600)] hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </div>
   );
 }

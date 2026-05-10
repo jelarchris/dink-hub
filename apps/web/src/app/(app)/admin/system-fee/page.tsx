@@ -16,8 +16,8 @@ export default async function AdminSystemFeePage() {
   ]);
 
   return (
-    <Container className="py-8">
-      <h1 className="text-2xl font-bold tracking-tight">System fee</h1>
+    <Container className="py-3 sm:py-4">
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">System fee</h1>
       <p className="text-sm text-[var(--color-fg-muted)]">
         Snapshotted to every new booking — historical bookings keep their old rate.
       </p>

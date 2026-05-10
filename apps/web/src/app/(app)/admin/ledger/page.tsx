@@ -34,8 +34,8 @@ export default async function AdminLedgerPage({ searchParams }: PageProps) {
   const result = await listLedger(filter);
 
   return (
-    <Container className="py-8">
-      <h1 className="text-2xl font-bold tracking-tight">Ledger</h1>
+    <Container className="py-3 sm:py-4">
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Ledger</h1>
       <p className="text-sm text-[var(--color-fg-muted)]">
         {result.total} entries · page {result.page}
       </p>

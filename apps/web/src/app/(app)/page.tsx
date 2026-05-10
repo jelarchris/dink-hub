@@ -53,7 +53,7 @@ function Hero({
 }) {
   return (
     <section
-      className="relative isolate overflow-hidden bg-[var(--color-bg)] px-4 pb-20 pt-14 sm:px-6 lg:px-8 lg:pb-28 lg:pt-20"
+      className="relative isolate overflow-hidden bg-[var(--color-bg)] px-4 pb-10 pt-8 sm:px-6 lg:px-8 lg:pb-16 lg:pt-12"
       aria-labelledby="hero-heading"
     >
       {/* Court-line pattern + brand glow */}
@@ -81,7 +81,7 @@ function Hero({
 
         <h1
           id="hero-heading"
-          className="mx-auto mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
+          className="mx-auto mt-4 max-w-3xl text-balance text-3xl font-extrabold leading-[1.05] tracking-tight sm:text-4xl lg:text-5xl"
         >
           Pickleball, booked in seconds.{" "}
           <span className="bg-gradient-to-r from-[var(--color-brand-500)] to-[var(--color-accent-500)] bg-clip-text text-transparent">
@@ -89,12 +89,12 @@ function Hero({
           </span>
         </h1>
 
-        <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-[var(--color-fg-muted)]">
+        <p className="mx-auto mt-3 max-w-xl text-pretty text-base text-[var(--color-fg-muted)]">
           Find courts near you, see real availability, and pay through GCash.
           Confirmation lands in your inbox before you finish your warm-up.
         </p>
 
-        <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
           <Link
             href="/venues"
             className={`${buttonVariants({ size: "xl" })} w-full shadow-[var(--shadow-md)] sm:w-auto`}
@@ -111,12 +111,12 @@ function Hero({
           </Link>
         </div>
 
-        <p className="mt-4 text-sm text-[var(--color-fg-subtle)]">
+        <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
           Free for players · Venue owners pay only when you book
         </p>
 
         {stats.bookingsLast7d > 0 && (
-          <p className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--color-brand-100)] px-3 py-1 text-xs font-medium text-[var(--color-brand-700)]">
+          <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--color-brand-100)] px-3 py-1 text-xs font-medium text-[var(--color-brand-700)]">
             <Sparkles className="size-3.5" aria-hidden="true" />
             {stats.bookingsLast7d.toLocaleString("en-PH")} game
             {stats.bookingsLast7d === 1 ? "" : "s"} booked this week
@@ -150,7 +150,7 @@ function StatsBar({
       aria-label="Marketplace stats"
       className="border-y border-[var(--color-border-default)] bg-[var(--color-bg-muted)]"
     >
-      <Container className="grid grid-cols-2 gap-y-6 py-8 sm:grid-cols-4">
+      <Container className="grid grid-cols-2 gap-y-4 py-5 sm:grid-cols-4">
         {items.map((s) => (
           <div key={s.label} className="text-center">
             <div className="text-2xl font-extrabold tracking-tight sm:text-3xl">
@@ -185,11 +185,12 @@ interface FeaturedVenue {
 
 function FeaturedVenues({ venues }: { venues: FeaturedVenue[] }) {
   return (
-    <section className="px-4 py-16 sm:px-6 lg:px-8 lg:py-24" aria-labelledby="venues-heading">
+    <section className="px-4 py-8 sm:px-6 lg:px-8 lg:py-12" aria-labelledby="venues-heading">
       <Container>
-        <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
+        <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-end">
           <div>
-            <h2 id="venues-heading" className="text-2xl font-bold sm:text-3xl">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">Featured</p>
+            <h2 id="venues-heading" className="text-xl font-bold sm:text-2xl">
               Courts you can book today
             </h2>
             <p className="mt-2 text-[var(--color-fg-muted)]">
@@ -209,7 +210,7 @@ function FeaturedVenues({ venues }: { venues: FeaturedVenue[] }) {
         </div>
 
         {venues.length === 0 ? (
-          <div className="mt-10 rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] p-10 text-center">
+          <div className="mt-6 rounded-[var(--radius-md)] border border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] p-8 text-center">
             <Trophy
               className="mx-auto size-10 text-[var(--color-brand-500)]"
               aria-hidden="true"
@@ -229,7 +230,7 @@ function FeaturedVenues({ venues }: { venues: FeaturedVenue[] }) {
             </div>
           </div>
         ) : (
-          <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {venues.map((v) => (
               <li key={v.venue.id}>
                 <VenueCard item={v} />
@@ -247,10 +248,10 @@ function VenueCard({ item }: { item: FeaturedVenue }) {
   return (
     <Link
       href={`/venues/${venue.slug}`}
-      className="group relative flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] shadow-[var(--shadow-sm)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
+      className="group block overflow-hidden rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
     >
       <div
-        className="relative aspect-[16/10] w-full bg-gradient-to-br from-[var(--color-brand-300)] via-[var(--color-brand-500)] to-[var(--color-accent-500)] bg-cover bg-center"
+        className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-brand-300)] via-[var(--color-brand-500)] to-[var(--color-accent-500)] bg-cover bg-center"
         style={
           venue.coverImageUrl
             ? { backgroundImage: `url(${venue.coverImageUrl})` }
@@ -263,41 +264,27 @@ function VenueCard({ item }: { item: FeaturedVenue }) {
             <Trophy className="size-10" />
           </div>
         )}
-        <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-bg)]/95 px-2.5 py-1 text-xs font-medium text-[var(--color-fg)] shadow-[var(--shadow-sm)]">
+        <div className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-[var(--color-bg)]/95 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-fg)]">
           <Zap className="size-3 text-[var(--color-brand-600)]" aria-hidden="true" />
-          Bookable now
+          Bookable
         </div>
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-5">
-        <div>
-          <h3 className="text-lg font-semibold leading-tight group-hover:text-[var(--color-brand-700)]">
+      <div className="mt-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="truncate text-sm font-semibold leading-tight group-hover:text-[var(--color-brand-700)]">
             {venue.name}
           </h3>
-          <p className="mt-1 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)]">
-            <MapPin className="size-3.5" aria-hidden="true" />
-            {venue.city}, {venue.province}
-          </p>
+          {minHourlyRateCentavos !== null ? (
+            <span className="shrink-0 text-sm font-bold text-[var(--color-brand-700)]">
+              {formatPHP(minHourlyRateCentavos)}
+              <span className="ml-0.5 text-[10px] font-medium text-[var(--color-fg-muted)]">/hr</span>
+            </span>
+          ) : null}
         </div>
-        <div className="mt-auto flex items-end justify-between border-t border-[var(--color-border-default)] pt-3">
-          <div className="text-xs text-[var(--color-fg-muted)]">
-            {courtCount} {courtCount === 1 ? "court" : "courts"}
-          </div>
-          <div className="text-right">
-            {minHourlyRateCentavos !== null ? (
-              <>
-                <span className="text-xs text-[var(--color-fg-muted)]">from</span>{" "}
-                <span className="text-base font-bold">
-                  {formatPHP(minHourlyRateCentavos)}
-                </span>
-                <span className="text-xs text-[var(--color-fg-muted)]">/hr</span>
-              </>
-            ) : (
-              <span className="text-xs text-[var(--color-fg-muted)]">
-                See rates
-              </span>
-            )}
-          </div>
-        </div>
+        <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--color-fg-muted)]">
+          <MapPin className="size-3" aria-hidden="true" />
+          <span className="truncate">{venue.city}, {venue.province} · {courtCount} {courtCount === 1 ? "court" : "courts"}</span>
+        </p>
       </div>
     </Link>
   );
@@ -330,32 +317,32 @@ function HowItWorks() {
   ];
   return (
     <section
-      className="border-t border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-16 sm:px-6 lg:px-8 lg:py-24"
+      className="border-t border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-8 sm:px-6 lg:px-8 lg:py-12"
       aria-labelledby="how-heading"
     >
       <Container>
         <div className="text-center">
-          <Badge variant="success" className="mb-4">
+          <Badge variant="success" className="mb-2">
             How it works
           </Badge>
-          <h2 id="how-heading" className="text-2xl font-bold sm:text-3xl">
+          <h2 id="how-heading" className="text-xl font-bold sm:text-2xl">
             From searching to serving — in three steps
           </h2>
         </div>
-        <ol className="mt-12 grid gap-6 sm:grid-cols-3">
+        <ol className="mt-6 grid gap-4 sm:grid-cols-3">
           {steps.map((s) => (
             <li
               key={s.n}
-              className="relative rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-6 shadow-[var(--shadow-sm)]"
+              className="relative rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4"
             >
-              <span className="absolute -top-3 left-6 inline-flex size-7 items-center justify-center rounded-full bg-[var(--color-brand-500)] text-sm font-bold text-white shadow-[var(--shadow-sm)]">
+              <span className="absolute -top-2.5 left-4 inline-flex size-6 items-center justify-center rounded-full bg-[var(--color-brand-500)] text-xs font-bold text-white">
                 {s.n}
               </span>
-              <div className="mb-3 inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-5">
+              <div className="mb-2 inline-flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-4">
                 {s.icon}
               </div>
-              <h3 className="text-lg font-semibold">{s.title}</h3>
-              <p className="mt-1.5 text-sm text-[var(--color-fg-muted)]">{s.body}</p>
+              <h3 className="text-base font-semibold">{s.title}</h3>
+              <p className="mt-1 text-xs text-[var(--color-fg-muted)]">{s.body}</p>
             </li>
           ))}
         </ol>
@@ -370,24 +357,24 @@ function HowItWorks() {
 
 function ForOwnersBand() {
   return (
-    <section className="px-4 py-16 sm:px-6 lg:px-8" aria-labelledby="owners-heading">
+    <section className="px-4 py-8 sm:px-6 lg:px-8 lg:py-10" aria-labelledby="owners-heading">
       <Container>
-        <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-gradient-to-br from-[var(--color-brand-700)] via-[var(--color-brand-600)] to-[var(--color-accent-600)] p-8 text-white shadow-[var(--shadow-md)] sm:p-12">
+        <div className="relative overflow-hidden rounded-[var(--radius-lg)] bg-gradient-to-br from-[var(--color-brand-700)] via-[var(--color-brand-600)] to-[var(--color-accent-600)] p-6 text-white sm:p-8">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 opacity-15 [background-image:linear-gradient(white_1px,transparent_1px),linear-gradient(90deg,white_1px,transparent_1px)] [background-size:32px_32px]"
           />
-          <div className="relative grid gap-8 lg:grid-cols-2 lg:items-center">
+          <div className="relative grid gap-6 lg:grid-cols-2 lg:items-center">
             <div>
-              <h2 id="owners-heading" className="text-2xl font-bold sm:text-3xl">
+              <h2 id="owners-heading" className="text-xl font-bold sm:text-2xl">
                 Run a court? Fill it.
               </h2>
-              <p className="mt-3 max-w-md text-white/85">
+              <p className="mt-2 max-w-md text-sm text-white/85">
                 List your venue in 5 minutes. Take real bookings. Players pay
                 you directly via GCash — we deduct a small platform fee from
                 your weekly payout. No setup fees, no monthly subscription.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Link
                   href="/sign-up?role=venue_owner"
                   className={`${buttonVariants({ size: "lg" })} bg-white text-[var(--color-brand-700)] hover:bg-white/90`}
@@ -429,14 +416,14 @@ function ForOwnersBand() {
 function Features() {
   return (
     <section
-      className="border-t border-[var(--color-border-default)] px-4 py-16 sm:px-6 lg:px-8 lg:py-24"
+      className="border-t border-[var(--color-border-default)] px-4 py-8 sm:px-6 lg:px-8 lg:py-12"
       aria-labelledby="features-heading"
     >
       <Container>
-        <h2 id="features-heading" className="text-center text-2xl font-bold sm:text-3xl">
+        <h2 id="features-heading" className="text-center text-xl font-bold sm:text-2xl">
           Built for the way you actually play
         </h2>
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <FeatureCard
             icon={<MapPin />}
             title="Courts near you"
@@ -473,12 +460,12 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-6 shadow-[var(--shadow-sm)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">
-      <div className="mb-4 inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-5">
+    <div className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4">
+      <div className="mb-2 inline-flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-4">
         {icon}
       </div>
-      <h3 className="text-lg font-semibold">{title}</h3>
-      <p className="mt-2 text-sm text-[var(--color-fg-muted)]">{description}</p>
+      <h3 className="text-base font-semibold">{title}</h3>
+      <p className="mt-1 text-xs text-[var(--color-fg-muted)]">{description}</p>
     </div>
   );
 }
@@ -512,32 +499,29 @@ function FaqSection() {
   ];
   return (
     <section
-      className="border-t border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-16 sm:px-6 lg:px-8 lg:py-24"
+      className="border-t border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-8 sm:px-6 lg:px-8 lg:py-12"
       aria-labelledby="faq-heading"
     >
       <Container className="max-w-3xl">
         <div className="text-center">
-          <h2 id="faq-heading" className="text-2xl font-bold sm:text-3xl">
+          <h2 id="faq-heading" className="text-xl font-bold sm:text-2xl">
             Frequently asked
           </h2>
         </div>
-        <ul className="mt-10 space-y-3">
+        <ul className="mt-6 divide-y divide-[var(--color-border-default)] border-y border-[var(--color-border-default)]">
           {faqs.map((f) => (
-            <li
-              key={f.q}
-              className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] shadow-[var(--shadow-sm)]"
-            >
-              <details className="group p-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left text-sm font-semibold sm:text-base">
+            <li key={f.q}>
+              <details className="group py-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left text-sm font-semibold">
                   {f.q}
                   <span
                     aria-hidden="true"
-                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-muted)] text-[var(--color-fg-muted)] transition-transform group-open:rotate-45"
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-muted)] text-[var(--color-fg-muted)] transition-transform group-open:rotate-45"
                   >
                     +
                   </span>
                 </summary>
-                <p className="mt-3 text-sm text-[var(--color-fg-muted)]">{f.a}</p>
+                <p className="mt-2 text-sm text-[var(--color-fg-muted)]">{f.a}</p>
               </details>
             </li>
           ))}
@@ -553,8 +537,8 @@ function FaqSection() {
 
 function Footer() {
   return (
-    <footer className="mt-auto border-t border-[var(--color-border-default)] bg-[var(--color-bg)] px-4 py-10 sm:px-6 lg:px-8">
-      <Container className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+    <footer className="mt-auto border-t border-[var(--color-border-default)] bg-[var(--color-bg)] px-4 py-6 sm:px-6 lg:px-8">
+      <Container className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center gap-2 font-bold">
             <span
@@ -590,7 +574,7 @@ function Footer() {
           links={[{ label: "Email us", href: "mailto:dinkhubofficial@gmail.com" }]}
         />
       </Container>
-      <Container className="mt-8 border-t border-[var(--color-border-default)] pt-6 text-center text-xs text-[var(--color-fg-subtle)]">
+      <Container className="mt-6 border-t border-[var(--color-border-default)] pt-4 text-center text-xs text-[var(--color-fg-subtle)]">
         © {new Date().getFullYear()} DinkHub. All rights reserved.
       </Container>
     </footer>

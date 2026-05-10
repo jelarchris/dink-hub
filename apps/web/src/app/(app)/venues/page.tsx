@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { MapPin, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { MapPin, Search, Trophy } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { listActiveVenues } from "@/features/venues";
 import { formatPHP } from "@/lib/money";
 
@@ -13,13 +13,12 @@ export default async function VenuesPage() {
   const venues = await listActiveVenues({ limit: 50 });
 
   return (
-    <Container className="py-10">
-      <div className="mb-8 flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Find a court</h1>
-        <p className="text-[var(--color-fg-muted)]">
-          Pickleball venues in Agusan del Sur. Tap one to see availability.
-        </p>
-      </div>
+    <Container className="py-3 sm:py-4">
+      <PageHeader
+        kicker="Find a court"
+        title="Venues near you"
+        subtitle={`${venues.length} venue${venues.length === 1 ? "" : "s"} in Agusan del Sur`}
+      />
 
       {venues.length === 0 ? (
         <EmptyState
@@ -28,42 +27,46 @@ export default async function VenuesPage() {
           description="We're just getting started. Check back soon — or list your venue and be among the first."
         />
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {venues.map((v) => (
             <li key={v.venue.id}>
               <Link
                 href={`/venues/${v.venue.slug}`}
-                className="group block h-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] shadow-[var(--shadow-sm)] transition-shadow hover:shadow-[var(--shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
+                className="group block overflow-hidden rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
               >
-                <div
-                  className="aspect-[16/9] w-full bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)] bg-cover bg-center"
-                  style={
-                    v.venue.coverImageUrl
-                      ? { backgroundImage: `url(${JSON.stringify(v.venue.coverImageUrl)})` }
-                      : undefined
-                  }
-                  aria-hidden="true"
-                />
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-2">
-                    <h2 className="text-lg font-semibold leading-tight group-hover:text-[var(--color-brand-700)]">
+                <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)]">
+                  {v.venue.coverImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={v.venue.coverImageUrl}
+                      alt={v.venue.name}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-white/85">
+                      <Trophy className="size-10" />
+                    </div>
+                  )}
+                  <span className="absolute right-2 top-2 rounded-full bg-[var(--color-bg)]/90 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-fg)]">
+                    {v.courtCount} {v.courtCount === 1 ? "court" : "courts"}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h2 className="truncate text-sm font-semibold leading-tight group-hover:text-[var(--color-brand-700)]">
                       {v.venue.name}
                     </h2>
-                    <Badge variant="success">{v.courtCount} {v.courtCount === 1 ? "court" : "courts"}</Badge>
+                    {v.minHourlyRateCentavos !== null && (
+                      <span className="shrink-0 text-sm font-bold text-[var(--color-brand-700)]">
+                        {formatPHP(v.minHourlyRateCentavos)}
+                        <span className="ml-0.5 text-[10px] font-medium text-[var(--color-fg-muted)]">/hr</span>
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-2 flex items-start gap-1 text-sm text-[var(--color-fg-muted)]">
-                    <MapPin className="mt-0.5 size-4 shrink-0" />
-                    <span className="line-clamp-2">
-                      {v.venue.addressLine}, {v.venue.city}
-                    </span>
+                  <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--color-fg-muted)]">
+                    <MapPin className="size-3" />
+                    <span className="truncate">{v.venue.city}, {v.venue.province}</span>
                   </p>
-                  {v.minHourlyRateCentavos !== null && (
-                    <p className="mt-3 text-sm">
-                      <span className="text-[var(--color-fg-muted)]">From </span>
-                      <span className="font-semibold">{formatPHP(v.minHourlyRateCentavos)}</span>
-                      <span className="text-[var(--color-fg-muted)]"> / hour</span>
-                    </p>
-                  )}
                 </div>
               </Link>
             </li>

@@ -2,10 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { getCurrentUser } from "@/features/auth/service";
 import { listBookingsForPlayer } from "@/features/bookings-view";
 import { formatDateTimeManila } from "@/lib/date";
@@ -25,11 +25,16 @@ export default async function MyBookingsPage() {
   const now = Date.now();
 
   return (
-    <Container className="py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">My bookings</h1>
-        <p className="text-[var(--color-fg-muted)]">All your courts in one place.</p>
-      </div>
+    <Container className="py-3 sm:py-4">
+      <PageHeader
+        kicker="My bookings"
+        title={`${items.length} booking${items.length === 1 ? "" : "s"}`}
+        action={
+          <Link href="/venues" className={buttonVariants({ size: "sm" })}>
+            Find a court
+          </Link>
+        }
+      />
 
       {items.length === 0 ? (
         <EmptyState
@@ -43,50 +48,48 @@ export default async function MyBookingsPage() {
           }
         />
       ) : (
-        <ul className="space-y-3">
+        <ul className="divide-y divide-[var(--color-border-default)]">
           {items.map((it) => {
             const cancellable =
               (it.booking.status === "pending_payment" || it.booking.status === "payment_submitted") &&
               it.booking.cancellableUntil.getTime() > now;
             const needsPayment = it.booking.status === "pending_payment";
             return (
-              <Card key={it.booking.id}>
-                <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex-1 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/venues/${it.venue.slug}`}
-                        className="font-semibold hover:text-[var(--color-brand-700)]"
-                      >
-                        {it.venue.name}
-                      </Link>
-                      <span className="text-sm text-[var(--color-fg-muted)]">· {it.court.name}</span>
-                      <StatusBadge status={it.booking.status} />
-                    </div>
-                    <div className="text-sm text-[var(--color-fg-muted)]">
-                      {formatDateTimeManila(it.booking.startAt)} → {formatDateTimeManila(it.booking.endAt)}
-                    </div>
-                    <div className="text-sm">
-                      <span className="font-semibold">{formatPHP(it.booking.totalCentavos)}</span>
-                    </div>
+              <li key={it.booking.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/venues/${it.venue.slug}`}
+                      className="truncate font-semibold hover:text-[var(--color-brand-700)]"
+                    >
+                      {it.venue.name}
+                    </Link>
+                    <StatusBadge status={it.booking.status} />
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {needsPayment && (
-                      <Link href={`/book/${it.booking.id}/pay`}>
-                        <Button size="sm">Pay now</Button>
-                      </Link>
-                    )}
-                    {it.booking.status === "payment_submitted" && (
-                      <Link href={`/book/${it.booking.id}/pay`}>
-                        <Button size="sm" variant="outline">
-                          View
-                        </Button>
-                      </Link>
-                    )}
-                    {cancellable && <CancelBookingButton bookingId={it.booking.id} />}
+                  <div className="text-xs text-[var(--color-fg-muted)]">
+                    {it.court.name} · {formatDateTimeManila(it.booking.startAt)}
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="text-sm font-bold text-[var(--color-brand-700)]">
+                    {formatPHP(it.booking.totalCentavos)}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {needsPayment && (
+                    <Link href={`/book/${it.booking.id}/pay`} className={buttonVariants({ size: "sm" })}>
+                      Pay now
+                    </Link>
+                  )}
+                  {it.booking.status === "payment_submitted" && (
+                    <Link
+                      href={`/book/${it.booking.id}/pay`}
+                      className={buttonVariants({ size: "sm", variant: "outline" })}
+                    >
+                      View
+                    </Link>
+                  )}
+                  {cancellable && <CancelBookingButton bookingId={it.booking.id} />}
+                </div>
+              </li>
             );
           })}
         </ul>

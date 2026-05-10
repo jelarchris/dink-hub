@@ -40,8 +40,8 @@ export default async function AdminBookingsPage({ searchParams }: PageProps) {
   const result = await listBookings(filter);
 
   return (
-    <Container className="py-8">
-      <h1 className="text-2xl font-bold tracking-tight">Bookings</h1>
+    <Container className="py-3 sm:py-4">
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Bookings</h1>
       <p className="text-sm text-[var(--color-fg-muted)]">
         {result.total} total · page {result.page}
       </p>

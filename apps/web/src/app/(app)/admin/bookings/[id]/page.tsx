@@ -36,7 +36,7 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
     booking.status === "refunded";
 
   return (
-    <Container className="py-8">
+    <Container className="py-3 sm:py-4">
       <Link
         href="/admin/bookings"
         className="mb-4 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
@@ -46,7 +46,7 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
             {venueName} · {courtName}
           </h1>
           <p className="text-sm text-[var(--color-fg-muted)]">

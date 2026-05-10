@@ -16,8 +16,8 @@ export default async function AdminDashboardPage() {
   const [stats, fee] = await Promise.all([getDashboardStats(), getCurrentSystemFee()]);
 
   return (
-    <Container className="py-8">
-      <h1 className="text-2xl font-bold tracking-tight">Admin dashboard</h1>
+    <Container className="py-3 sm:py-4">
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Admin dashboard</h1>
       <p className="text-sm text-[var(--color-fg-muted)]">Last 7 days unless noted.</p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

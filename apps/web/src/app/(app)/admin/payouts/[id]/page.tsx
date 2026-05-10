@@ -35,7 +35,7 @@ export default async function AdminPayoutDetailPage({ params }: PageProps) {
   const canRelease = payout.status === "on_hold";
 
   return (
-    <Container className="py-8">
+    <Container className="py-3 sm:py-4">
       <Link
         href="/admin/payouts"
         className="mb-4 inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
@@ -45,7 +45,7 @@ export default async function AdminPayoutDetailPage({ params }: PageProps) {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{venueName}</h1>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{venueName}</h1>
           <p className="text-sm text-[var(--color-fg-muted)]">
             {formatDateTimeManila(payout.periodStart)} –{" "}
             {formatDateTimeManila(payout.periodEnd)}

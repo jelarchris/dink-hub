@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ChevronLeft, ExternalLink, Plus } from "lucide-react";
+import { ExternalLink, Plus } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader, SectionLabel } from "@/components/ui/page-header";
 import { formatPHP } from "@/lib/money";
 import {
   getVenueWithCourtsForOwner,
@@ -37,7 +37,7 @@ export default async function EditVenuePage({
   if (!profile) redirect(`/sign-in?next=${encodeURIComponent(`/owner/venues/${id}`)}`);
   if (profile.role !== "venue_owner" && profile.role !== "admin") {
     return (
-      <Container className="py-10">
+      <Container className="py-4">
         <Alert variant="warning" title="Owner access required">
           Your account isn&apos;t set up as a venue owner.
         </Alert>
@@ -52,7 +52,7 @@ export default async function EditVenuePage({
     if (err instanceof OwnerVenueError && err.code === "venue_not_found") notFound();
     if (err instanceof OwnerVenueError && err.code === "forbidden") {
       return (
-        <Container className="py-10">
+        <Container className="py-4">
           <Alert variant="warning" title="Not your venue">
             You don&apos;t have access to this venue.
           </Alert>
@@ -67,98 +67,84 @@ export default async function EditVenuePage({
   const archivedCourts = courts.filter((c) => !c.isActive);
 
   return (
-    <Container className="max-w-4xl py-8">
-      <Link
-        href="/owner/venues"
-        className="inline-flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-      >
-        <ChevronLeft className="size-4" /> Back to venues
-      </Link>
-
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{venue.name}</h1>
-          <div className="mt-1 flex items-center gap-2 text-sm text-[var(--color-fg-muted)]">
+    <Container className="max-w-4xl py-3 sm:py-4">
+      <PageHeader
+        back={{ href: "/owner/venues", label: "Venues" }}
+        kicker="Edit venue"
+        title={venue.name}
+        subtitle={`${venue.city}, ${venue.province}`}
+        action={
+          <div className="flex items-center gap-2">
             <StatusBadge status={venue.status} />
-            <span>·</span>
-            <span>{venue.city}, {venue.province}</span>
             {venue.status === "active" && (
-              <>
-                <span>·</span>
-                <Link
-                  href={`/venues/${venue.slug}`}
-                  className="inline-flex items-center gap-1 text-[var(--color-brand-700)] hover:underline"
-                >
-                  View public page <ExternalLink className="size-3" />
-                </Link>
-              </>
+              <Link
+                href={`/venues/${venue.slug}`}
+                className="inline-flex items-center gap-1 text-xs text-[var(--color-brand-700)] hover:underline"
+              >
+                View public <ExternalLink className="size-3" />
+              </Link>
             )}
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <VenuePublishCard venue={venue} courtCount={activeCourts.length} />
 
-      <Card className="mt-6">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Courts</CardTitle>
-          <Link href={`/owner/venues/${venue.id}/courts/new`}>
-            <Button size="sm">
-              <Plus className="size-4" /> Add court
-            </Button>
+      <div className="mt-5">
+        <div className="mb-2 flex items-center justify-between">
+          <SectionLabel>Courts</SectionLabel>
+          <Link
+            href={`/owner/venues/${venue.id}/courts/new`}
+            className={buttonVariants({ size: "sm" })}
+          >
+            <Plus className="size-4" /> Add court
           </Link>
-        </CardHeader>
-        <CardContent>
-          {activeCourts.length === 0 && archivedCourts.length === 0 ? (
-            <EmptyState
-              title="No courts yet"
-              description="Add at least one court before submitting your venue for review."
-              action={
-                <Link href={`/owner/venues/${venue.id}/courts/new`}>
-                  <Button size="sm">
-                    <Plus className="size-4" /> Add court
-                  </Button>
-                </Link>
-              }
-            />
-          ) : (
-            <div className="space-y-2">
-              {activeCourts.map((c) => (
-                <CourtRow key={c.id} venueId={venue.id} court={c} />
-              ))}
-              {archivedCourts.length > 0 && (
-                <>
-                  <div className="mt-6 text-xs font-medium uppercase tracking-wide text-[var(--color-fg-subtle)]">
-                    Archived
-                  </div>
-                  {archivedCourts.map((c) => (
-                    <CourtRow key={c.id} venueId={venue.id} court={c} />
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+        {activeCourts.length === 0 && archivedCourts.length === 0 ? (
+          <EmptyState
+            title="No courts yet"
+            description="Add at least one court before submitting your venue for review."
+            action={
+              <Link href={`/owner/venues/${venue.id}/courts/new`}>
+                <Button size="sm">
+                  <Plus className="size-4" /> Add court
+                </Button>
+              </Link>
+            }
+          />
+        ) : (
+          <ul className="divide-y divide-[var(--color-border-default)] border-y border-[var(--color-border-default)]">
+            {activeCourts.map((c) => (
+              <CourtRow key={c.id} venueId={venue.id} court={c} />
+            ))}
+            {archivedCourts.length > 0 && (
+              <>
+                <li className="pt-3 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-subtle)]">
+                  Archived
+                </li>
+                {archivedCourts.map((c) => (
+                  <CourtRow key={c.id} venueId={venue.id} court={c} />
+                ))}
+              </>
+            )}
+          </ul>
+        )}
+      </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Venue details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VenueForm action={updateVenueAction} mode="edit" initial={venue} />
-        </CardContent>
-      </Card>
+      <div className="mt-5">
+        <SectionLabel className="mb-2 block">Venue details</SectionLabel>
+        <VenueForm action={updateVenueAction} mode="edit" initial={venue} />
+      </div>
     </Container>
   );
 }
 
 function CourtRow({ venueId, court }: { venueId: string; court: Court }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3">
+    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{court.name}</span>
+          <span className="font-semibold">{court.name}</span>
           {!court.isActive && <Badge variant="neutral">Archived</Badge>}
           {court.isActive && (
             <Badge variant="success">{court.isIndoor ? "Indoor" : "Outdoor"} · {court.surface}</Badge>
@@ -169,12 +155,15 @@ function CourtRow({ venueId, court }: { venueId: string; court: Court }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Link href={`/owner/venues/${venueId}/courts/${court.id}`}>
-          <Button variant="outline" size="sm">Edit</Button>
+        <Link
+          href={`/owner/venues/${venueId}/courts/${court.id}`}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          Edit
         </Link>
         <CourtArchiveButton courtId={court.id} venueId={venueId} isActive={court.isActive} />
       </div>
-    </div>
+    </li>
   );
 }
 
@@ -192,5 +181,4 @@ function StatusBadge({ status }: { status: Venue["status"] }) {
   }
 }
 
-// Re-export for module shape consistency.
 export type { OwnerVenueListItem };

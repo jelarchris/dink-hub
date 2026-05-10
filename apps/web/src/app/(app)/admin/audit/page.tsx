@@ -21,8 +21,8 @@ export default async function AdminAuditPage({ searchParams }: PageProps) {
   const result = await listAuditLog(filter);
 
   return (
-    <Container className="py-8">
-      <h1 className="text-2xl font-bold tracking-tight">Audit log</h1>
+    <Container className="py-3 sm:py-4">
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Audit log</h1>
       <p className="text-sm text-[var(--color-fg-muted)]">
         {result.total} total entries · append-only · page {result.page}
       </p>
