@@ -11,6 +11,12 @@ import {
   verifyPayment,
 } from "@/features/booking/service";
 import { isBookingError } from "@/features/booking/errors";
+import {
+  notifyPaymentRejected,
+  notifyPaymentSubmitted,
+  notifyPaymentVerified,
+} from "@/features/booking/notifications";
+import { findPaymentById } from "@/features/booking/repo";
 import { findBookingDetailForPlayer } from "@/features/bookings-view";
 import { uploadReceipt } from "@/features/storage";
 import { checkRateLimit, limiters, rateLimitMessage } from "@/lib/rate-limit";
@@ -116,6 +122,9 @@ export async function submitReceiptAction(
     return unwrap(err);
   }
 
+  // Side-effect: notify the venue owner. Failures captured, never thrown.
+  await notifyPaymentSubmitted(parsed.data.bookingId);
+
   revalidatePath(`/book/${parsed.data.bookingId}/pay`);
   revalidatePath("/me/bookings");
   return { ok: true, data: null };
@@ -146,6 +155,12 @@ export async function verifyPaymentAction(
   } catch (err) {
     return unwrap(err);
   }
+
+  // verifyPayment doesn't return the bookingId; re-resolve via the payment.
+  // Cheap PK lookup.
+  const payment = await findPaymentById(parsed.data.paymentId);
+  if (payment) await notifyPaymentVerified(payment.bookingId);
+
   revalidatePath("/owner");
   revalidatePath("/owner/payments");
   return { ok: true, data: null };
@@ -180,6 +195,10 @@ export async function rejectPaymentAction(
   } catch (err) {
     return unwrap(err);
   }
+
+  const payment = await findPaymentById(parsed.data.paymentId);
+  if (payment) await notifyPaymentRejected(payment.bookingId, parsed.data.reason);
+
   revalidatePath("/owner");
   revalidatePath("/owner/payments");
   return { ok: true, data: null };

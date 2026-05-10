@@ -12,6 +12,10 @@ const serverSchema = z.object({
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid postgres URL"),
   DIRECT_URL: z.string().url("DIRECT_URL must be a valid postgres URL").optional(),
   RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z
+    .string()
+    .min(3)
+    .default("DinkHub <onboarding@resend.dev>"),
   SEMAPHORE_API_KEY: z.string().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
@@ -56,6 +60,7 @@ const processEnv = {
   DATABASE_URL: blankToUndefined(process.env.DATABASE_URL),
   DIRECT_URL: blankToUndefined(process.env.DIRECT_URL),
   RESEND_API_KEY: blankToUndefined(process.env.RESEND_API_KEY),
+  RESEND_FROM_EMAIL: blankToUndefined(process.env.RESEND_FROM_EMAIL),
   SEMAPHORE_API_KEY: blankToUndefined(process.env.SEMAPHORE_API_KEY),
   TURNSTILE_SECRET_KEY: blankToUndefined(process.env.TURNSTILE_SECRET_KEY),
   UPSTASH_REDIS_REST_URL: blankToUndefined(process.env.UPSTASH_REDIS_REST_URL),
