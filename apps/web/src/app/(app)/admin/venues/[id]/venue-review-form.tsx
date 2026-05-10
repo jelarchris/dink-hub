@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { reviewVenueAction } from "@/features/admin";
@@ -39,7 +39,7 @@ const VARIANT: Record<VenueReviewAction, "default" | "ghost" | "destructive"> = 
 
 export function VenueReviewForm({ venueId, version, status }: Props) {
   const allowed = ACTION_FOR_STATUS[status];
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     reviewVenueAction,
     null,
   );
@@ -80,17 +80,15 @@ export function VenueReviewForm({ venueId, version, status }: Props) {
 
       <div className="flex flex-wrap gap-2">
         {allowed.map((action) => (
-          <Button
+          <SubmitButton
             key={action}
-            type="submit"
             name="action"
             value={action}
-            disabled={pending}
             variant={VARIANT[action]}
             size="sm"
           >
             {LABEL[action]}
-          </Button>
+          </SubmitButton>
         ))}
       </div>
     </form>

@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Send, Undo2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
 import type { ActionResult } from "@/features/auth";
 import { setVenueStatusAction } from "@/features/owner-venues/actions";
@@ -18,7 +18,7 @@ export function VenuePublishCard({
   venue: Venue;
   courtCount: number;
 }) {
-  const [state, formAction, isPending] = useActionState(setVenueStatusAction, initialState);
+  const [state, formAction] = useActionState(setVenueStatusAction, initialState);
 
   if (venue.status === "active") {
     return (
@@ -88,26 +88,23 @@ export function VenuePublishCard({
           <input type="hidden" name="venueId" value={venue.id} />
           <input type="hidden" name="expectedVersion" value={venue.version} />
           {venue.status === "draft" ? (
-            <Button
-              type="submit"
+            <SubmitButton
               name="action"
               value="submit_for_review"
-              disabled={!canSubmit || isPending}
-              aria-busy={isPending}
+              disabled={!canSubmit}
+              pendingLabel="Submitting"
             >
-              <Send className="size-4" /> {isPending ? "Submitting…" : "Submit for review"}
-            </Button>
+              <Send className="size-4" /> Submit for review
+            </SubmitButton>
           ) : (
-            <Button
-              type="submit"
+            <SubmitButton
               variant="outline"
               name="action"
               value="save_draft"
-              disabled={isPending}
-              aria-busy={isPending}
+              pendingLabel="Working"
             >
-              <Undo2 className="size-4" /> {isPending ? "Working…" : "Move back to draft"}
-            </Button>
+              <Undo2 className="size-4" /> Move back to draft
+            </SubmitButton>
           )}
         </form>
       </CardContent>

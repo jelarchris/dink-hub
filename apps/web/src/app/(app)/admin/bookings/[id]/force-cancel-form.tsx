@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { forceCancelBookingAction } from "@/features/admin";
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function ForceCancelForm({ bookingId, version }: Props) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     forceCancelBookingAction,
     null,
   );
@@ -43,9 +43,9 @@ export function ForceCancelForm({ bookingId, version }: Props) {
           {state.message}
         </Alert>
       )}
-      <Button type="submit" size="sm" variant="destructive" disabled={pending}>
+      <SubmitButton size="sm" variant="destructive" pendingLabel="Cancelling">
         Force-cancel booking
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

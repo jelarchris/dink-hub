@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ export interface VenueFormProps {
 const initialState: ActionResult<never> | null = null;
 
 export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps) {
-  const [state, formAction, isPending] = useActionState(action, initialState);
+  const [state, formAction] = useActionState(action, initialState);
 
   const fieldErrors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
   const topError = state && !state.ok && !state.fieldErrors ? state.message : undefined;
@@ -267,9 +267,9 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
       </section>
 
       <div className="flex items-center gap-3 pt-2">
-        <Button type="submit" disabled={isPending} aria-busy={isPending}>
-          {isPending ? "Saving…" : (submitLabel ?? (mode === "create" ? "Create venue" : "Save changes"))}
-        </Button>
+        <SubmitButton pendingLabel="Saving">
+          {submitLabel ?? (mode === "create" ? "Create venue" : "Save changes")}
+        </SubmitButton>
       </div>
     </form>
   );

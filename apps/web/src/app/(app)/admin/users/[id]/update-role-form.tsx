@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function UpdateRoleForm({ userId, currentRole }: Props) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     updateUserRoleAction,
     null,
   );
@@ -53,9 +53,9 @@ export function UpdateRoleForm({ userId, currentRole }: Props) {
           Role updated.
         </Alert>
       )}
-      <Button type="submit" size="sm" disabled={pending}>
+      <SubmitButton size="sm" pendingLabel="Updating">
         Update role
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

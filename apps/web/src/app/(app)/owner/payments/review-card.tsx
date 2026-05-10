@@ -6,6 +6,7 @@ import { rejectPaymentAction, verifyPaymentAction } from "@/features/booking/pay
 import type { ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -127,9 +128,9 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
             <div className="flex flex-wrap gap-2 pt-1">
               <form action={verifyAction}>
                 <input type="hidden" name="paymentId" value={props.paymentId} />
-                <Button type="submit" disabled={verifyPending} size="sm">
-                  <Check className="size-4" /> {verifyPending ? "Verifying…" : "Verify payment"}
-                </Button>
+                <SubmitButton size="sm" pendingLabel="Verifying">
+                  <Check className="size-4" /> Verify payment
+                </SubmitButton>
               </form>
               <Button
                 type="button"
@@ -158,9 +159,9 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
                 )}
               </FormField>
               <div className="flex gap-2">
-                <Button type="submit" variant="destructive" size="sm" disabled={rejectPending}>
-                  {rejectPending ? "Rejecting…" : "Confirm reject"}
-                </Button>
+                <SubmitButton variant="destructive" size="sm" pendingLabel="Rejecting">
+                  Confirm reject
+                </SubmitButton>
                 <Button
                   type="button"
                   variant="ghost"

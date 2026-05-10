@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { openDisputeAction, resolveDisputeAction } from "@/features/admin";
@@ -14,7 +14,7 @@ export function OpenDisputeForm({
   paymentId: string;
   version: number;
 }) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     openDisputeAction,
     null,
   );
@@ -44,9 +44,9 @@ export function OpenDisputeForm({
           {state.message}
         </Alert>
       )}
-      <Button type="submit" size="sm" variant="destructive" disabled={pending}>
-        {pending ? "Opening…" : "Open dispute"}
-      </Button>
+      <SubmitButton size="sm" variant="destructive" pendingLabel="Opening">
+        Open dispute
+      </SubmitButton>
     </form>
   );
 }
@@ -60,7 +60,7 @@ export function ResolveDisputeForm({
   version: number;
   resolution: "refund_full" | "rejected";
 }) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     resolveDisputeAction,
     null,
   );
@@ -93,14 +93,13 @@ export function ResolveDisputeForm({
           {state.message}
         </Alert>
       )}
-      <Button
-        type="submit"
+      <SubmitButton
         size="sm"
         variant={resolution === "refund_full" ? "destructive" : "default"}
-        disabled={pending}
+        pendingLabel="Resolving"
       >
-        {pending ? "Resolving…" : label}
-      </Button>
+        {label}
+      </SubmitButton>
     </form>
   );
 }

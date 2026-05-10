@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function MarkPaidForm({ payoutId, version }: Props) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     markPayoutPaidAction,
     null,
   );
@@ -59,9 +59,9 @@ export function MarkPaidForm({ payoutId, version }: Props) {
           {state.message}
         </Alert>
       )}
-      <Button type="submit" size="sm" disabled={pending}>
-        {pending ? "Marking…" : "Mark as paid"}
-      </Button>
+      <SubmitButton size="sm" pendingLabel="Marking">
+        Mark as paid
+      </SubmitButton>
     </form>
   );
 }

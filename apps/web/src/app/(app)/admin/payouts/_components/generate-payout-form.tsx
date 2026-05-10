@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function GeneratePayoutForm({ venues }: Props) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     generatePayoutAction,
     null,
   );
@@ -118,9 +118,9 @@ export function GeneratePayoutForm({ venues }: Props) {
               </Alert>
             )}
 
-            <Button type="submit" size="sm" disabled={pending} className="w-full">
-              {pending ? "Generating…" : "Generate payout"}
-            </Button>
+            <SubmitButton size="sm" pendingLabel="Generating" className="w-full">
+              Generate payout
+            </SubmitButton>
           </form>
         )}
       </CardContent>

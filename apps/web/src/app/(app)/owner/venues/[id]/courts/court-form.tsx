@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,7 @@ const surfaceLabels: Record<(typeof courtSurfaceValues)[number], string> = {
 };
 
 export function CourtForm({ action, mode, venueId, initial }: CourtFormProps) {
-  const [state, formAction, isPending] = useActionState(action, initialState);
+  const [state, formAction] = useActionState(action, initialState);
   const fieldErrors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
   const topError = state && !state.ok && !state.fieldErrors ? state.message : undefined;
   const success = state?.ok === true && mode === "edit";
@@ -123,9 +123,9 @@ export function CourtForm({ action, mode, venueId, initial }: CourtFormProps) {
       </label>
 
       <div className="flex items-center gap-3 pt-2">
-        <Button type="submit" disabled={isPending} aria-busy={isPending}>
-          {isPending ? "Saving…" : mode === "create" ? "Add court" : "Save changes"}
-        </Button>
+        <SubmitButton pendingLabel="Saving">
+          {mode === "create" ? "Add court" : "Save changes"}
+        </SubmitButton>
       </div>
     </form>
   );

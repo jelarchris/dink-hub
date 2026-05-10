@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import { signUpAction, type ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ type Role = "player" | "venue_owner";
 
 export default function SignUpPage() {
   const [role, setRole] = useState<Role>("player");
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     signUpAction,
     null,
   );
@@ -123,9 +124,9 @@ export default function SignUpPage() {
             )}
           </FormField>
 
-          <Button type="submit" size="lg" disabled={pending} className="mt-2">
-            {pending ? "Creating account…" : "Create account"}
-          </Button>
+          <SubmitButton size="lg" pendingLabel="Creating account" className="mt-2">
+            Create account
+          </SubmitButton>
 
           <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signup" />
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { setUserSuspensionAction } from "@/features/admin";
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function SuspensionForm({ userId, isSuspended }: Props) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     setUserSuspensionAction,
     null,
   );
@@ -38,14 +38,13 @@ export function SuspensionForm({ userId, isSuspended }: Props) {
           {state.message}
         </Alert>
       )}
-      <Button
-        type="submit"
+      <SubmitButton
         size="sm"
         variant={isSuspended ? "default" : "destructive"}
-        disabled={pending}
+        pendingLabel="Working"
       >
         {isSuspended ? "Reinstate user" : "Suspend user"}
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

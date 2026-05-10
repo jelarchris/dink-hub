@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useActionState } from "react";
 import { signInAction, type ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 export default function SignInPage() {
   const params = useSearchParams();
   const next = params.get("next") ?? "/";
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     signInAction,
     null,
   );
@@ -67,9 +67,9 @@ export default function SignInPage() {
             )}
           </FormField>
 
-          <Button type="submit" size="lg" disabled={pending} className="mt-2">
-            {pending ? "Signing in…" : "Sign in"}
-          </Button>
+          <SubmitButton size="lg" pendingLabel="Signing in" className="mt-2">
+            Sign in
+          </SubmitButton>
 
           <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signin" />
 

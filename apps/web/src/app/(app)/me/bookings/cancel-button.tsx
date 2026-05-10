@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { cancelBookingAction } from "@/features/booking/actions";
 import type { ActionResult } from "@/features/auth";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export function CancelBookingButton({ bookingId }: { bookingId: string }) {
   const [confirming, setConfirming] = useState(false);
@@ -29,9 +30,9 @@ export function CancelBookingButton({ bookingId }: { bookingId: string }) {
     <form action={formAction} className="flex items-center gap-2">
       <input type="hidden" name="bookingId" value={bookingId} />
       <span className="text-xs text-[var(--color-fg-muted)]">Sure?</span>
-      <Button type="submit" size="sm" variant="destructive" disabled={pending}>
-        {pending ? "…" : "Yes, cancel"}
-      </Button>
+      <SubmitButton size="sm" variant="destructive" pendingLabel="Cancelling">
+        Yes, cancel
+      </SubmitButton>
       <Button
         type="button"
         size="sm"

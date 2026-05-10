@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { togglePayoutHoldAction } from "@/features/admin";
@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function HoldToggleForm({ payoutId, version, action }: Props) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     togglePayoutHoldAction,
     null,
   );
@@ -48,14 +48,13 @@ export function HoldToggleForm({ payoutId, version, action }: Props) {
           {state.message}
         </Alert>
       )}
-      <Button
-        type="submit"
+      <SubmitButton
         size="sm"
         variant={action === "hold" ? "destructive" : "default"}
-        disabled={pending}
+        pendingLabel="Working"
       >
-        {pending ? "Working…" : action === "hold" ? "Place on hold" : "Release hold"}
-      </Button>
+        {action === "hold" ? "Place on hold" : "Release hold"}
+      </SubmitButton>
     </form>
   );
 }

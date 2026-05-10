@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
@@ -9,7 +9,7 @@ import { updateSystemFeeAction } from "@/features/admin";
 import type { ActionResult } from "@/features/auth";
 
 export function UpdateFeeForm() {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     updateSystemFeeAction,
     null,
   );
@@ -46,9 +46,9 @@ export function UpdateFeeForm() {
           Fee updated.
         </Alert>
       )}
-      <Button type="submit" size="sm" disabled={pending}>
+      <SubmitButton size="sm" pendingLabel="Updating">
         Update fee
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

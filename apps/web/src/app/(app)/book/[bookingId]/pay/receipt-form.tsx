@@ -5,7 +5,7 @@ import { Check, Upload } from "lucide-react";
 import { submitReceiptAction } from "@/features/booking/payment-actions";
 import type { ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { TurnstileWidget } from "@/components/turnstile-widget";
@@ -16,7 +16,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 
 export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(
     submitReceiptAction,
     null,
   );
@@ -115,9 +115,9 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
         )}
       </FormField>
 
-      <Button type="submit" size="lg" disabled={pending || Boolean(fileError)} className="mt-2">
-        {pending ? "Uploading…" : "Submit receipt"}
-      </Button>
+      <SubmitButton size="lg" pendingLabel="Uploading" disabled={Boolean(fileError)} className="mt-2">
+        Submit receipt
+      </SubmitButton>
 
       <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="receipt-upload" />
     </form>
