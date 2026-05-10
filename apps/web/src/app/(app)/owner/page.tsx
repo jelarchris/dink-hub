@@ -56,13 +56,13 @@ export default async function OwnerDashboard() {
               <Layers className="size-5" /> Your venues
             </CardTitle>
             <CardDescription>
-              Venue and court setup is currently managed via DinkHub admin. Reach out to add or edit a venue.
+              Add venues, set GCash details, and manage courts.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" disabled>
-              Coming soon
-            </Button>
+            <Link href="/owner/venues">
+              <Button variant="outline">Manage venues</Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

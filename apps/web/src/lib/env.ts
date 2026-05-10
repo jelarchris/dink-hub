@@ -17,6 +17,7 @@ const serverSchema = z.object({
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
+  CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 chars").optional(),
 });
 
 const clientSchema = z.object({
@@ -58,6 +59,7 @@ const processEnv = {
   UPSTASH_REDIS_REST_URL: blankToUndefined(process.env.UPSTASH_REDIS_REST_URL),
   UPSTASH_REDIS_REST_TOKEN: blankToUndefined(process.env.UPSTASH_REDIS_REST_TOKEN),
   SENTRY_DSN: blankToUndefined(process.env.SENTRY_DSN),
+  CRON_SECRET: blankToUndefined(process.env.CRON_SECRET),
 };
 
 const isServer = typeof window === "undefined";
