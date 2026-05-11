@@ -146,7 +146,7 @@ function StatsBar({
       label: "Bookings this week",
       value: stats.bookingsLast7d.toLocaleString("en-PH"),
     },
-    { label: "Platform fee for players", value: "₱0" },
+    { label: "Platform fee for players", value: "Free" },
   ];
   return (
     <section
@@ -156,7 +156,7 @@ function StatsBar({
       <Container className="grid grid-cols-2 gap-y-4 py-5 sm:grid-cols-4">
         {items.map((s) => (
           <div key={s.label} className="text-center">
-            <div className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+            <div className="text-2xl font-extrabold tracking-tight text-[var(--color-brand-600)] sm:text-3xl">
               {s.value}
             </div>
             <div className="mt-1 text-xs uppercase tracking-wide text-[var(--color-fg-muted)]">
