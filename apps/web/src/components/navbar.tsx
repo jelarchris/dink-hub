@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type SVGProps } from "react";
 import { createPortal } from "react-dom";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Menu,
   X,
@@ -282,8 +283,12 @@ export function Navbar({ user }: NavbarProps) {
               ))}
             </div>
 
-            {/* Sign out pinned to bottom */}
-            <div className="border-t border-[var(--color-border-default)] p-4">
+            {/* Sign out + theme toggle pinned to bottom */}
+            <div className="border-t border-[var(--color-border-default)] p-4 space-y-2">
+              <div className="flex items-center justify-between rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-4 py-2.5">
+                <span className="text-sm font-medium text-[var(--color-fg-muted)]">Appearance</span>
+                <ThemeToggle className="inline-flex size-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] transition-colors" />
+              </div>
               <form action={signOutAction}>
                 <button
                   type="submit"
@@ -344,7 +349,8 @@ export function Navbar({ user }: NavbarProps) {
           </nav>
 
           {/* Desktop right actions */}
-          <div className="hidden items-center gap-2 sm:flex">
+          <div className="hidden items-center gap-1 sm:flex">
+            <ThemeToggle />
             {user ? (
               <>
                 <span className="text-sm text-[var(--color-fg-muted)]">
