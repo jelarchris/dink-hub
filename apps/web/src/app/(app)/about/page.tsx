@@ -49,24 +49,31 @@ function Story() {
       <Container className="max-w-3xl">
         <div className="prose prose-neutral max-w-none space-y-5 text-[var(--color-fg-muted)]">
           <p className="text-lg leading-relaxed">
-            I&apos;m a pickleball player myself. Here in Agusan del Sur, every
-            time I wanted to play, I had to message or call the venue and wait
-            for a reply just to find out if a slot was even open. Sometimes
-            the venue replied an hour later. Sometimes not at all. By the
-            time I got a confirmation, the court was already taken — or the
-            people I was supposed to play with had moved on.
+            I&apos;m a pickleball player myself. Here in Agusan del Sur, just
+            finding a court to play on was a problem. I didn&apos;t know which
+            venues existed, where they were, or who to ask. The only way to
+            find out was to scroll through Facebook groups, ask around in
+            chats, and hope someone replied.
           </p>
           <p className="text-lg leading-relaxed">
-            There was no shared calendar. No real-time availability. No way to
-            book and pay in one place. Just a group chat, a few screenshots,
-            and a lot of waiting.
+            And even after I found a venue, the booking part was just as
+            painful. I&apos;d message or call to ask if a slot was open, then
+            wait. Sometimes the reply came an hour later. Sometimes not at
+            all. By the time I got a confirmation, the court was already
+            taken — or the people I was supposed to play with had moved on.
           </p>
           <p className="text-lg leading-relaxed">
-            So I built DinkHub — the platform I wished existed when I picked
-            up a paddle for the first time. A place where any player can see
-            which courts are open tonight, this weekend, or two weeks from
-            now, and reserve one in under a minute. And a place where venue
-            owners stop losing bookings to missed messages.
+            There was no shared calendar. No real-time availability. No way
+            to discover venues, see open slots, and pay in one place. Just a
+            group chat, a few screenshots, and a lot of waiting.
+          </p>
+          <p className="text-lg leading-relaxed">
+            So I built DinkHub — one place for every pickleball venue in the
+            country. A directory where players can discover courts in their
+            area, see what&apos;s open tonight or two weeks from now, and
+            reserve a slot in under a minute. And a home where venue owners
+            stop losing bookings to missed messages and finally get found by
+            the players already looking for them.
           </p>
         </div>
       </Container>
