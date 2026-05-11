@@ -12,12 +12,16 @@ const MS_PER_DAY = 86_400_000;
  *
  * All arithmetic is done in Manila wall-clock (shift by +8h, truncate to day
  * or Monday boundary, shift back) to match the operator's local experience.
+ *
+ * `upcomingEndUTC` is the end of the upcoming window (days days from today)
+ * used by getUpcomingSchedule.
  */
-function getManilaTimeBoundaries(): {
+function getManilaTimeBoundaries(upcomingDays = 7): {
   todayStartUTC: Date;
   todayEndUTC: Date;
   thisWeekStartUTC: Date;
   lastWeekStartUTC: Date;
+  upcomingEndUTC: Date;
 } {
   const nowMs = Date.now();
   const nowManilaMs = nowMs + MANILA_OFFSET_MS;
@@ -36,7 +40,18 @@ function getManilaTimeBoundaries(): {
   // Last week: the 7-day window immediately preceding this week.
   const lastWeekStartUTC = new Date(thisWeekStartManilaMs - 7 * MS_PER_DAY - MANILA_OFFSET_MS);
 
-  return { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC };
+  // Upcoming window: today 00:00 Manila → N days later (exclusive).
+  const upcomingEndUTC = new Date(
+    todayManilaFloorMs + upcomingDays * MS_PER_DAY - MANILA_OFFSET_MS,
+  );
+
+  return { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC, upcomingEndUTC };
+}
+
+/** Format a UTC Date as a Manila-wall-clock date string "YYYY-MM-DD". */
+export function toManilaDayKey(d: Date): string {
+  const manilaMs = d.getTime() + MANILA_OFFSET_MS;
+  return new Date(manilaMs).toISOString().slice(0, 10);
 }
 
 // ============================================================================
@@ -61,11 +76,18 @@ export interface OwnerDashboardStats {
  *   - this week (Mon 00:00 Manila → now)
  *   - last week (same window 7 days prior)
  *
- * All three queries run in parallel. Scoped to all venues owned by `ownerId`.
+ * All four queries run in parallel. Scoped to the owner's venues; optionally
+ * filtered to a single venue via `venueId`.
  */
-export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDashboardStats> {
+export async function getOwnerDashboardStats(
+  ownerId: string,
+  venueId?: string | undefined,
+): Promise<OwnerDashboardStats> {
   const { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC } =
     getManilaTimeBoundaries();
+
+  // Optional single-venue filter — shared across all four sub-queries.
+  const venueFilter = venueId ? eq(bookings.venueId, venueId) : undefined;
 
   const [todayRow, thisWeekRow, lastWeekRow, noShowRow] = await Promise.all([
     db
@@ -82,6 +104,7 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
           gte(bookings.startAt, todayStartUTC),
           lt(bookings.startAt, todayEndUTC),
           isNull(venues.deletedAt),
+          venueFilter,
         ),
       ),
     db
@@ -97,6 +120,7 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
           eq(bookings.status, "confirmed"),
           gte(bookings.startAt, thisWeekStartUTC),
           isNull(venues.deletedAt),
+          venueFilter,
         ),
       ),
     db
@@ -113,6 +137,7 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
           gte(bookings.startAt, lastWeekStartUTC),
           lt(bookings.startAt, thisWeekStartUTC),
           isNull(venues.deletedAt),
+          venueFilter,
         ),
       ),
     db
@@ -125,6 +150,7 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
           eq(bookings.status, "no_show"),
           gte(bookings.startAt, thisWeekStartUTC),
           isNull(venues.deletedAt),
+          venueFilter,
         ),
       ),
   ]);
@@ -141,7 +167,7 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
 }
 
 // ============================================================================
-// today's schedule
+// upcoming schedule — today + next N days
 // ============================================================================
 
 export interface ScheduleItem {
@@ -153,17 +179,30 @@ export interface ScheduleItem {
   courtName: string;
   playerDisplayName: string;
   totalCentavos: bigint;
+  /**
+   * Manila calendar date string "YYYY-MM-DD" for this booking's start time.
+   * Use this to group rows into day buckets on the UI without re-doing
+   * timezone math in the render layer.
+   */
+  manilaDateKey: string;
 }
 
 /**
- * All confirmed bookings starting today (Manila time) across all venues
- * owned by `ownerId`, ordered chronologically.
+ * All confirmed bookings starting today (Manila 00:00) through the next
+ * `days` calendar days for venues owned by `ownerId`, ordered chronologically.
  *
- * Used as the "front desk" view — a receptionist can check upcoming
- * bookings on any device without needing the admin panel.
+ * Optionally scoped to a single venue via `venueId`.
+ *
+ * The returned `manilaDateKey` ("YYYY-MM-DD") is pre-computed in the query
+ * using Postgres `AT TIME ZONE 'Asia/Manila'` so the page never does tz math.
+ * Capped at 200 rows — well above any realistic 7-day load.
  */
-export async function getTodaysSchedule(ownerId: string): Promise<ScheduleItem[]> {
-  const { todayStartUTC, todayEndUTC } = getManilaTimeBoundaries();
+export async function getUpcomingSchedule(
+  ownerId: string,
+  { venueId, days = 7 }: { venueId?: string; days?: number } = {},
+): Promise<ScheduleItem[]> {
+  const { todayStartUTC, upcomingEndUTC } = getManilaTimeBoundaries(days);
+  const venueFilter = venueId ? eq(bookings.venueId, venueId) : undefined;
 
   const rows = await db
     .select({
@@ -175,9 +214,11 @@ export async function getTodaysSchedule(ownerId: string): Promise<ScheduleItem[]
       courtName: courts.name,
       playerDisplayName: profiles.displayName,
       totalCentavos: bookings.totalCentavos,
+      // Pre-compute the Manila date key in Postgres — avoids JS tz math.
+      manilaDateKey: sql<string>`to_char(${bookings.startAt} at time zone 'Asia/Manila', 'YYYY-MM-DD')`,
     })
     .from(bookings)
-    .innerJoin(venues, eq(venues.id, bookings.venueId))
+    .innerJoin(venues, and(eq(venues.id, bookings.venueId), isNull(venues.deletedAt)))
     .innerJoin(courts, eq(courts.id, bookings.courtId))
     .innerJoin(profiles, eq(profiles.id, bookings.playerId))
     .where(
@@ -185,11 +226,13 @@ export async function getTodaysSchedule(ownerId: string): Promise<ScheduleItem[]
         eq(venues.ownerId, ownerId),
         eq(bookings.status, "confirmed"),
         gte(bookings.startAt, todayStartUTC),
-        lt(bookings.startAt, todayEndUTC),
+        lt(bookings.startAt, upcomingEndUTC),
         isNull(venues.deletedAt),
+        venueFilter,
       ),
     )
-    .orderBy(bookings.startAt);
+    .orderBy(bookings.startAt)
+    .limit(200);
 
   return rows;
 }
@@ -221,8 +264,10 @@ export interface CourtUtilization {
  */
 export async function getCourtUtilizationThisWeek(
   ownerId: string,
+  venueId?: string,
 ): Promise<CourtUtilization[]> {
   const { thisWeekStartUTC } = getManilaTimeBoundaries();
+  const venueFilter = venueId ? eq(courts.venueId, venueId) : undefined;
 
   const rows = await db
     .select({
@@ -249,6 +294,7 @@ export async function getCourtUtilizationThisWeek(
         eq(venues.ownerId, ownerId),
         eq(courts.isActive, true),
         isNull(courts.deletedAt),
+        venueFilter,
       ),
     )
     .groupBy(courts.id, courts.name, venues.id, venues.name)

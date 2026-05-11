@@ -17,11 +17,13 @@ import { PageHeader, SectionLabel } from "@/components/ui/page-header";
 import { Alert } from "@/components/ui/alert";
 import { formatPHP } from "@/lib/money";
 import { listPendingPaymentsForOwner } from "@/features/bookings-view";
+import { listVenuesForOwner } from "@/features/owner-venues/service";
 import { OwnerBalanceCard } from "@/features/owner-invoices/components/owner-balance-card";
 import {
   getOwnerDashboardStats,
-  getTodaysSchedule,
+  getUpcomingSchedule,
   getCourtUtilizationThisWeek,
+  toManilaDayKey,
   type ScheduleItem,
   type CourtUtilization,
 } from "@/features/owner-dashboard";
@@ -29,7 +31,7 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Owner dashboard" };
 
-// Time formatters — always display in Manila wall-clock regardless of server locale.
+// Time formatter — always display in Manila wall-clock regardless of server locale.
 const TIME_FMT = new Intl.DateTimeFormat("en-PH", {
   hour: "2-digit",
   minute: "2-digit",
@@ -37,18 +39,14 @@ const TIME_FMT = new Intl.DateTimeFormat("en-PH", {
   timeZone: "Asia/Manila",
 });
 
-const TODAY_LABEL_FMT = new Intl.DateTimeFormat("en-PH", {
-  weekday: "long",
-  month: "long",
+// Short day header: "Mon, May 12"
+const DAY_HEADER_FMT = new Intl.DateTimeFormat("en-PH", {
+  weekday: "short",
+  month: "short",
   day: "numeric",
   timeZone: "Asia/Manila",
 });
 
-/**
- * Week-over-week percentage delta.
- * Returns null when there is no prior-week baseline (avoid division-by-zero
- * and a meaningless "+Infinity%" badge on new venues).
- */
 function weekOverWeekPct(current: number | bigint, previous: number | bigint): number | null {
   const curr = typeof current === "bigint" ? Number(current) : current;
   const prev = typeof previous === "bigint" ? Number(previous) : previous;
@@ -56,7 +54,23 @@ function weekOverWeekPct(current: number | bigint, previous: number | bigint): n
   return ((curr - prev) / prev) * 100;
 }
 
-export default async function OwnerDashboard() {
+/**
+ * Human-readable label for a schedule day section header.
+ * "Today", "Tomorrow", or short date string.
+ */
+function dayLabel(dayKey: string, todayKey: string, tomorrowKey: string): string {
+  if (dayKey === todayKey) return "Today";
+  if (dayKey === tomorrowKey) return "Tomorrow";
+  // Parse the key as a UTC midnight date for the formatter — then Manila tz
+  // will display it exactly as that calendar date (no off-by-one).
+  return DAY_HEADER_FMT.format(new Date(`${dayKey}T00:00:00+08:00`));
+}
+
+export default async function OwnerDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const profile = await getSessionUser();
   if (!profile) redirect(`/sign-in?next=${encodeURIComponent("/owner")}`);
   if (profile.role !== "venue_owner" && profile.role !== "admin") {
@@ -69,12 +83,25 @@ export default async function OwnerDashboard() {
     );
   }
 
-  // All four fetches are independent — run in parallel.
-  const [pending, stats, schedule, utilization] = await Promise.all([
+  // Resolve venue filter from URL — absent or "all" means no filter.
+  const sp = await searchParams;
+  const rawVenue = Array.isArray(sp.venue) ? sp.venue[0] : sp.venue;
+  // Only trust a UUID-shaped value to prevent injection into queries.
+  const venueIdFilter =
+    rawVenue && /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(rawVenue)
+      ? rawVenue
+      : undefined;
+
+  // All independent fetches run in parallel.
+  const [pending, venueList, stats, schedule, utilization] = await Promise.all([
     listPendingPaymentsForOwner(profile.id),
-    getOwnerDashboardStats(profile.id),
-    getTodaysSchedule(profile.id),
-    getCourtUtilizationThisWeek(profile.id),
+    listVenuesForOwner(profile.id),
+    getOwnerDashboardStats(profile.id, venueIdFilter),
+    getUpcomingSchedule(profile.id, {
+      ...(venueIdFilter ? { venueId: venueIdFilter } : {}),
+      days: 7,
+    }),
+    getCourtUtilizationThisWeek(profile.id, venueIdFilter),
   ]);
 
   const pendingCount = pending.length;
@@ -83,10 +110,20 @@ export default async function OwnerDashboard() {
   const grossDelta = weekOverWeekPct(stats.grossThisWeekCentavos, stats.grossLastWeekCentavos);
   const bookingsDelta = weekOverWeekPct(stats.bookingsThisWeek, stats.bookingsLastWeek);
 
-  // Normalise court bar widths to the busiest court this week.
   const maxUtilMinutes = Math.max(...utilization.map((u) => u.bookedMinutes), 1);
 
-  const todayLabel = TODAY_LABEL_FMT.format(new Date());
+  // Group schedule items by Manila date key — preserves chronological order within each day.
+  const now = new Date();
+  const todayKey = toManilaDayKey(now);
+  const tomorrowKey = toManilaDayKey(new Date(now.getTime() + 86_400_000));
+  const scheduleDays = groupByDay(schedule);
+
+  // Determine the active venue label for the filter bar.
+  const activeVenue = venueIdFilter
+    ? venueList.find((v) => v.venue.id === venueIdFilter)?.venue
+    : undefined;
+
+  const showVenueFilter = venueList.length > 1;
 
   return (
     <Container className="py-3 sm:py-4">
@@ -106,6 +143,35 @@ export default async function OwnerDashboard() {
           ) : undefined
         }
       />
+
+      {/* ── Venue filter ─────────────────────────────────────────────────── */}
+      {showVenueFilter && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <VenueTab
+            href="/owner"
+            label="All venues"
+            active={!venueIdFilter}
+          />
+          {venueList.map(({ venue }) => (
+            <VenueTab
+              key={venue.id}
+              href={`/owner?venue=${venue.id}`}
+              label={venue.name}
+              active={venueIdFilter === venue.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Active-venue context hint */}
+      {activeVenue && (
+        <p className="mt-2 text-xs text-[var(--color-fg-muted)]">
+          Showing data for <strong>{activeVenue.name}</strong> only ·{" "}
+          <Link href="/owner" className="underline hover:text-[var(--color-fg)]">
+            Clear filter
+          </Link>
+        </p>
+      )}
 
       {/* ── Stat cards ──────────────────────────────────────────────────── */}
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -143,7 +209,7 @@ export default async function OwnerDashboard() {
 
       {/* ── No-show row ─────────────────────────────────────────────────── */}
       {stats.noShowsThisWeek > 0 && (
-        <div className="mt-3 grid grid-cols-1">
+        <div className="mt-3">
           <StatCard
             title="No-shows this week"
             value={stats.noShowsThisWeek.toString()}
@@ -154,30 +220,45 @@ export default async function OwnerDashboard() {
         </div>
       )}
 
-      {/* ── Today's schedule ────────────────────────────────────────────── */}
+      {/* ── Upcoming schedule ────────────────────────────────────────────── */}
       <section className="mt-6">
         <SectionLabel className="mb-2 flex items-center gap-1.5">
           <CalendarClock className="size-3.5" />
-          Today&apos;s schedule
-          <span className="ml-1 font-normal text-[var(--color-fg-muted)]">· {todayLabel}</span>
+          Upcoming bookings
+          <span className="ml-1 font-normal text-[var(--color-fg-muted)]">· next 7 days</span>
         </SectionLabel>
 
-        {schedule.length === 0 ? (
+        {scheduleDays.size === 0 ? (
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-6 text-center">
             <CalendarClock className="mx-auto size-8 text-[var(--color-fg-subtle)]" />
             <p className="mt-2 text-sm font-medium text-[var(--color-fg-muted)]">
-              No confirmed bookings today
+              No confirmed bookings in the next 7 days
             </p>
             <p className="mt-0.5 text-xs text-[var(--color-fg-subtle)]">
               Bookings appear here once players upload and you verify their payment receipt.
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-[var(--color-border-default)] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)]">
-            {schedule.map((item) => (
-              <ScheduleRow key={item.bookingId} item={item} />
+          <div className="space-y-3">
+            {Array.from(scheduleDays.entries()).map(([dayKey, items]) => (
+              <div key={dayKey}>
+                {/* Day header */}
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-xs font-bold text-[var(--color-fg-muted)] uppercase tracking-wide">
+                    {dayLabel(dayKey, todayKey, tomorrowKey)}
+                  </span>
+                  <span className="text-[10px] text-[var(--color-fg-subtle)]">
+                    · {items.length} booking{items.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <ul className="divide-y divide-[var(--color-border-default)] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)]">
+                  {items.map((item) => (
+                    <ScheduleRow key={item.bookingId} item={item} showVenue={!venueIdFilter && venueList.length > 1} />
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
 
@@ -188,7 +269,7 @@ export default async function OwnerDashboard() {
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)]">
             <ul className="divide-y divide-[var(--color-border-default)]">
               {utilization.map((court) => (
-                <CourtBar key={court.courtId} court={court} maxMinutes={maxUtilMinutes} />
+                <CourtBar key={court.courtId} court={court} maxMinutes={maxUtilMinutes} showVenue={!venueIdFilter && venueList.length > 1} />
               ))}
             </ul>
           </div>
@@ -227,8 +308,52 @@ export default async function OwnerDashboard() {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Group schedule items into an ordered Map keyed by manilaDateKey.
+ * Insertion order == chronological order because items arrive sorted from DB.
+ */
+function groupByDay(items: ScheduleItem[]): Map<string, ScheduleItem[]> {
+  const map = new Map<string, ScheduleItem[]>();
+  for (const item of items) {
+    const existing = map.get(item.manilaDateKey);
+    if (existing) {
+      existing.push(item);
+    } else {
+      map.set(item.manilaDateKey, [item]);
+    }
+  }
+  return map;
+}
+
+// ============================================================================
 // Sub-components (co-located — no external consumers)
 // ============================================================================
+
+function VenueTab({
+  href,
+  label,
+  active,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+        active
+          ? "bg-[var(--color-brand-700)] text-white"
+          : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)]"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
 
 function WoWBadge({ delta }: { delta: number }) {
   const positive = delta >= 0;
@@ -280,7 +405,13 @@ function StatCard({
   );
 }
 
-function ScheduleRow({ item }: { item: ScheduleItem }) {
+function ScheduleRow({
+  item,
+  showVenue,
+}: {
+  item: ScheduleItem;
+  showVenue: boolean;
+}) {
   const startLabel = TIME_FMT.format(item.startAt);
   const endLabel = TIME_FMT.format(item.endAt);
 
@@ -303,9 +434,13 @@ function ScheduleRow({ item }: { item: ScheduleItem }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             <span className="font-semibold leading-tight">{item.courtName}</span>
-            <span className="text-xs text-[var(--color-fg-muted)]">· {item.venueName}</span>
+            {showVenue && (
+              <span className="text-xs text-[var(--color-fg-muted)]">· {item.venueName}</span>
+            )}
           </div>
-          <div className="mt-0.5 text-xs text-[var(--color-fg-muted)]">{item.playerDisplayName}</div>
+          <div className="mt-0.5 text-xs text-[var(--color-fg-muted)]">
+            {item.playerDisplayName}
+          </div>
         </div>
 
         {/* Amount */}
@@ -320,9 +455,11 @@ function ScheduleRow({ item }: { item: ScheduleItem }) {
 function CourtBar({
   court,
   maxMinutes,
+  showVenue,
 }: {
   court: CourtUtilization;
   maxMinutes: number;
+  showVenue: boolean;
 }) {
   const pct = maxMinutes > 0 ? Math.round((court.bookedMinutes / maxMinutes) * 100) : 0;
   const totalHours = Math.floor(court.bookedMinutes / 60);
@@ -341,7 +478,9 @@ function CourtBar({
       <div className="flex items-center justify-between gap-3 text-sm">
         <div className="min-w-0">
           <span className="font-medium">{court.courtName}</span>
-          <span className="ml-1.5 text-xs text-[var(--color-fg-muted)]">{court.venueName}</span>
+          {showVenue && (
+            <span className="ml-1.5 text-xs text-[var(--color-fg-muted)]">{court.venueName}</span>
+          )}
         </div>
         <div className="shrink-0 text-right text-xs tabular-nums text-[var(--color-fg-muted)]">
           {hoursLabel}
