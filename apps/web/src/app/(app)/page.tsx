@@ -564,6 +564,18 @@ function Footer() {
             Pickleball court bookings for the Philippines. Built in Agusan del
             Sur 🇵🇭
           </p>
+          <p className="mt-2 text-xs text-[var(--color-fg-subtle)]">
+            Founded by{" "}
+            <a
+              href="https://www.facebook.com/jelarjoychristian"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-[var(--color-fg-muted)] underline-offset-2 hover:text-[var(--color-brand-600)] hover:underline"
+            >
+              Christian Jelar Joy D. Hisola
+            </a>
+            {" "}· Founder
+          </p>
         </div>
         <FooterCol
           title="Players"
