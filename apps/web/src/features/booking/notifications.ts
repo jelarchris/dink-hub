@@ -31,6 +31,11 @@ interface BookingJoin {
   venueName: string;
   ownerEmail: string;
   ownerDisplayName: string;
+  ownerNotificationPrefs: {
+    email_on_payment_submitted: boolean;
+    email_on_booking_cancelled: boolean;
+    email_daily_digest: boolean;
+  };
   playerEmail: string;
   playerDisplayName: string;
   gcashReferenceNumber: string | null;
@@ -57,7 +62,11 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
   if (!base) return null;
 
   const [ownerRow] = await db
-    .select({ email: profiles.email, displayName: profiles.displayName })
+    .select({
+      email: profiles.email,
+      displayName: profiles.displayName,
+      notificationPrefs: profiles.notificationPrefs,
+    })
     .from(profiles)
     .where(eq(profiles.id, base.ownerId))
     .limit(1);
@@ -85,6 +94,7 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
     venueName: base.venueName,
     ownerEmail: ownerRow.email,
     ownerDisplayName: ownerRow.displayName,
+    ownerNotificationPrefs: ownerRow.notificationPrefs,
     playerEmail: playerRow.email,
     playerDisplayName: playerRow.displayName,
     gcashReferenceNumber: paymentRow?.ref ?? null,
@@ -95,6 +105,7 @@ export async function notifyPaymentSubmitted(bookingId: string): Promise<void> {
   try {
     const ctx = await loadBookingJoin(bookingId);
     if (!ctx) return;
+    if (!ctx.ownerNotificationPrefs.email_on_payment_submitted) return;
     const tpl = paymentSubmittedEmail({
       bookingId: ctx.bookingId,
       venueName: ctx.venueName,
@@ -155,6 +166,7 @@ export async function notifyBookingCancelledByPlayer(bookingId: string): Promise
   try {
     const ctx = await loadBookingJoin(bookingId);
     if (!ctx) return;
+    if (!ctx.ownerNotificationPrefs.email_on_booking_cancelled) return;
     const tpl = bookingCancelledByPlayerEmail({
       bookingId: ctx.bookingId,
       venueName: ctx.venueName,

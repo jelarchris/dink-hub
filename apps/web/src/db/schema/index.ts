@@ -51,6 +51,19 @@ export const profiles = pgTable("profiles", {
   ratingRd: numeric("rating_rd", { precision: 6, scale: 2 }).default("350.00"),
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
   suspensionReason: text("suspension_reason"),
+  /** Per-owner notification preferences. Keys must match the DB check constraint. */
+  notificationPrefs: jsonb("notification_prefs")
+    .$type<{
+      email_daily_digest: boolean;
+      email_on_payment_submitted: boolean;
+      email_on_booking_cancelled: boolean;
+    }>()
+    .notNull()
+    .default({
+      email_daily_digest: true,
+      email_on_payment_submitted: true,
+      email_on_booking_cancelled: true,
+    }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

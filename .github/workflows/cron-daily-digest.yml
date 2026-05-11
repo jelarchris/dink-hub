@@ -1,0 +1,48 @@
+name: cron-daily-digest
+
+# Sends the owner daily digest at 08:00 Manila time (00:00 UTC).
+# Vercel Hobby caps cron jobs at once-per-day; we drive it from GitHub Actions.
+#
+# The digest only emails owners who opted in AND had activity that day, so
+# firing on days with zero bookings simply completes with sent=0.
+#
+# Required repo secret: CRON_SECRET (must match the value set in Vercel env).
+# Optional repo secret: CRON_TARGET_URL (defaults to https://dinkhub.ph).
+
+on:
+  schedule:
+    # 00:00 UTC = 08:00 Asia/Manila (fixed UTC+8, no DST)
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: cron-daily-digest
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/daily-digest
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_TARGET_URL: ${{ secrets.CRON_TARGET_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set"
+            exit 1
+          fi
+          base="${CRON_TARGET_URL:-https://dinkhub.ph}"
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "$base/api/cron/daily-digest" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json" \
+            --max-time 120 --retry 2 --retry-delay 10)
+          echo "status=$status"
+          cat /tmp/body.json || true
+          if [ "$status" != "200" ]; then
+            echo "::error::cron-daily-digest returned non-200 status"
+            exit 1
+          fi
