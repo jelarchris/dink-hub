@@ -131,7 +131,17 @@ export async function insertBooking(
 export async function updateBookingStatus(
   bookingId: string,
   expectedVersion: number,
-  patch: Partial<Pick<Booking, "status" | "notes">>,
+  patch: Partial<
+    Pick<
+      Booking,
+      | "status"
+      | "notes"
+      | "cancelledAt"
+      | "cancelledBy"
+      | "cancellationReason"
+      | "cancellationCategory"
+    >
+  >,
   exec: Executor = db,
 ): Promise<Booking | null> {
   const rows = await exec

@@ -102,3 +102,40 @@ export const cancelBookingInputSchema = z.object({
   playerId: uuidSchema,
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingInputSchema>;
+
+// ----------------------------------------------------------------------------
+// Owner-initiated cancel + reschedule (Tier 4)
+// ----------------------------------------------------------------------------
+
+export const cancellationCategorySchema = z.enum([
+  "weather",
+  "court_unavailable",
+  "venue_closure",
+  "player_request",
+  "admin_action",
+  "other",
+]);
+export type CancellationCategory = z.infer<typeof cancellationCategorySchema>;
+
+export const ownerCancelBookingInputSchema = z.object({
+  bookingId: uuidSchema,
+  ownerId: uuidSchema,
+  expectedVersion: z.number().int().positive(),
+  category: cancellationCategorySchema,
+  reason: z.string().min(3).max(500),
+});
+export type OwnerCancelBookingInput = z.infer<typeof ownerCancelBookingInputSchema>;
+
+export const ownerRescheduleBookingInputSchema = z
+  .object({
+    bookingId: uuidSchema,
+    ownerId: uuidSchema,
+    expectedVersion: z.number().int().positive(),
+    newStartAt: z.date(),
+    newEndAt: z.date(),
+    reason: z.string().max(500).optional(),
+  })
+  .superRefine((d, ctx) =>
+    validateSlotTimes({ startAt: d.newStartAt, endAt: d.newEndAt }, ctx),
+  );
+export type OwnerRescheduleBookingInput = z.infer<typeof ownerRescheduleBookingInputSchema>;

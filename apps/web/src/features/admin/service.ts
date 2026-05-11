@@ -651,6 +651,10 @@ export async function forceCancelBooking(
       notes: b.notes
         ? `${b.notes}\n\n[Admin force-cancel] ${input.reason}`
         : `[Admin force-cancel] ${input.reason}`,
+      cancelledAt: new Date(),
+      cancelledBy: admin.id,
+      cancellationReason: input.reason,
+      cancellationCategory: "admin_action",
       updatedAt: new Date(),
     })
     .where(and(eq(bookings.id, b.id), eq(bookings.version, input.expectedVersion)))

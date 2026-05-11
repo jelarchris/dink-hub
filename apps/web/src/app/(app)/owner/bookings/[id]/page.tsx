@@ -22,6 +22,8 @@ import { findBookingForOwner } from "@/features/bookings-view";
 import { getReceiptSignedUrl } from "@/features/storage";
 import type { Booking, Payment } from "@/db/schema";
 import { NoShowForm } from "./_components/no-show-form";
+import { CancelBookingForm } from "./_components/cancel-booking-form";
+import { RescheduleForm } from "./_components/reschedule-form";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,8 @@ export default async function OwnerBookingDetailPage({
   const isConfirmed = booking.status === "confirmed";
   const durationMin =
     (booking.endAt.getTime() - booking.startAt.getTime()) / 60_000;
+  // Server-side request timestamp — RSC renders once per request so this is stable.
+  const renderedAtMs = new Date().getTime();
 
   return (
     <Container className="max-w-3xl py-3 sm:py-4">
@@ -197,18 +201,66 @@ export default async function OwnerBookingDetailPage({
           </div>
 
           {/* Actions */}
-          {isConfirmed && (
-            <div>
-              <SectionLabel className="mb-2 block">Actions</SectionLabel>
-              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4">
-                <p className="mb-3 text-xs text-[var(--color-fg-muted)]">
-                  Use this if the player booked but did not show up. This action
-                  is permanent and recorded in the audit log.
-                </p>
-                <NoShowForm bookingId={booking.id} version={booking.version} />
+          {(() => {
+            const cancellableStatuses: Array<Booking["status"]> = [
+              "pending_payment",
+              "payment_submitted",
+              "confirmed",
+            ];
+            const reschedulableStatuses: Array<Booking["status"]> = [
+              "payment_submitted",
+              "confirmed",
+            ];
+            const canCancel = cancellableStatuses.includes(booking.status);
+            const canReschedule =
+              reschedulableStatuses.includes(booking.status) &&
+              booking.startAt.getTime() > renderedAtMs;
+
+            if (!isConfirmed && !canCancel && !canReschedule) return null;
+
+            return (
+              <div>
+                <SectionLabel className="mb-2 block">Actions</SectionLabel>
+                <div className="space-y-4 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4">
+                  {canReschedule && (
+                    <div>
+                      <p className="mb-2 text-xs text-[var(--color-fg-muted)]">
+                        Move this booking to a different time on the same court.
+                      </p>
+                      <RescheduleForm
+                        bookingId={booking.id}
+                        version={booking.version}
+                        currentStartAt={booking.startAt}
+                        currentDurationMin={durationMin}
+                      />
+                    </div>
+                  )}
+                  {canCancel && (
+                    <div>
+                      <p className="mb-2 text-xs text-[var(--color-fg-muted)]">
+                        Cancel this booking. The player will be emailed the
+                        reason. Paid bookings require a manual GCash refund.
+                      </p>
+                      <CancelBookingForm
+                        bookingId={booking.id}
+                        version={booking.version}
+                        isConfirmed={isConfirmed}
+                      />
+                    </div>
+                  )}
+                  {isConfirmed && (
+                    <div>
+                      <p className="mb-2 text-xs text-[var(--color-fg-muted)]">
+                        Use this if the player booked but did not show up. This
+                        action is permanent and recorded in the audit log.
+                      </p>
+                      <NoShowForm bookingId={booking.id} version={booking.version} />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </aside>
       </div>
     </Container>

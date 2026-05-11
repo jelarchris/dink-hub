@@ -151,6 +151,10 @@ export async function resolveDispute(
           notes: b.notes
             ? `${b.notes}\n\n[Dispute refund] ${input.notes ?? p.disputeReason ?? ""}`
             : `[Dispute refund] ${input.notes ?? p.disputeReason ?? ""}`,
+          cancelledAt: now,
+          cancelledBy: admin.id,
+          cancellationReason: input.notes ?? p.disputeReason ?? null,
+          cancellationCategory: "admin_action",
           version: b.version + 1,
           updatedAt: now,
         })

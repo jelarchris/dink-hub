@@ -401,6 +401,8 @@ export async function markNoShowAction(
     .update(bookings)
     .set({
       status: "no_show",
+      cancelledAt: new Date(),
+      cancelledBy: guard.userId,
       version: sql`${bookings.version} + 1`,
       updatedAt: new Date(),
     })
@@ -433,3 +435,147 @@ export async function markNoShowAction(
   revalidatePath(`/owner/bookings/${bookingId}`);
   return { ok: true, data: undefined as never };
 }
+
+// ============================================================================
+// Owner cancel booking (Tier 4)
+// ============================================================================
+
+const cancelBookingFormSchema = z.object({
+  bookingId: z.string().uuid(),
+  expectedVersion: z.coerce.number().int().min(1),
+  category: z.enum([
+    "weather",
+    "court_unavailable",
+    "venue_closure",
+    "player_request",
+    "admin_action",
+    "other",
+  ]),
+  reason: z.string().min(3, "Reason must be at least 3 characters").max(500),
+});
+
+export async function cancelBookingByOwnerAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = cancelBookingFormSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const { bookingId, expectedVersion, category, reason } = parsed.data;
+
+  const { cancelBookingByOwner } = await import("@/features/booking/service");
+  const { isBookingError } = await import("@/features/booking/errors");
+  const { notifyBookingCancelledByOwner } = await import("@/features/booking/notifications");
+
+  try {
+    await cancelBookingByOwner({
+      bookingId,
+      ownerId: guard.userId,
+      expectedVersion,
+      category,
+      reason,
+    });
+  } catch (err) {
+    if (isBookingError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[owner-cancel-booking]", err);
+    return fail("Could not cancel the booking. Please try again.");
+  }
+
+  // Best-effort notification — never blocks the action.
+  await notifyBookingCancelledByOwner(bookingId, reason);
+
+  revalidatePath("/owner");
+  revalidatePath(`/owner/bookings/${bookingId}`);
+  return { ok: true, data: undefined as never };
+}
+
+// ============================================================================
+// Owner reschedule booking (Tier 4)
+// ============================================================================
+
+const rescheduleBookingFormSchema = z.object({
+  bookingId: z.string().uuid(),
+  expectedVersion: z.coerce.number().int().min(1),
+  // ISO 8601 with offset (the form serialises Manila wall-clock with +08:00)
+  newStartAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
+  newEndAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
+  reason: z.string().max(500).optional(),
+});
+
+export async function rescheduleBookingByOwnerAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = rescheduleBookingFormSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const { bookingId, expectedVersion, newStartAt, newEndAt, reason } = parsed.data;
+
+  // Capture original times for the notification BEFORE the mutation.
+  const { db } = await import("@/db/client");
+  const { bookings } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const before = await db
+    .select({ startAt: bookings.startAt, endAt: bookings.endAt })
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+  const oldStartAt = before[0]?.startAt;
+  const oldEndAt = before[0]?.endAt;
+
+  const { rescheduleBookingByOwner } = await import("@/features/booking/service");
+  const { isBookingError } = await import("@/features/booking/errors");
+  const { notifyBookingRescheduledByOwner } = await import("@/features/booking/notifications");
+
+  try {
+    await rescheduleBookingByOwner({
+      bookingId,
+      ownerId: guard.userId,
+      expectedVersion,
+      newStartAt,
+      newEndAt,
+      ...(reason ? { reason } : {}),
+    });
+  } catch (err) {
+    if (isBookingError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[owner-reschedule-booking]", err);
+    return fail("Could not reschedule the booking. Please try again.");
+  }
+
+  if (oldStartAt && oldEndAt) {
+    await notifyBookingRescheduledByOwner(bookingId, oldStartAt, oldEndAt);
+  }
+
+  revalidatePath("/owner");
+  revalidatePath(`/owner/bookings/${bookingId}`);
+  return { ok: true, data: undefined as never };
+}
+

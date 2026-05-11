@@ -480,13 +480,178 @@ export async function cancelBooking(input: CancelBookingInput): Promise<Booking>
     const cancelled = await repo.updateBookingStatus(
       bookingId,
       booking.version,
-      { status: "cancelled" },
+      {
+        status: "cancelled",
+        cancelledAt: new Date(),
+        cancelledBy: playerId,
+        cancellationCategory: "player_request",
+      },
       tx,
     );
     if (!cancelled) {
       throw new BookingError("concurrent_modification", "Booking was modified concurrently");
     }
     return cancelled;
+  });
+}
+
+// ============================================================================
+// 7b. cancelBookingByOwner — owner-initiated cancellation (Tier 4)
+//
+// Differs from player cancel:
+//   - No 15-min window — owners can cancel any non-terminal booking.
+//   - Allowed from {pending_payment, payment_submitted, confirmed}.
+//   - Confirmed cancellations leave a marker note; refunds are out-of-band
+//     (admin dispute flow handles ledger reversal). We DO NOT auto-touch the
+//     ledger here — owner cancel is a state transition only.
+//   - Authorization: caller must own the venue (verified via court→venue join).
+// ============================================================================
+export async function cancelBookingByOwner(
+  input: import("./schema").OwnerCancelBookingInput,
+): Promise<Booking> {
+  const parsed = (
+    await import("./schema")
+  ).ownerCancelBookingInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new BookingError("validation_failed", "Invalid cancel input", {
+      issues: parsed.error.flatten(),
+    });
+  }
+  const { bookingId, ownerId, expectedVersion, category, reason } = parsed.data;
+
+  return db.transaction(async (tx) => {
+    const booking = await repo.findBookingById(bookingId, tx);
+    if (!booking) throw new BookingError("booking_not_found", "Booking not found");
+    if (booking.version !== expectedVersion) {
+      throw new BookingError("concurrent_modification", "Booking was modified — reload and retry");
+    }
+
+    const courtRow = await repo.findCourtById(booking.courtId, tx);
+    if (!courtRow) throw new BookingError("court_not_found", "Court missing for booking");
+    if (courtRow.venue.ownerId !== ownerId) {
+      throw new BookingError("not_authorized", "Only the venue owner can cancel this booking");
+    }
+
+    if (!["pending_payment", "payment_submitted", "confirmed"].includes(booking.status)) {
+      throw new BookingError(
+        "booking_not_cancellable",
+        `Cannot cancel — booking status is ${booking.status}`,
+      );
+    }
+
+    const noteSuffix =
+      booking.status === "confirmed"
+        ? `[Owner cancel · ${category}] ${reason}\n[Refund pending — admin dispute flow]`
+        : `[Owner cancel · ${category}] ${reason}`;
+    const newNotes = booking.notes ? `${booking.notes}\n\n${noteSuffix}` : noteSuffix;
+
+    const cancelled = await repo.updateBookingStatus(
+      bookingId,
+      booking.version,
+      {
+        status: "cancelled",
+        notes: newNotes,
+        cancelledAt: new Date(),
+        cancelledBy: ownerId,
+        cancellationReason: reason,
+        cancellationCategory: category,
+      },
+      tx,
+    );
+    if (!cancelled) {
+      throw new BookingError("concurrent_modification", "Booking was modified concurrently");
+    }
+    return cancelled;
+  });
+}
+
+// ============================================================================
+// 7c. rescheduleBookingByOwner — owner moves a booking to a new slot (Tier 4)
+//
+// Same court only in v1. Allowed from {payment_submitted, confirmed}.
+// Cannot reschedule pending_payment (player still in checkout) or any terminal
+// state. The DB EXCLUDE constraint guarantees no double-booking — we catch
+// the exclusion violation and translate to slot_not_available.
+//
+// originalStartAt/originalEndAt are set only on the FIRST reschedule so the
+// truly original time survives multiple moves.
+// ============================================================================
+export async function rescheduleBookingByOwner(
+  input: import("./schema").OwnerRescheduleBookingInput,
+): Promise<Booking> {
+  const parsed = (
+    await import("./schema")
+  ).ownerRescheduleBookingInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new BookingError("validation_failed", "Invalid reschedule input", {
+      issues: parsed.error.flatten(),
+    });
+  }
+  const { bookingId, ownerId, expectedVersion, newStartAt, newEndAt, reason } = parsed.data;
+
+  if (newStartAt.getTime() <= Date.now()) {
+    throw new BookingError("validation_failed", "New start time must be in the future");
+  }
+
+  return db.transaction(async (tx) => {
+    const booking = await repo.findBookingById(bookingId, tx);
+    if (!booking) throw new BookingError("booking_not_found", "Booking not found");
+    if (booking.version !== expectedVersion) {
+      throw new BookingError("concurrent_modification", "Booking was modified — reload and retry");
+    }
+
+    const courtRow = await repo.findCourtById(booking.courtId, tx);
+    if (!courtRow) throw new BookingError("court_not_found", "Court missing for booking");
+    if (courtRow.venue.ownerId !== ownerId) {
+      throw new BookingError("not_authorized", "Only the venue owner can reschedule this booking");
+    }
+
+    if (!["payment_submitted", "confirmed"].includes(booking.status)) {
+      throw new BookingError(
+        "booking_wrong_status",
+        `Cannot reschedule — booking status is ${booking.status}`,
+      );
+    }
+
+    // Preserve the truly-original time across multiple reschedules.
+    const isFirstReschedule = booking.originalStartAt === null;
+    const noteSuffix = reason ? `[Owner reschedule] ${reason}` : "[Owner reschedule]";
+    const newNotes = booking.notes ? `${booking.notes}\n\n${noteSuffix}` : noteSuffix;
+
+    try {
+      const { bookings: bookingsTable } = await import("@/db/schema");
+      const { and, eq } = await import("drizzle-orm");
+      const rows = await tx
+        .update(bookingsTable)
+        .set({
+          startAt: newStartAt,
+          endAt: newEndAt,
+          notes: newNotes,
+          ...(isFirstReschedule
+            ? { originalStartAt: booking.startAt, originalEndAt: booking.endAt }
+            : {}),
+          rescheduledCount: booking.rescheduledCount + 1,
+          lastRescheduledAt: new Date(),
+          lastRescheduledBy: ownerId,
+        })
+        .where(
+          and(
+            eq(bookingsTable.id, bookingId),
+            eq(bookingsTable.version, booking.version),
+          ),
+        )
+        .returning();
+      const updated = rows[0];
+      if (!updated) {
+        throw new BookingError("concurrent_modification", "Booking was modified concurrently");
+      }
+      return updated;
+    } catch (err) {
+      if (isPgError(err, PG_EXCLUSION_VIOLATION)) {
+        throw new BookingError("slot_not_available", "Target slot conflicts with another booking");
+      }
+      throw err;
+    }
   });
 }
 

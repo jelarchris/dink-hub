@@ -191,6 +191,78 @@ export async function notifyBookingForceCancelled(bookingId: string, reason: str
   }
 }
 
+/**
+ * Owner-initiated cancel notification. Reuses the force-cancelled template
+ * (player-facing copy is suitably generic) but tags the email distinctly so
+ * deliverability + analytics can split owner-cancel vs admin-cancel.
+ *
+ * Future: dedicated template that includes venue contact + refund timeline
+ * once admin refund SLA is formalised.
+ */
+export async function notifyBookingCancelledByOwner(bookingId: string, reason: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const tpl = bookingForceCancelledEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      playerDisplayName: ctx.playerDisplayName,
+      reason,
+    });
+    await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "booking_cancelled_by_owner" });
+  } catch (err) {
+    captureException(err, { scope: "notify.booking_cancelled_by_owner", extra: { bookingId } });
+  }
+}
+
+/**
+ * Owner-initiated reschedule notification. Inline minimal email \u2014 dedicated
+ * template + ICS attachment is a follow-up.
+ */
+export async function notifyBookingRescheduledByOwner(
+  bookingId: string,
+  oldStartAt: Date,
+  oldEndAt: Date,
+): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const fmt = (d: Date) =>
+      d.toLocaleString("en-PH", {
+        timeZone: "Asia/Manila",
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    const oldWhen = `${fmt(oldStartAt)} \u2013 ${fmt(oldEndAt)}`;
+    const newWhen = `${fmt(ctx.startAt)} \u2013 ${fmt(ctx.endAt)}`;
+    const subject = `Your booking was rescheduled \u2014 ${ctx.venueName}`;
+    const text =
+      `Hi ${ctx.playerDisplayName},\n\n` +
+      `${ctx.venueName} rescheduled your booking on ${ctx.courtName}.\n\n` +
+      `Original time: ${oldWhen}\n` +
+      `New time:      ${newWhen}\n\n` +
+      `If the new time doesn't work, reply to this email to coordinate with the venue.\n`;
+    const html =
+      `<p>Hi ${ctx.playerDisplayName},</p>` +
+      `<p><strong>${ctx.venueName}</strong> rescheduled your booking on <strong>${ctx.courtName}</strong>.</p>` +
+      `<p><strong>Original:</strong> ${oldWhen}<br/><strong>New:</strong> ${newWhen}</p>` +
+      `<p>If the new time doesn't work, reply to this email to coordinate with the venue.</p>`;
+    await sendEmail({
+      to: ctx.playerEmail,
+      subject,
+      html,
+      text,
+      tag: "booking_rescheduled_by_owner",
+    });
+  } catch (err) {
+    captureException(err, { scope: "notify.booking_rescheduled_by_owner", extra: { bookingId } });
+  }
+}
+
 async function bookingIdFromPaymentId(paymentId: string): Promise<string | null> {
   const rows = await db
     .select({ bookingId: payments.bookingId })

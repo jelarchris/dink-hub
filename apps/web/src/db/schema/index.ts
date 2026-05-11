@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   bookingStatusEnum,
+  cancellationCategoryEnum,
   courtSurfaceEnum,
   ledgerAccountEnum,
   ledgerDirectionEnum,
@@ -145,6 +146,19 @@ export const bookings = pgTable("bookings", {
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  // Cancellation metadata (Tier 4). DB CHECK enforces:
+  //   status in (cancelled,no_show,refunded) ⇒ cancelled_at is not null.
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: uuid("cancelled_by").references(() => profiles.id),
+  cancellationReason: text("cancellation_reason"),
+  cancellationCategory: cancellationCategoryEnum("cancellation_category"),
+  // Reschedule audit. originalStartAt/originalEndAt set only on FIRST reschedule
+  // so the truly-original time survives multiple reschedules.
+  originalStartAt: timestamp("original_start_at", { withTimezone: true }),
+  originalEndAt: timestamp("original_end_at", { withTimezone: true }),
+  rescheduledCount: integer("rescheduled_count").notNull().default(0),
+  lastRescheduledAt: timestamp("last_rescheduled_at", { withTimezone: true }),
+  lastRescheduledBy: uuid("last_rescheduled_by").references(() => profiles.id),
 });
 
 // ----------------------------------------------------------------------------

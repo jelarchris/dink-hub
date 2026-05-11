@@ -58,6 +58,15 @@ export const payoutStatusEnum = pgEnum("payout_status", [
   "on_hold",
 ]);
 
+export const cancellationCategoryEnum = pgEnum("cancellation_category", [
+  "weather",
+  "court_unavailable",
+  "venue_closure",
+  "player_request",
+  "admin_action",
+  "other",
+]);
+
 export const ownerInvoiceStatusEnum = pgEnum("owner_invoice_status", [
   "open",
   "submitted",
