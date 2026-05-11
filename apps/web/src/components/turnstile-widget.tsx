@@ -15,6 +15,7 @@ declare global {
           appearance?: "always" | "execute" | "interaction-only";
           retry?: "auto" | "never";
           "refresh-expired"?: "auto" | "manual" | "never";
+          callback?: (token: string) => void;
           "error-callback"?: (code: string) => void;
           "expired-callback"?: () => void;
         },
@@ -45,13 +46,26 @@ export function TurnstileWidget({
   siteKey,
   action,
   className,
+  onVerify,
+  onExpire,
 }: {
   siteKey: string | null | undefined;
   action?: string;
   className?: string;
+  /** Called with the token once the user passes the challenge. */
+  onVerify?: (token: string) => void;
+  /** Called when the token expires (user must re-verify). */
+  onExpire?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  // Stable refs so the effect dependency array never needs to include callbacks,
+  // which would re-mount the widget on every parent render. Synced via a
+  // separate effect (not during render — see react-hooks/refs).
+  const onVerifyRef = useRef(onVerify);
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => { onVerifyRef.current = onVerify; }, [onVerify]);
+  useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
 
   useEffect(() => {
     if (!siteKey) return;
@@ -77,7 +91,11 @@ export function TurnstileWidget({
         theme: "auto",
         retry: "auto",
         "refresh-expired": "auto",
+        callback: (token: string) => {
+          onVerifyRef.current?.(token);
+        },
         "error-callback": () => {
+          onExpireRef.current?.();
           if (widgetIdRef.current) {
             try {
               window.turnstile?.reset(widgetIdRef.current);
@@ -87,6 +105,7 @@ export function TurnstileWidget({
           }
         },
         "expired-callback": () => {
+          onExpireRef.current?.();
           if (widgetIdRef.current) {
             try {
               window.turnstile?.reset(widgetIdRef.current);

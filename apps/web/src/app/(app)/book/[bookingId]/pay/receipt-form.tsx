@@ -22,6 +22,10 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
   );
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  // Track whether Turnstile has been solved. When a siteKey is configured the
+  // submit button stays disabled until the token arrives, preventing the
+  // "Security check failed" error from blank tokens.
+  const [captchaSolved, setCaptchaSolved] = useState(!TURNSTILE_SITE_KEY);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
@@ -115,11 +119,21 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
         )}
       </FormField>
 
-      <SubmitButton size="lg" pendingLabel="Uploading" disabled={Boolean(fileError)} className="mt-2">
+      <SubmitButton
+        size="lg"
+        pendingLabel="Uploading"
+        disabled={Boolean(fileError) || !captchaSolved}
+        className="mt-2"
+      >
         Submit receipt
       </SubmitButton>
 
-      <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="receipt-upload" />
+      <TurnstileWidget
+        siteKey={TURNSTILE_SITE_KEY}
+        action="receipt-upload"
+        onVerify={() => setCaptchaSolved(true)}
+        onExpire={() => setCaptchaSolved(false)}
+      />
     </form>
   );
 }
