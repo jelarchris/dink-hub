@@ -566,14 +566,12 @@ function Footer() {
           </p>
           <p className="mt-2 text-xs text-[var(--color-fg-subtle)]">
             Founded by{" "}
-            <a
-              href="https://www.facebook.com/jelarjoychristian"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/about"
               className="font-medium text-[var(--color-fg-muted)] underline-offset-2 hover:text-[var(--color-brand-600)] hover:underline"
             >
               Christian Jelar Joy D. Hisola
-            </a>
+            </Link>
             {" "}· Founder
           </p>
         </div>
@@ -593,8 +591,11 @@ function Footer() {
           ]}
         />
         <FooterCol
-          title="Support"
-          links={[{ label: "Email us", href: "mailto:dinkhubofficial@gmail.com" }]}
+          title="Company"
+          links={[
+            { label: "About", href: "/about" },
+            { label: "Email us", href: "mailto:dinkhubofficial@gmail.com" },
+          ]}
         />
       </Container>
       <Container className="mt-6 border-t border-[var(--color-border-default)] pt-4 text-center text-xs text-[var(--color-fg-subtle)]">
