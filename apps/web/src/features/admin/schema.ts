@@ -224,4 +224,36 @@ export const resolveDisputeInputSchema = z.object({
 });
 export type ResolveDisputeInput = z.infer<typeof resolveDisputeInputSchema>;
 
+// ----------------------------------------------------------------------------
+// Owner invoices (admin verification queue)
+// ----------------------------------------------------------------------------
+export const ownerInvoiceStatusValues = [
+  "open",
+  "submitted",
+  "verified",
+  "rejected",
+  "void",
+] as const;
+
+export const ownerInvoiceListFilterSchema = z.object({
+  status: z.enum(["all", ...ownerInvoiceStatusValues]).default("submitted"),
+  venueId: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type OwnerInvoiceListFilter = z.infer<typeof ownerInvoiceListFilterSchema>;
+
+export const verifyOwnerInvoiceInputSchema = z.object({
+  invoiceId: uuidSchema,
+  expectedVersion: z.coerce.number().int().min(1),
+  notes: optionalReason,
+});
+export type VerifyOwnerInvoiceInput = z.infer<typeof verifyOwnerInvoiceInputSchema>;
+
+export const rejectOwnerInvoiceInputSchema = z.object({
+  invoiceId: uuidSchema,
+  expectedVersion: z.coerce.number().int().min(1),
+  reason: z.string().trim().min(3, "Reason is required").max(500),
+});
+export type RejectOwnerInvoiceInput = z.infer<typeof rejectOwnerInvoiceInputSchema>;
+
 export const PAGE_SIZE = 25;

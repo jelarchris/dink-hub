@@ -203,6 +203,7 @@ export const ledgerEntries = pgTable("ledger_entries", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   bookingId: uuid("booking_id").references(() => bookings.id),
   payoutId: uuid("payout_id"),
+  ownerInvoiceId: uuid("owner_invoice_id"),
   account: ledgerAccountEnum("account").notNull(),
   direction: ledgerDirectionEnum("direction").notNull(),
   amountCentavos: bigint("amount_centavos", { mode: "bigint" }).notNull(),

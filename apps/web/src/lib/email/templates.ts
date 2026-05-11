@@ -328,7 +328,95 @@ export function disputeResolvedEmail(ctx: BookingEmailContext & {
 }
 
 // ---------------------------------------------------------------------------
-// password_reset \u2192 user
+// owner_invoice_verified → venue owner
+// ---------------------------------------------------------------------------
+export interface OwnerInvoiceEmailContext {
+  invoiceId: string;
+  venueName: string;
+  periodStart: Date;
+  periodEnd: Date;
+  totalCentavos: bigint;
+  ownerDisplayName: string;
+}
+
+function formatInvoicePeriod(start: Date, end: Date): string {
+  const inclusiveEnd = new Date(end.getTime() - 86_400_000);
+  const opts: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Manila",
+  };
+  const fmt = new Intl.DateTimeFormat("en-PH", opts);
+  return `${fmt.format(start)} – ${fmt.format(inclusiveEnd)}`;
+}
+
+export function ownerInvoiceVerifiedEmail(ctx: OwnerInvoiceEmailContext) {
+  const period = formatInvoicePeriod(ctx.periodStart, ctx.periodEnd);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/owner/invoices/${ctx.invoiceId}`;
+
+  return {
+    subject: `Invoice paid — ${ctx.venueName} (${period})`,
+    html: shell({
+      heading: `Your DinkHub invoice is paid`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.ownerDisplayName)}, we've verified your GCash receipt and marked this invoice paid. Thank you!</p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Period:</strong> ${escapeHtml(period)}</p>
+          <p style="margin:0;"><strong>Amount paid:</strong> ${escapeHtml(total)}</p>
+        </div>
+        <p style="margin:0;">No further action needed. Your next weekly invoice will appear on Monday morning if any booking fees accrue.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "View invoice",
+    }),
+    text:
+      `Invoice paid\n\n` +
+      `Venue: ${ctx.venueName}\nPeriod: ${period}\nAmount paid: ${total}\n\n` +
+      `View: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// owner_invoice_rejected → venue owner
+// ---------------------------------------------------------------------------
+export function ownerInvoiceRejectedEmail(
+  ctx: OwnerInvoiceEmailContext & { reason: string },
+) {
+  const period = formatInvoicePeriod(ctx.periodStart, ctx.periodEnd);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/owner/invoices/${ctx.invoiceId}`;
+
+  return {
+    subject: `Action needed: receipt rejected — ${ctx.venueName}`,
+    html: shell({
+      heading: `Receipt needs another look`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.ownerDisplayName)}, we couldn't verify the receipt you uploaded for your DinkHub invoice.</p>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 4px 0;"><strong>Reason:</strong></p>
+          <p style="margin:0 0 12px 0;color:#991b1b;">${escapeHtml(ctx.reason)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Period:</strong> ${escapeHtml(period)}</p>
+          <p style="margin:0;"><strong>Amount due:</strong> ${escapeHtml(total)}</p>
+        </div>
+        <p style="margin:0;">Please re-upload a corrected GCash receipt at the link below. The screenshot must show the amount and reference number clearly.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "Re-upload receipt",
+    }),
+    text:
+      `Receipt rejected — please re-upload\n\n` +
+      `Venue: ${ctx.venueName}\nPeriod: ${period}\nAmount due: ${total}\n\n` +
+      `Reason: ${ctx.reason}\n\n` +
+      `Re-upload: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// password_reset → user
 // ---------------------------------------------------------------------------
 export function passwordResetEmail(ctx: {
   displayName: string;

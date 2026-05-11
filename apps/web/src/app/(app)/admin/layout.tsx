@@ -62,6 +62,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <SidebarLink href="/admin/payouts" icon={<Coins className="size-4" />}>
             Payouts
           </SidebarLink>
+          <SidebarLink href="/admin/invoices" icon={<Receipt className="size-4" />}>
+            DinkHub invoices
+          </SidebarLink>
           <SidebarLink href="/admin/ledger" icon={<Receipt className="size-4" />}>
             Ledger
           </SidebarLink>
