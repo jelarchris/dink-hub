@@ -1,12 +1,117 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
+import {
+  Menu,
+  X,
+  ChevronRight,
+  LayoutDashboard,
+  CalendarDays,
+  Search,
+  MapPin,
+  Building2,
+  Wallet,
+  FileText,
+  Star,
+  Settings,
+  Users,
+  ScrollText,
+  ClipboardList,
+  Receipt,
+  ShieldCheck,
+  LogOut,
+} from "lucide-react";
 import { signOutAction } from "@/features/auth";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { cn } from "@/lib/cn";
+
+type IconType = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
+type DrawerLink = { href: string; label: string; icon: IconType };
+type DrawerSection = { heading: string; links: DrawerLink[] };
+
+type Role = "player" | "venue_owner" | "admin";
+
+const ROLE_BADGE: Record<Role, string> = {
+  player: "Player",
+  venue_owner: "Venue Owner",
+  admin: "Admin",
+};
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+}
+
+function sectionsFor(role: Role): DrawerSection[] {
+  if (role === "player") {
+    return [
+      {
+        heading: "Your account",
+        links: [
+          { href: "/me/bookings", label: "My bookings", icon: CalendarDays },
+        ],
+      },
+      {
+        heading: "Quick actions",
+        links: [
+          { href: "/venues", label: "Find courts", icon: Search },
+        ],
+      },
+    ];
+  }
+  if (role === "venue_owner") {
+    return [
+      {
+        heading: "Your account",
+        links: [
+          { href: "/owner", label: "Owner dashboard", icon: LayoutDashboard },
+          { href: "/me/bookings", label: "My bookings", icon: CalendarDays },
+        ],
+      },
+      {
+        heading: "Manage venues",
+        links: [
+          { href: "/owner/venues", label: "My venues", icon: Building2 },
+          { href: "/owner/payments", label: "Payments", icon: Wallet },
+          { href: "/owner/invoices", label: "Invoices", icon: FileText },
+          { href: "/owner/reviews", label: "Reviews", icon: Star },
+          { href: "/owner/settings", label: "Settings", icon: Settings },
+        ],
+      },
+      {
+        heading: "Quick actions",
+        links: [
+          { href: "/venues", label: "Find courts", icon: Search },
+        ],
+      },
+    ];
+  }
+  // admin
+  return [
+    {
+      heading: "Your account",
+      links: [
+        { href: "/admin", label: "Admin dashboard", icon: ShieldCheck },
+      ],
+    },
+    {
+      heading: "Operations",
+      links: [
+        { href: "/admin/venues", label: "Venues", icon: MapPin },
+        { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
+        { href: "/admin/users", label: "Users", icon: Users },
+        { href: "/admin/payouts", label: "Payouts", icon: Wallet },
+        { href: "/admin/invoices", label: "Invoices", icon: Receipt },
+        { href: "/admin/ledger", label: "Ledger", icon: ClipboardList },
+        { href: "/admin/audit", label: "Audit log", icon: ScrollText },
+        { href: "/admin/system-fee", label: "System fee", icon: Settings },
+        { href: "/admin/settings", label: "Settings", icon: Settings },
+      ],
+    },
+  ];
+}
 
 export interface NavbarProps {
   user: { email: string; displayName: string; role: "player" | "venue_owner" | "admin" } | null;
@@ -32,14 +137,19 @@ export function Navbar({ user }: NavbarProps) {
   const lastYRef = useRef(0);
   const tickingRef = useRef(false);
 
-  // Close mobile menu on Escape key.
+  // Close mobile menu on Escape key + lock body scroll while drawer is open.
   useEffect(() => {
     if (!menuOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setMenuOpen(false);
     }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [menuOpen]);
 
   useEffect(() => {
@@ -167,84 +277,105 @@ export function Navbar({ user }: NavbarProps) {
         </div>
       </Container>
 
-      {/* ── Mobile drawer ── */}
+      {/* ── Mobile slide-in drawer ── */}
       {user && (
         <div
-          id="mobile-menu"
-          role="navigation"
-          aria-label="Mobile navigation"
           className={cn(
-            "overflow-hidden border-t border-[var(--color-border-default)] transition-[max-height,opacity] duration-200 ease-out sm:hidden",
-            menuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0",
+            "fixed inset-0 z-50 sm:hidden",
+            menuOpen ? "pointer-events-auto" : "pointer-events-none",
           )}
+          aria-hidden={!menuOpen}
         >
-          <Container>
-            <div className="flex flex-col gap-1 py-3">
-              {/* User identity */}
-              <p className="px-3 py-2 text-xs font-medium uppercase tracking-widest text-[var(--color-fg-subtle)]">
-                {user.displayName}
-              </p>
+          {/* Backdrop */}
+          <button
+            type="button"
+            aria-label="Close menu"
+            tabIndex={menuOpen ? 0 : -1}
+            onClick={() => setMenuOpen(false)}
+            className={cn(
+              "absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200",
+              menuOpen ? "opacity-100" : "opacity-0",
+            )}
+          />
 
-              <Link
-                href="/venues"
-                onClick={() => setMenuOpen(false)}
-                className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
-              >
-                Find courts
-              </Link>
-
-              {user.role === "player" && (
-                <Link
-                  href="/me/bookings"
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+          {/* Panel */}
+          <aside
+            id="mobile-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mobile navigation"
+            className={cn(
+              "absolute inset-y-0 right-0 flex h-full w-[88vw] max-w-sm flex-col bg-[var(--color-bg)] shadow-2xl transition-transform duration-300 ease-out",
+              menuOpen ? "translate-x-0" : "translate-x-full",
+            )}
+          >
+            {/* Drawer header: identity + close */}
+            <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-subtle)] text-lg font-semibold text-[var(--color-fg)]"
                 >
-                  My bookings
-                </Link>
-              )}
-
-              {user.role === "venue_owner" && (
-                <>
-                  <Link
-                    href="/me/bookings"
-                    onClick={() => setMenuOpen(false)}
-                    className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
-                  >
-                    My bookings
-                  </Link>
-                  <Link
-                    href="/owner"
-                    onClick={() => setMenuOpen(false)}
-                    className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
-                  >
-                    Owner dashboard
-                  </Link>
-                </>
-              )}
-
-              {user.role === "admin" && (
-                <Link
-                  href="/admin"
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
-                >
-                  Admin
-                </Link>
-              )}
-
-              {/* Sign out at the bottom of the drawer */}
-              <div className="mt-1 border-t border-[var(--color-border-default)] pt-2">
-                <form action={signOutAction}>
-                  <button
-                    type="submit"
-                    className="w-full rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm font-medium text-[var(--color-danger-600)] hover:bg-[var(--color-bg-subtle)]"
-                  >
-                    Sign out
-                  </button>
-                </form>
+                  {initialsOf(user.displayName)}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-[var(--color-fg)]">
+                    {user.displayName}
+                  </p>
+                  <p className="truncate text-xs text-[var(--color-fg-muted)]">{user.email}</p>
+                  <span className="mt-1 inline-flex items-center rounded-full bg-[var(--color-brand-500)]/10 px-2 py-0.5 text-xs font-medium text-[var(--color-brand-600)]">
+                    {ROLE_BADGE[user.role]}
+                  </span>
+                </div>
               </div>
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMenuOpen(false)}
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+              >
+                <X size={20} />
+              </button>
             </div>
-          </Container>
+
+            {/* Sections (scrollable) */}
+            <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-4">
+              {sectionsFor(user.role).map((section) => (
+                <div key={section.heading}>
+                  <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-fg-subtle)]">
+                    {section.heading}
+                  </p>
+                  <div className="divide-y divide-[var(--color-border-default)] overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-bg-subtle)]/60">
+                    {section.links.map(({ href, label, icon: Icon }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
+                      >
+                        <Icon size={18} className="text-[var(--color-fg-muted)]" />
+                        <span className="flex-1">{label}</span>
+                        <ChevronRight size={16} className="text-[var(--color-fg-subtle)]" />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Sign out pinned to bottom */}
+            <div className="border-t border-[var(--color-border-default)] p-4">
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--color-danger-600)] hover:bg-[var(--color-danger-600)]/10"
+                >
+                  <LogOut size={16} />
+                  Sign out
+                </button>
+              </form>
+            </div>
+          </aside>
         </div>
       )}
     </header>
