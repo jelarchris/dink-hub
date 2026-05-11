@@ -23,6 +23,7 @@ import {
   Receipt,
   ShieldCheck,
   LogOut,
+  UserCircle2,
 } from "lucide-react";
 import { signOutAction } from "@/features/auth";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,9 @@ function sectionsFor(role: Role): DrawerSection[] {
       {
         heading: "Your account",
         links: [
+          { href: "/me", label: "Dashboard", icon: LayoutDashboard },
           { href: "/me/bookings", label: "My bookings", icon: CalendarDays },
+          { href: "/me/profile", label: "Edit profile", icon: UserCircle2 },
         ],
       },
       {

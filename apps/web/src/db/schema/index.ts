@@ -16,6 +16,7 @@ import {
   bookingStatusEnum,
   cancellationCategoryEnum,
   courtSurfaceEnum,
+  genderEnum,
   ledgerAccountEnum,
   ledgerDirectionEnum,
   ownerInvoiceStatusEnum,
@@ -50,6 +51,7 @@ export const profiles = pgTable("profiles", {
   province: text("province"),
   ratingGlicko: numeric("rating_glicko", { precision: 6, scale: 2 }).default("1500.00"),
   ratingRd: numeric("rating_rd", { precision: 6, scale: 2 }).default("350.00"),
+  gender: genderEnum("gender"),
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
   suspensionReason: text("suspension_reason"),
   /** Per-owner notification preferences. Keys must match the DB check constraint. */

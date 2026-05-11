@@ -7,6 +7,13 @@ import { pgEnum } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["player", "venue_owner", "admin"]);
 
+export const genderEnum = pgEnum("gender", [
+  "male",
+  "female",
+  "non_binary",
+  "prefer_not_to_say",
+]);
+
 export const venueStatusEnum = pgEnum("venue_status", [
   "draft",
   "pending_review",
