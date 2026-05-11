@@ -89,6 +89,12 @@ export function TurnstileWidget({
         sitekey: key,
         ...(action ? { action } : {}),
         theme: "auto",
+        // "interaction-only": the widget is invisible and verifies silently in
+        // the background for most users. The iframe still loads and produces a
+        // token but never blocks touches or causes layout shift. Only users
+        // flagged by Cloudflare's risk engine are shown an explicit challenge.
+        // This eliminates the "frozen form while Cloudflare checks" bug on mobile.
+        appearance: "interaction-only",
         retry: "auto",
         "refresh-expired": "auto",
         callback: (token: string) => {
