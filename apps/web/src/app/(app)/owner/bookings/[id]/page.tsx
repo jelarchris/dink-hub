@@ -20,6 +20,7 @@ import { formatPHP } from "@/lib/money";
 import { formatDateTimeManila, formatDateManila, formatTimeManila } from "@/lib/date";
 import { findBookingForOwner } from "@/features/bookings-view";
 import { getReceiptSignedUrl } from "@/features/storage";
+import { listActiveCourtsForVenue } from "@/features/owner-venues/service";
 import type { Booking, Payment } from "@/db/schema";
 import { NoShowForm } from "./_components/no-show-form";
 import { CancelBookingForm } from "./_components/cancel-booking-form";
@@ -51,6 +52,9 @@ export default async function OwnerBookingDetailPage({
   if (!detail) notFound();
 
   const { booking, venue, court, player, payment } = detail;
+
+  // Active courts for the same venue — passed to RescheduleForm for cross-court moves.
+  const activeCourts = await listActiveCourtsForVenue(venue.id);
 
   const receiptUrl =
     payment?.receiptImagePath
@@ -226,13 +230,21 @@ export default async function OwnerBookingDetailPage({
                   {canReschedule && (
                     <div>
                       <p className="mb-2 text-xs text-[var(--color-fg-muted)]">
-                        Move this booking to a different time on the same court.
+                        Move this booking to a different time{activeCourts.length > 1 ? " or court" : ""} at the same venue.
                       </p>
                       <RescheduleForm
                         bookingId={booking.id}
                         version={booking.version}
                         currentStartAt={booking.startAt}
                         currentDurationMin={durationMin}
+                        currentCourtId={booking.courtId}
+                        availableCourts={activeCourts.map((c) => ({
+                          id: c.id,
+                          name: c.name,
+                          isIndoor: c.isIndoor,
+                          surface: c.surface,
+                          hourlyRateCentavos: Number(c.hourlyRateCentavos),
+                        }))}
                       />
                     </div>
                   )}

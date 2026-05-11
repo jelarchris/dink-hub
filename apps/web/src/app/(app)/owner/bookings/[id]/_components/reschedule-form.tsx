@@ -10,6 +10,15 @@ import { SubmitButton } from "@/components/ui/submit-button";
 // Direct import — never import from the feature barrel in a client component.
 import { rescheduleBookingByOwnerAction } from "@/features/owner-venues/actions";
 
+export interface CourtOption {
+  id: string;
+  name: string;
+  isIndoor: boolean;
+  surface: string;
+  /** PHP hourly rate as a regular number — safe for JS since court rates are well within safe-integer range. */
+  hourlyRateCentavos: number;
+}
+
 interface RescheduleFormProps {
   bookingId: string;
   version: number;
@@ -17,6 +26,10 @@ interface RescheduleFormProps {
   currentStartAt: Date;
   /** Current duration in minutes — preserved by default for one-tap reschedule. */
   currentDurationMin: number;
+  /** The court this booking is currently on — pre-selected in the court picker. */
+  currentCourtId: string;
+  /** All active courts in this venue. Pass an array with a single entry to hide the selector. */
+  availableCourts: CourtOption[];
 }
 
 /**
@@ -44,11 +57,20 @@ function manilaInputToIso(local: string): string {
   return `${local}:00+08:00`;
 }
 
+function formatPesoCents(centavos: number): string {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+  }).format(centavos / 100);
+}
+
 export function RescheduleForm({
   bookingId,
   version,
   currentStartAt,
   currentDurationMin,
+  currentCourtId,
+  availableCourts,
 }: RescheduleFormProps) {
   const [state, formAction] = useActionState(rescheduleBookingByOwnerAction, null);
   const [open, setOpen] = useState(false);
@@ -58,6 +80,7 @@ export function RescheduleForm({
   const [durationMin, setDurationMin] = useState<number>(
     DURATION_OPTIONS.find((d) => d === currentDurationMin) ?? 60,
   );
+  const [selectedCourtId, setSelectedCourtId] = useState(currentCourtId);
 
   // Compute end time on the fly so it stays in sync with start + duration.
   const newStartIso = manilaInputToIso(startLocal);
@@ -67,6 +90,16 @@ export function RescheduleForm({
     const end = new Date(startMs + durationMin * 60_000);
     return end.toISOString();
   }, [newStartIso, durationMin]);
+
+  // Only show the court picker when there are multiple courts.
+  const showCourtPicker = availableCourts.length > 1;
+  const isCourtChanged = selectedCourtId !== currentCourtId;
+  const newCourt = availableCourts.find((c) => c.id === selectedCourtId);
+
+  // Preview the fee change when the court changes (exact same formula as server).
+  const feePreview = isCourtChanged && newCourt
+    ? Math.floor((durationMin * newCourt.hourlyRateCentavos) / 60)
+    : null;
 
   if (!open) {
     return (
@@ -86,11 +119,40 @@ export function RescheduleForm({
       <input type="hidden" name="expectedVersion" value={version} />
       <input type="hidden" name="newStartAt" value={newStartIso} />
       <input type="hidden" name="newEndAt" value={newEndIso} />
+      {/* Only send newCourtId when the court has actually changed. */}
+      {isCourtChanged && (
+        <input type="hidden" name="newCourtId" value={selectedCourtId} />
+      )}
 
       {state && !state.ok && (
         <Alert variant="danger" title="Could not reschedule">
           {state.message}
         </Alert>
+      )}
+
+      {showCourtPicker && (
+        <div>
+          <Label htmlFor="reschedule-court">Court</Label>
+          <Select
+            id="reschedule-court"
+            value={selectedCourtId}
+            onChange={(e) => setSelectedCourtId(e.target.value)}
+            className="mt-1"
+          >
+            {availableCourts.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.isIndoor ? "Indoor" : "Outdoor"} · {c.surface}
+              </option>
+            ))}
+          </Select>
+          {feePreview !== null && (
+            <p className="mt-1 text-xs text-amber-700">
+              Court fee will update to{" "}
+              <strong>{formatPesoCents(feePreview)}</strong> based on{" "}
+              {newCourt?.name}&apos;s rate.
+            </p>
+          )}
+        </div>
       )}
 
       <div>
@@ -133,13 +195,15 @@ export function RescheduleForm({
           name="reason"
           maxLength={500}
           rows={2}
-          placeholder="e.g. Moved to 5pm so we can fit a tournament block."
+          placeholder="e.g. Moved to Court 2 — same venue, easier parking."
           className="mt-1"
         />
       </div>
 
       <p className="text-xs text-[var(--color-fg-muted)]">
-        Same court only. The player will be notified by email.
+        {showCourtPicker
+          ? "The player will be notified by email with the updated time and court."
+          : "Same court. The player will be notified by email."}
       </p>
 
       <div className="flex items-center gap-2">
@@ -157,3 +221,5 @@ export function RescheduleForm({
     </form>
   );
 }
+
+

@@ -516,6 +516,13 @@ const rescheduleBookingFormSchema = z.object({
     .string()
     .datetime({ offset: true })
     .transform((s) => new Date(s)),
+  // Optional: different court within the same venue.
+  // Empty string (no court change) → treated as undefined.
+  newCourtId: z
+    .string()
+    .uuid()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   reason: z.string().max(500).optional(),
 });
 
@@ -535,7 +542,7 @@ export async function rescheduleBookingByOwnerAction(
       fieldErrors: fieldErrorsFromZod(parsed.error),
     };
   }
-  const { bookingId, expectedVersion, newStartAt, newEndAt, reason } = parsed.data;
+  const { bookingId, expectedVersion, newStartAt, newEndAt, newCourtId, reason } = parsed.data;
 
   // Capture original times for the notification BEFORE the mutation.
   const { db } = await import("@/db/client");
@@ -560,6 +567,7 @@ export async function rescheduleBookingByOwnerAction(
       expectedVersion,
       newStartAt,
       newEndAt,
+      ...(newCourtId ? { newCourtId } : {}),
       ...(reason ? { reason } : {}),
     });
   } catch (err) {

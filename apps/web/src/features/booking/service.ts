@@ -587,7 +587,7 @@ export async function rescheduleBookingByOwner(
       issues: parsed.error.flatten(),
     });
   }
-  const { bookingId, ownerId, expectedVersion, newStartAt, newEndAt, reason } = parsed.data;
+  const { bookingId, ownerId, expectedVersion, newStartAt, newEndAt, newCourtId, reason } = parsed.data;
 
   if (newStartAt.getTime() <= Date.now()) {
     throw new BookingError("validation_failed", "New start time must be in the future");
@@ -613,6 +613,31 @@ export async function rescheduleBookingByOwner(
       );
     }
 
+    // ── Cross-court move (Tier 8): verify target court + recompute fee ──────
+    let targetCourtId = booking.courtId;
+    let newCourtFeeCentavos: bigint | null = null;
+
+    if (newCourtId && newCourtId !== booking.courtId) {
+      const newCourtRow = await repo.findCourtById(newCourtId, tx);
+      if (!newCourtRow) {
+        throw new BookingError("court_not_found", "Target court not found");
+      }
+      if (newCourtRow.venue.id !== courtRow.venue.id) {
+        throw new BookingError(
+          "validation_failed",
+          "Target court must belong to the same venue",
+        );
+      }
+      if (!newCourtRow.court.isActive || newCourtRow.court.deletedAt !== null) {
+        throw new BookingError("validation_failed", "Target court is not active");
+      }
+      targetCourtId = newCourtId;
+      const durationMin =
+        (newEndAt.getTime() - newStartAt.getTime()) / 60_000;
+      newCourtFeeCentavos = computeCourtFeeCentavos(durationMin, newCourtRow.court.hourlyRateCentavos);
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     // Preserve the truly-original time across multiple reschedules.
     const isFirstReschedule = booking.originalStartAt === null;
     const noteSuffix = reason ? `[Owner reschedule] ${reason}` : "[Owner reschedule]";
@@ -627,6 +652,12 @@ export async function rescheduleBookingByOwner(
           startAt: newStartAt,
           endAt: newEndAt,
           notes: newNotes,
+          ...(targetCourtId !== booking.courtId
+            ? { courtId: targetCourtId }
+            : {}),
+          ...(newCourtFeeCentavos !== null
+            ? { courtFeeCentavos: newCourtFeeCentavos }
+            : {}),
           ...(isFirstReschedule
             ? { originalStartAt: booking.startAt, originalEndAt: booking.endAt }
             : {}),

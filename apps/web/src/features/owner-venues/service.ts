@@ -96,6 +96,21 @@ export async function getVenueWithCourtsForOwner(
   return { venue, courts: courtRows };
 }
 
+/**
+ * Lists active, non-deleted courts for a venue.
+ * No ownership check — callers must have already verified access to the venue
+ * (e.g., via findBookingForOwner or getVenueWithCourtsForOwner).
+ */
+export async function listActiveCourtsForVenue(venueId: string): Promise<Court[]> {
+  return db
+    .select()
+    .from(courts)
+    .where(
+      and(eq(courts.venueId, venueId), eq(courts.isActive, true), isNull(courts.deletedAt)),
+    )
+    .orderBy(asc(courts.name));
+}
+
 export async function getCourtForOwner(
   courtId: string,
   ownerId: string,

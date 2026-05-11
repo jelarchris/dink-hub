@@ -133,6 +133,13 @@ export const ownerRescheduleBookingInputSchema = z
     expectedVersion: z.number().int().positive(),
     newStartAt: z.date(),
     newEndAt: z.date(),
+    /**
+     * Optional: move to a different court in the same venue.
+     * When provided and different from the current courtId, the service
+     * verifies the new court is active, belongs to the same venue, and
+     * recalculates courtFeeCentavos based on the new hourly rate.
+     */
+    newCourtId: uuidSchema.optional(),
     reason: z.string().max(500).optional(),
   })
   .superRefine((d, ctx) =>
