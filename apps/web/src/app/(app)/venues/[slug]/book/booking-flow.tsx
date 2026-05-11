@@ -11,6 +11,7 @@ import { formatPHP } from "@/lib/money";
 const OPEN_HOUR = 6;
 const CLOSE_HOUR = 22;
 const SLOT_MINUTES = 60;
+const MAX_SLOTS = 4; // server enforces 4-hour max
 
 export interface BookingFlowProps {
   venueSlug: string;
@@ -42,11 +43,13 @@ export function BookingFlow({
 }: BookingFlowProps) {
   const [selectedCourtId, setSelectedCourtId] = useState<string>(courts[0]!.id);
   const [selectedDateIso, setSelectedDateIso] = useState<string>(days[0]!.isoDate);
-  const [pickedSlotIso, setPickedSlotIso] = useState<string | null>(null);
+  const [pickedStartIso, setPickedStartIso] = useState<string | null>(null);
+  const [pickedCount, setPickedCount] = useState<number>(0);
 
   const selectedCourt = courts.find((c) => c.id === selectedCourtId) ?? courts[0]!;
   const hourlyRate = BigInt(selectedCourt.hourlyRateCentavos);
   const slotPriceCentavos = (BigInt(SLOT_MINUTES) * hourlyRate) / 60n;
+  const totalPriceCentavos = slotPriceCentavos * BigInt(Math.max(pickedCount, 1));
 
   // Index occupancy once: courtId -> sorted ranges (millis).
   const occupancyByCourt = useMemo(() => {
@@ -84,19 +87,93 @@ export function BookingFlow({
 
   const pickedDateLabel =
     days.find((d) => d.isoDate === selectedDateIso)?.label ?? selectedDateIso;
-  const pickedSlotDate = pickedSlotIso ? new Date(pickedSlotIso) : null;
-  const pickedEndDate = pickedSlotDate ? addMinutes(pickedSlotDate, SLOT_MINUTES) : null;
-  const canContinue = pickedSlotIso !== null;
+  const pickedStartDate = pickedStartIso ? new Date(pickedStartIso) : null;
+  const pickedEndDate =
+    pickedStartDate && pickedCount > 0
+      ? addMinutes(pickedStartDate, SLOT_MINUTES * pickedCount)
+      : null;
+  const canContinue = pickedStartIso !== null && pickedCount > 0;
 
   function pickCourt(id: string): void {
     if (id === selectedCourtId) return;
     setSelectedCourtId(id);
-    setPickedSlotIso(null);
+    setPickedStartIso(null);
+    setPickedCount(0);
   }
   function pickDate(iso: string): void {
     if (iso === selectedDateIso) return;
     setSelectedDateIso(iso);
-    setPickedSlotIso(null);
+    setPickedStartIso(null);
+    setPickedCount(0);
+  }
+
+  /**
+   * Multi-slot selection rules (contiguous, max 4):
+   *   - empty → pick this slot (count=1)
+   *   - clicking the slot immediately AFTER the current end → extend (if available, < MAX)
+   *   - clicking the slot immediately BEFORE the current start → prepend (if available, < MAX)
+   *   - clicking the LAST selected slot → shrink by 1 (deselect tail)
+   *   - clicking the FIRST selected slot when count > 1 → shrink from head
+   *   - clicking inside the middle of selection → reset to single
+   *   - clicking any non-adjacent available slot → reset to single
+   */
+  function pickSlot(slotStart: Date): void {
+    const slotMs = slotStart.getTime();
+    if (pickedStartIso === null || pickedCount === 0) {
+      setPickedStartIso(slotStart.toISOString());
+      setPickedCount(1);
+      return;
+    }
+    const startMs = new Date(pickedStartIso).getTime();
+    const endMs = startMs + pickedCount * SLOT_MINUTES * 60_000;
+    const lastSlotStartMs = endMs - SLOT_MINUTES * 60_000;
+    const nextAfterMs = endMs;
+    const prevBeforeMs = startMs - SLOT_MINUTES * 60_000;
+
+    if (slotMs === lastSlotStartMs && pickedCount > 1) {
+      setPickedCount(pickedCount - 1);
+      return;
+    }
+    if (slotMs === startMs && pickedCount === 1) {
+      // toggle off
+      setPickedStartIso(null);
+      setPickedCount(0);
+      return;
+    }
+    if (slotMs === startMs && pickedCount > 1) {
+      // shrink from head
+      setPickedStartIso(new Date(startMs + SLOT_MINUTES * 60_000).toISOString());
+      setPickedCount(pickedCount - 1);
+      return;
+    }
+    if (slotMs === nextAfterMs && pickedCount < MAX_SLOTS && isAvailable(slotStart)) {
+      setPickedCount(pickedCount + 1);
+      return;
+    }
+    if (slotMs === prevBeforeMs && pickedCount < MAX_SLOTS && isAvailable(slotStart)) {
+      setPickedStartIso(slotStart.toISOString());
+      setPickedCount(pickedCount + 1);
+      return;
+    }
+    // inside selection or non-adjacent → reset to single
+    setPickedStartIso(slotStart.toISOString());
+    setPickedCount(1);
+  }
+
+  /** Compact range label for a 1-hour slot, e.g. "6 – 7 PM" or "11 AM – 12 PM". */
+  function slotRangeLabel(start: Date): string {
+    const end = addMinutes(start, SLOT_MINUTES);
+    const startLabel = formatTimeManila(start); // "6:00 AM"
+    const endLabel = formatTimeManila(end);
+    const startPeriod = startLabel.endsWith("PM") ? "PM" : "AM";
+    const endPeriod = endLabel.endsWith("PM") ? "PM" : "AM";
+    const stripPeriod = (s: string) => s.replace(/\s?(AM|PM)$/, "");
+    const stripMinsZero = (s: string) => s.replace(/:00$/, "");
+    const startCore = stripMinsZero(stripPeriod(startLabel));
+    const endCore = stripMinsZero(stripPeriod(endLabel));
+    return startPeriod === endPeriod
+      ? `${startCore} – ${endCore} ${endPeriod}`
+      : `${startCore} ${startPeriod} – ${endCore} ${endPeriod}`;
   }
 
   return (
@@ -128,14 +205,24 @@ export function BookingFlow({
         </div>
       </Section>
 
-      <Section label={`Select time · ${pickedDateLabel}`}>
-        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
+      <Section
+        label={`Select time · ${pickedDateLabel}`}
+        hint="Tap adjacent slots to book multiple hours (max 4)"
+      >
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
           {slots.map((s) => {
             const iso = s.toISOString();
             const available = isAvailable(s);
-            const isPicked = pickedSlotIso === iso;
             const slotStartMs = s.getTime();
             const slotEndMs = slotStartMs + SLOT_MINUTES * 60_000;
+            const pickedStartMs = pickedStartIso ? new Date(pickedStartIso).getTime() : null;
+            const pickedEndMs =
+              pickedStartMs !== null ? pickedStartMs + pickedCount * SLOT_MINUTES * 60_000 : null;
+            const isPicked =
+              pickedStartMs !== null &&
+              pickedEndMs !== null &&
+              slotStartMs >= pickedStartMs &&
+              slotStartMs < pickedEndMs;
             const isClosed = !available && courtRanges.some(
               (r) => r.kind === "closure" && r.start < slotEndMs && r.end > slotStartMs,
             );
@@ -143,30 +230,30 @@ export function BookingFlow({
               <button
                 key={iso}
                 type="button"
-                disabled={!available}
-                onClick={() => setPickedSlotIso(iso)}
+                disabled={!available && !isPicked}
+                onClick={() => pickSlot(s)}
                 className={cn(
                   "flex flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-2 py-2 text-center transition-colors",
                   isPicked &&
                     "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] ring-2 ring-[var(--color-brand-500)]",
                   !isPicked && available &&
                     "border-[var(--color-border-default)] bg-[var(--color-bg)] hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)]",
-                  !available &&
+                  !available && !isPicked &&
                     "cursor-not-allowed border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] text-[var(--color-fg-subtle)] opacity-60",
                 )}
               >
                 <span className="text-sm font-bold leading-tight tracking-tight">
-                  {formatTimeManila(s)}
+                  {slotRangeLabel(s)}
                 </span>
                 <span
                   className={cn(
                     "text-[10px] font-bold uppercase tracking-wide leading-none",
-                    available
+                    available || isPicked
                       ? "text-[var(--color-success)]"
                       : "text-[var(--color-fg-subtle)]",
                   )}
                 >
-                  {available ? formatPHP(slotPriceCentavos) : isClosed ? "Closed" : "Booked"}
+                  {available || isPicked ? formatPHP(slotPriceCentavos) : isClosed ? "Closed" : "Booked"}
                 </span>
               </button>
             );
@@ -177,15 +264,18 @@ export function BookingFlow({
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border-default)] bg-[var(--color-bg)]/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgb(0_0_0/_0.15)] backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div className="min-w-0 text-xs sm:text-sm">
-            {canContinue && pickedSlotDate && pickedEndDate ? (
+            {canContinue && pickedStartDate && pickedEndDate ? (
               <>
                 <div className="truncate font-semibold">
                   {selectedCourt.name} · {pickedDateLabel} ·{" "}
-                  {formatTimeManila(pickedSlotDate)}–{formatTimeManila(pickedEndDate)}
+                  {formatTimeManila(pickedStartDate)}–{formatTimeManila(pickedEndDate)}
+                  <span className="ml-1 text-[var(--color-fg-muted)]">
+                    ({pickedCount}h)
+                  </span>
                 </div>
                 <div className="text-[var(--color-fg-muted)]">
                   <span className="font-semibold text-[var(--color-brand-700)]">
-                    {formatPHP(slotPriceCentavos)}
+                    {formatPHP(totalPriceCentavos)}
                   </span>{" "}
                   + booking fee
                 </div>
@@ -197,7 +287,7 @@ export function BookingFlow({
           <form action={startBookingFormAction}>
             <input type="hidden" name="venueSlug" value={venueSlug} />
             <input type="hidden" name="courtId" value={selectedCourtId} />
-            <input type="hidden" name="startAt" value={pickedSlotIso ?? ""} />
+            <input type="hidden" name="startAt" value={pickedStartIso ?? ""} />
             <input type="hidden" name="endAt" value={pickedEndDate?.toISOString() ?? ""} />
             <ContinueButton disabled={!canContinue} />
           </form>
@@ -207,12 +297,25 @@ export function BookingFlow({
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="mb-3">
-      <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
-        {label}
-      </h2>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <h2 className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+          {label}
+        </h2>
+        {hint && (
+          <span className="text-[10px] text-[var(--color-fg-subtle)]">{hint}</span>
+        )}
+      </div>
       {children}
     </section>
   );
