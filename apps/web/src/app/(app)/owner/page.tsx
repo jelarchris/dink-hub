@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   Layers,
+  MessageSquare,
   Receipt,
   TrendingUp,
   Wallet,
@@ -301,6 +302,12 @@ export default async function OwnerDashboard({
           icon={<Layers className="size-4" />}
           title="Your venues"
           subtitle="Add venues, set GCash details, manage courts"
+        />
+        <NavRow
+          href="/owner/reviews"
+          icon={<MessageSquare className="size-4" />}
+          title="Reviews"
+          subtitle="See player reviews and reply to feedback"
         />
       </ul>
     </Container>

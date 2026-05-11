@@ -7,6 +7,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  smallint,
   text,
   timestamp,
   uuid,
@@ -361,6 +362,30 @@ export const courtClosures = pgTable("court_closures", {
 });
 
 // ----------------------------------------------------------------------------
+// reviews — player reviews of venues, one per completed booking
+// ----------------------------------------------------------------------------
+export const reviews = pgTable("reviews", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  bookingId: uuid("booking_id")
+    .notNull()
+    .unique()
+    .references(() => bookings.id, { onDelete: "restrict" }),
+  playerId: uuid("player_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "restrict" }),
+  venueId: uuid("venue_id")
+    .notNull()
+    .references(() => venues.id, { onDelete: "cascade" }),
+  rating: smallint("rating").notNull(),
+  body: text("body"),
+  ownerReply: text("owner_reply"),
+  ownerRepliedAt: timestamp("owner_replied_at", { withTimezone: true }),
+  isHidden: boolean("is_hidden").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ----------------------------------------------------------------------------
 // Inferred types — single source of truth for app code
 // ----------------------------------------------------------------------------
 export type Profile = typeof profiles.$inferSelect;
@@ -389,3 +414,5 @@ export type OwnerInvoice = typeof ownerInvoices.$inferSelect;
 export type NewOwnerInvoice = typeof ownerInvoices.$inferInsert;
 export type CourtClosure = typeof courtClosures.$inferSelect;
 export type NewCourtClosure = typeof courtClosures.$inferInsert;
+export type Review = typeof reviews.$inferSelect;
+export type NewReview = typeof reviews.$inferInsert;

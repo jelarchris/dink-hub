@@ -3,9 +3,12 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, MapPin, Trophy } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
+import { StarRating } from "@/components/ui/star-rating";
 import { findActiveVenueBySlug } from "@/features/venues";
+import { getVenueRating, listReviewsForVenue } from "@/features/reviews/service";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
 import { formatPHP } from "@/lib/money";
+import { formatDateManila } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +30,11 @@ export default async function VenuePage({
   const found = await findActiveVenueBySlug(slug);
   if (!found) notFound();
   const { venue, courts } = found;
+
+  const [ratingStats, reviewItems] = await Promise.all([
+    getVenueRating(venue.id),
+    listReviewsForVenue(venue.id, 10),
+  ]);
 
   const minRate = courts.reduce<bigint | null>((acc, c) => {
     const r = c.hourlyRateCentavos;
@@ -78,6 +86,20 @@ export default async function VenuePage({
             <span className="font-semibold text-[var(--color-fg)]">{courts.length}</span>{" "}
             {courts.length === 1 ? "court" : "courts"}
           </div>
+          {ratingStats && (
+            <>
+              <div className="text-[var(--color-fg-muted)]">·</div>
+              <div className="flex items-center gap-1">
+                <StarRating rating={ratingStats.avgRating} size={4} />
+                <span className="text-xs font-semibold text-[var(--color-fg)]">
+                  {ratingStats.avgRating.toFixed(1)}
+                </span>
+                <span className="text-xs text-[var(--color-fg-muted)]">
+                  ({ratingStats.reviewCount})
+                </span>
+              </div>
+            </>
+          )}
         </div>
         {hasCourts ? (
           <Link
@@ -164,6 +186,56 @@ export default async function VenuePage({
                 </li>
               );
             })}
+          </ul>
+        )}
+      </section>
+
+      {/* Reviews */}
+      <section className="mt-8">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-fg-muted)]">
+          Reviews{ratingStats ? ` · ${ratingStats.reviewCount}` : ""}
+        </h2>
+        {ratingStats && (
+          <div className="mt-1 flex items-center gap-2">
+            <StarRating rating={ratingStats.avgRating} size={5} />
+            <span className="text-lg font-bold">{ratingStats.avgRating.toFixed(1)}</span>
+            <span className="text-sm text-[var(--color-fg-muted)]">out of 5</span>
+          </div>
+        )}
+        {reviewItems.length === 0 ? (
+          <p className="mt-3 text-sm text-[var(--color-fg-muted)]">No reviews yet. Be the first after your booking!</p>
+        ) : (
+          <ul className="mt-4 space-y-5">
+            {reviewItems.map(({ review, playerDisplayName }) => (
+              <li key={review.id} className="border-b border-[var(--color-border-default)] pb-5 last:border-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <StarRating rating={review.rating} size={3.5} />
+                      <span className="text-[11px] text-[var(--color-fg-muted)]">
+                        {formatDateManila(review.createdAt)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs font-semibold text-[var(--color-fg-muted)]">
+                      {playerDisplayName}
+                    </p>
+                  </div>
+                </div>
+                {review.body && (
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[var(--color-fg)]">
+                    {review.body}
+                  </p>
+                )}
+                {review.ownerReply && (
+                  <div className="mt-3 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-3 py-2">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-fg-muted)]">
+                      Venue reply
+                    </p>
+                    <p className="whitespace-pre-line text-sm text-[var(--color-fg)]">{review.ownerReply}</p>
+                  </div>
+                )}
+              </li>
+            ))}
           </ul>
         )}
       </section>

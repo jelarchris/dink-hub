@@ -50,6 +50,7 @@ export interface BookingListItem {
     | "status"
     | "startAt"
     | "endAt"
+    | "venueId"
     | "totalCentavos"
     | "courtFeeCentavos"
     | "systemFeeCentavos"
@@ -69,6 +70,7 @@ export async function listBookingsForPlayer(playerId: string): Promise<BookingLi
         status: bookings.status,
         startAt: bookings.startAt,
         endAt: bookings.endAt,
+        venueId: bookings.venueId,
         totalCentavos: bookings.totalCentavos,
         courtFeeCentavos: bookings.courtFeeCentavos,
         systemFeeCentavos: bookings.systemFeeCentavos,
