@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ArrowRight,
   Calendar,
@@ -18,16 +19,23 @@ import { Container } from "@/components/ui/container";
 import { PromoBanner } from "@/components/promo-banner";
 import { listActiveVenues, getMarketplaceStats } from "@/features/venues";
 import { formatPHP } from "@/lib/money";
+import { getSessionUser } from "@/server/session";
 
 // Counters and venue snapshot are dynamic — re-render every request so the
 // numbers stay current without manual revalidation.
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [stats, venues] = await Promise.all([
+  const [user, stats, venues] = await Promise.all([
+    getSessionUser(),
     getMarketplaceStats(),
     listActiveVenues({ limit: 6 }),
   ]);
+
+  // Logged-in users land on their role-specific dashboard.
+  if (user?.role === "player") redirect("/me");
+  if (user?.role === "venue_owner") redirect("/owner");
+  if (user?.role === "admin") redirect("/admin");
 
   return (
     <main className="flex flex-1 flex-col">

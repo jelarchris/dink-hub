@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
@@ -249,5 +249,190 @@ export async function findBookingForOwner(args: {
     court: r.court,
     player: r.player,
     payment: r.payment,
+  };
+}
+
+// ============================================================================
+// Player dashboard data — single round-trip
+// ============================================================================
+
+export interface DashboardUpcoming {
+  booking: Pick<Booking, "id" | "status" | "startAt" | "endAt" | "totalCentavos" | "paymentDueAt">;
+  venue: Pick<Venue, "name" | "slug" | "city" | "addressLine">;
+  court: Pick<Court, "name">;
+  payment: Pick<Payment, "status"> | null;
+}
+
+export interface DashboardRecentItem {
+  booking: Pick<Booking, "id" | "status" | "startAt" | "endAt" | "totalCentavos">;
+  venue: Pick<Venue, "name" | "slug">;
+  court: Pick<Court, "name">;
+  hasReview: boolean;
+}
+
+export interface PlayerDashboardData {
+  /** The next upcoming confirmed or payment-pending booking, if any. */
+  upcoming: DashboardUpcoming | null;
+  /** Last 5 past bookings (completed / cancelled). */
+  recent: DashboardRecentItem[];
+  stats: {
+    totalSessions: number;
+    totalHours: number;
+    uniqueVenues: number;
+    favoriteVenueSlug: string | null;
+    favoriteVenueName: string | null;
+  };
+  /** Bookings that are confirmed, ended, and not yet reviewed. */
+  pendingReviewBookingIds: string[];
+}
+
+export async function getPlayerDashboardData(playerId: string): Promise<PlayerDashboardData> {
+  const now = new Date();
+
+  // 1. Next upcoming booking (pending_payment | payment_submitted | confirmed, future)
+  const upcomingRows = await db
+    .select({
+      booking: {
+        id: bookings.id,
+        status: bookings.status,
+        startAt: bookings.startAt,
+        endAt: bookings.endAt,
+        totalCentavos: bookings.totalCentavos,
+        paymentDueAt: bookings.paymentDueAt,
+      },
+      venue: {
+        name: venues.name,
+        slug: venues.slug,
+        city: venues.city,
+        addressLine: venues.addressLine,
+      },
+      court: { name: courts.name },
+      payment: { status: payments.status },
+    })
+    .from(bookings)
+    .innerJoin(venues, eq(venues.id, bookings.venueId))
+    .innerJoin(courts, eq(courts.id, bookings.courtId))
+    .leftJoin(payments, eq(payments.bookingId, bookings.id))
+    .where(
+      and(
+        eq(bookings.playerId, playerId),
+        gt(bookings.endAt, now),
+        sql`${bookings.status} not in ('cancelled','no_show','expired','refunded')`,
+      ),
+    )
+    .orderBy(bookings.startAt)
+    .limit(1);
+
+  const upcomingRow = upcomingRows[0];
+  const upcoming: DashboardUpcoming | null = upcomingRow
+    ? {
+        booking: upcomingRow.booking,
+        venue: upcomingRow.venue,
+        court: upcomingRow.court,
+        payment: upcomingRow.payment,
+      }
+    : null;
+
+  // 2. Recent past bookings (last 5, end_at in the past)
+  const recentRows = await db
+    .select({
+      booking: {
+        id: bookings.id,
+        status: bookings.status,
+        startAt: bookings.startAt,
+        endAt: bookings.endAt,
+        totalCentavos: bookings.totalCentavos,
+      },
+      venue: { name: venues.name, slug: venues.slug },
+      court: { name: courts.name },
+      hasReview: sql<boolean>`exists (
+        select 1 from reviews r
+        where r.booking_id = ${bookings.id}
+      )`,
+    })
+    .from(bookings)
+    .innerJoin(venues, eq(venues.id, bookings.venueId))
+    .innerJoin(courts, eq(courts.id, bookings.courtId))
+    .where(
+      and(
+        eq(bookings.playerId, playerId),
+        lt(bookings.endAt, now),
+        sql`${bookings.status} not in ('cancelled','no_show','expired')`,
+      ),
+    )
+    .orderBy(desc(bookings.startAt))
+    .limit(5);
+
+  const recent: DashboardRecentItem[] = recentRows.map((r) => ({
+    booking: r.booking,
+    venue: r.venue,
+    court: r.court,
+    hasReview: r.hasReview,
+  }));
+
+  // 3. Aggregate stats — all confirmed/completed bookings ever
+  const statsRows = await db
+    .select({
+      totalSessions: count(bookings.id).mapWith(Number),
+      totalMinutes: sql<number>`coalesce(sum(extract(epoch from (${bookings.endAt} - ${bookings.startAt})) / 60), 0)::int`,
+      uniqueVenues: sql<number>`count(distinct ${bookings.venueId})::int`,
+    })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.playerId, playerId),
+        eq(bookings.status, "confirmed"),
+      ),
+    );
+
+  // Favorite venue (most sessions at)
+  const favRows = await db
+    .select({
+      venueId: bookings.venueId,
+      venueName: venues.name,
+      venueSlug: venues.slug,
+      sessionCount: count(bookings.id).mapWith(Number),
+    })
+    .from(bookings)
+    .innerJoin(venues, eq(venues.id, bookings.venueId))
+    .where(
+      and(
+        eq(bookings.playerId, playerId),
+        eq(bookings.status, "confirmed"),
+      ),
+    )
+    .groupBy(bookings.venueId, venues.name, venues.slug)
+    .orderBy(sql`count(${bookings.id}) desc`)
+    .limit(1);
+
+  const statsRow = statsRows[0];
+  const favRow = favRows[0];
+
+  // 4. Pending review booking ids (confirmed, ended, no review yet)
+  const pendingReviewRows = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.playerId, playerId),
+        eq(bookings.status, "confirmed"),
+        lt(bookings.endAt, now),
+        sql`not exists (select 1 from reviews r where r.booking_id = ${bookings.id})`,
+      ),
+    )
+    .orderBy(desc(bookings.endAt))
+    .limit(3);
+
+  return {
+    upcoming,
+    recent,
+    stats: {
+      totalSessions: statsRow?.totalSessions ?? 0,
+      totalHours: Math.round(((statsRow?.totalMinutes ?? 0) / 60) * 10) / 10,
+      uniqueVenues: statsRow?.uniqueVenues ?? 0,
+      favoriteVenueSlug: favRow?.venueSlug ?? null,
+      favoriteVenueName: favRow?.venueName ?? null,
+    },
+    pendingReviewBookingIds: pendingReviewRows.map((r) => r.id),
   };
 }
