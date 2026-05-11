@@ -3,6 +3,7 @@ import { and, asc, desc, eq, ilike, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { courts, reviews, venues, type Court, type Venue } from "@/db/schema";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
+import { TOD_OPTIONS, type AvailabilityFilter } from "./availability";
 
 export type VenueSort = "name" | "price_asc" | "rating_desc";
 
@@ -297,4 +298,149 @@ export async function getMarketplaceStats(): Promise<MarketplaceStats> {
     courtCount: row?.court_count ?? 0,
     bookingsLast7d: row?.bookings_last_7d ?? 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Availability map
+// ---------------------------------------------------------------------------
+
+export interface VenueAvailability {
+  totalCourts: number;
+  availableCourts: number;
+}
+
+/**
+ * For a set of venue IDs and an availability filter (date + time-of-day +
+ * duration), returns how many of each venue's courts have at least one free
+ * slot of `durationMin` minutes within the requested time window.
+ *
+ * Algorithm (gap detection):
+ *   1. Collect all bookings that overlap the window per court.
+ *   2. Build candidate free-slot start times: the window start + the end of
+ *      each overlapping booking (capped to `windowEnd - duration`).
+ *   3. For each candidate, verify no booking overlaps [candidate, candidate+dur].
+ *   4. Courts with zero bookings in the window are free by definition.
+ *
+ * This is intentionally conservative — it correctly handles courts with
+ * partial bookings inside the window (e.g., a 1-hr booking in a 4-hr window
+ * leaves free slots before/after it).
+ *
+ * Relies on the partial index `bookings_avail_idx (court_id, start_at, end_at)
+ * WHERE status NOT IN ('cancelled','no_show','expired')` added in 0016.
+ */
+export async function getVenueAvailabilityMap(
+  venueIds: string[],
+  filter: AvailabilityFilter,
+): Promise<Map<string, VenueAvailability>> {
+  if (venueIds.length === 0) return new Map();
+
+  const todOption = TOD_OPTIONS.find((o) => o.value === filter.tod);
+  if (!todOption) return new Map();
+
+  // Convert Manila local hours to UTC timestamps.
+  // Manila is always UTC+8 (no DST). Date.UTC handles negative/overflow hours.
+  const toUtc = (manilaHour: number): Date => {
+    const [y, m, d] = filter.date.split("-").map(Number);
+    return new Date(Date.UTC(y!, m! - 1, d!, manilaHour - 8, 0, 0, 0));
+  };
+
+  const windowStart = toUtc(todOption.startH);
+  const windowEnd = toUtc(todOption.endH);
+
+  // Guard: window must fit at least one slot of the requested duration.
+  const windowMinutes = (windowEnd.getTime() - windowStart.getTime()) / 60_000;
+  if (windowMinutes < filter.durationMin) return new Map();
+
+  const idList = sql.join(
+    venueIds.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  );
+
+  const rows = await db.execute<{
+    venue_id: string;
+    total_courts: number;
+    available_courts: number;
+  }>(sql`
+    WITH params AS (
+        SELECT
+            ${windowStart.toISOString()}::timestamptz          AS ws,
+            ${windowEnd.toISOString()}::timestamptz            AS we,
+            (${filter.durationMin}::int * INTERVAL '1 minute') AS dur
+    ),
+    -- Active courts scoped to the requested venues
+    venue_courts AS (
+        SELECT c.id AS court_id, c.venue_id
+        FROM   courts c
+        WHERE  c.venue_id IN (${idList})
+          AND  c.is_active   = true
+          AND  c.deleted_at  IS NULL
+    ),
+    -- All bookings that overlap the window for any of those courts.
+    -- The partial index bookings_avail_idx (court_id, start_at, end_at) is used here.
+    busy AS (
+        SELECT b.court_id, b.start_at, b.end_at
+        FROM   bookings      b
+        JOIN   venue_courts  vc ON vc.court_id = b.court_id
+        CROSS  JOIN params   p
+        WHERE  b.status NOT IN ('cancelled', 'no_show', 'expired')
+          AND  b.start_at <  p.we
+          AND  b.end_at   >  p.ws
+    ),
+    -- Candidate free-slot start times per court:
+    --   (a) the window start (ws) for every court that has ≥1 busy booking
+    --   (b) the end of each booking, capped to (we - dur) so the slot fits
+    candidates AS (
+        SELECT DISTINCT vc.court_id, p.ws AS slot_start
+        FROM   venue_courts vc
+        JOIN   busy         b  ON b.court_id = vc.court_id
+        CROSS  JOIN params  p
+        UNION ALL
+        SELECT b.court_id, LEAST(b.end_at, p.we - p.dur) AS slot_start
+        FROM   busy        b
+        CROSS  JOIN params p
+    ),
+    -- Courts where at least one candidate slot is fully unoccupied
+    has_slot AS (
+        SELECT DISTINCT c.court_id
+        FROM   candidates  c
+        CROSS  JOIN params p
+        WHERE  c.slot_start + p.dur <= p.we
+          AND  NOT EXISTS (
+              SELECT 1
+              FROM   busy b
+              WHERE  b.court_id   = c.court_id
+                AND  b.start_at   < c.slot_start + p.dur
+                AND  b.end_at     > c.slot_start
+          )
+    ),
+    -- Courts with zero bookings in the window (the entire window is free)
+    free_courts AS (
+        SELECT vc.court_id
+        FROM   venue_courts vc
+        CROSS  JOIN params  p
+        WHERE  p.we - p.ws >= p.dur
+          AND  NOT EXISTS (SELECT 1 FROM busy b WHERE b.court_id = vc.court_id)
+    ),
+    avail AS (
+        SELECT court_id FROM has_slot
+        UNION
+        SELECT court_id FROM free_courts
+    )
+    SELECT
+        vc.venue_id::text                   AS venue_id,
+        COUNT(DISTINCT vc.court_id)::int    AS total_courts,
+        COUNT(DISTINCT a.court_id)::int     AS available_courts
+    FROM   venue_courts vc
+    LEFT   JOIN avail a ON a.court_id = vc.court_id
+    GROUP  BY vc.venue_id
+  `);
+
+  const map = new Map<string, VenueAvailability>();
+  for (const row of rows) {
+    map.set(row.venue_id, {
+      totalCourts: Number(row.total_courts),
+      availableCourts: Number(row.available_courts),
+    });
+  }
+  return map;
 }

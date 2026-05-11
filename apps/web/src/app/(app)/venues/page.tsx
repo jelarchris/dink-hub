@@ -4,9 +4,18 @@ import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StarRating } from "@/components/ui/star-rating";
-import { listActiveVenueCities, listActiveVenues, type VenueSort } from "@/features/venues";
+import {
+  getVenueAvailabilityMap,
+  listActiveVenueCities,
+  listActiveVenues,
+  type AvailabilityFilter,
+  type VenueAvailability,
+  type VenueSort,
+} from "@/features/venues";
+import { formatManilaDate } from "@/features/venues/availability";
 import { formatPHP } from "@/lib/money";
 import { cn } from "@/lib/cn";
+import { AvailabilityFilterBar } from "./availability-filter";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Find a court" };
@@ -30,6 +39,10 @@ interface FilterState {
   q?: string | undefined;
   city?: string | undefined;
   sort?: VenueSort | undefined;
+  // Availability filter params (preserved across city/sort navigation)
+  date?: string | undefined;
+  tod?: string | undefined;
+  dur?: string | undefined;
 }
 
 function buildQuery(current: FilterState, patch: FilterState): string {
@@ -38,8 +51,27 @@ function buildQuery(current: FilterState, patch: FilterState): string {
   if (next.q) params.set("q", next.q);
   if (next.city) params.set("city", next.city);
   if (next.sort && next.sort !== "name") params.set("sort", next.sort);
+  if (next.date) params.set("date", next.date);
+  if (next.tod) params.set("tod", next.tod);
+  if (next.dur) params.set("dur", next.dur);
   const qs = params.toString();
   return qs ? `/venues?${qs}` : "/venues";
+}
+
+/** Validates and parses availability URL params. Returns null if absent or invalid. */
+function resolveAvailabilityFilter(
+  sp: Record<string, string | string[] | undefined>,
+): AvailabilityFilter | null {
+  const date = pickString(sp.date);
+  const tod = pickString(sp.tod);
+  const durStr = pickString(sp.dur);
+  if (!date || !tod || !durStr) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const VALID_TODS = ["morning", "afternoon", "evening", "late_night"] as const;
+  if (!VALID_TODS.includes(tod as (typeof VALID_TODS)[number])) return null;
+  const dur = parseInt(durStr, 10);
+  if (dur !== 30 && dur !== 60 && dur !== 90 && dur !== 120) return null;
+  return { date, tod: tod as AvailabilityFilter["tod"], durationMin: dur };
 }
 
 export default async function VenuesPage({ searchParams }: PageProps) {
@@ -49,8 +81,13 @@ export default async function VenuesPage({ searchParams }: PageProps) {
   const sortRaw = pickString(sp.sort);
   const sort: VenueSort =
     sortRaw === "price_asc" || sortRaw === "rating_desc" ? sortRaw : "name";
+  const availability = resolveAvailabilityFilter(sp);
 
-  const [venues, cities] = await Promise.all([
+  // Compute today in Manila timezone server-side to avoid hydration mismatch
+  // in the client AvailabilityFilterBar component.
+  const manilaToday = formatManilaDate(new Date());
+
+  const [venueList, cities] = await Promise.all([
     listActiveVenues({
       limit: 50,
       ...(q ? { query: q } : {}),
@@ -60,8 +97,29 @@ export default async function VenuesPage({ searchParams }: PageProps) {
     listActiveVenueCities(),
   ]);
 
-  const current: FilterState = { q, city, sort };
-  const hasActiveFilter = Boolean(q) || Boolean(city) || sort !== "name";
+  // Second round-trip only when availability filter is active.
+  const availabilityMap =
+    availability && venueList.length > 0
+      ? await getVenueAvailabilityMap(
+          venueList.map((v) => v.venue.id),
+          availability,
+        )
+      : null;
+
+  const current: FilterState = {
+    q,
+    city,
+    sort,
+    ...(availability
+      ? {
+          date: availability.date,
+          tod: availability.tod,
+          dur: String(availability.durationMin),
+        }
+      : {}),
+  };
+  const hasActiveFilter =
+    Boolean(q) || Boolean(city) || sort !== "name" || availability !== null;
 
   return (
     <>
@@ -121,8 +179,8 @@ export default async function VenuesPage({ searchParams }: PageProps) {
           {/* Sort row */}
           <div className="mt-3 flex items-center justify-between gap-3">
             <p className="text-xs text-[var(--color-fg-muted)]">
-              <span className="font-bold text-[var(--color-fg)]">{venues.length}</span>{" "}
-              {venues.length === 1 ? "venue" : "venues"}
+              <span className="font-bold text-[var(--color-fg)]">{venueList.length}</span>{" "}
+              {venueList.length === 1 ? "venue" : "venues"}
               {city && <> in {city}</>}
               {q && <> matching &ldquo;{q}&rdquo;</>}
             </p>
@@ -149,6 +207,15 @@ export default async function VenuesPage({ searchParams }: PageProps) {
               })}
             </div>
           </div>
+
+          {/* Availability filter — client component to avoid hydration issues with dates */}
+          <AvailabilityFilterBar
+            today={manilaToday}
+            activeFilter={availability}
+            {...(q ? { currentQ: q } : {})}
+            {...(city ? { currentCity: city } : {})}
+            {...(sort !== "name" ? { currentSort: sort } : {})}
+          />
         </Container>
       </div>
 
@@ -163,14 +230,22 @@ export default async function VenuesPage({ searchParams }: PageProps) {
             : {})}
         />
 
-        {venues.length === 0 ? (
+        {venueList.length === 0 ? (
           <EmptyState
             icon={hasActiveFilter ? <Search /> : <Trophy />}
-            title={hasActiveFilter ? "No matches" : "No venues yet"}
+            title={
+              availability
+                ? "No venues available"
+                : hasActiveFilter
+                  ? "No matches"
+                  : "No venues yet"
+            }
             description={
-              hasActiveFilter
-                ? "Try a different search or clear your filters."
-                : "We're just getting started. Check back soon — or list your venue and be among the first."
+              availability
+                ? "No courts with a free slot for that time. Try a different time or date."
+                : hasActiveFilter
+                  ? "Try a different search or clear your filters."
+                  : "We're just getting started. Check back soon — or list your venue and be among the first."
             }
             action={
               hasActiveFilter ? (
@@ -185,13 +260,21 @@ export default async function VenuesPage({ searchParams }: PageProps) {
           />
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {venues.map((v) => (
+            {venueList.map((v) => {
+              const avail: VenueAvailability | undefined = availabilityMap?.get(v.venue.id);
+              const fullyBooked = avail !== undefined && avail.availableCourts === 0;
+              return (
               <li key={v.venue.id}>
                 <Link
                   href={`/venues/${v.venue.slug}`}
                   className="group block overflow-hidden rounded-[var(--radius-lg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)] focus-visible:ring-offset-2"
                 >
-                  <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-lg)] bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)]">
+                  <div
+                    className={cn(
+                      "relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-lg)] bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)] transition-opacity",
+                      fullyBooked && "opacity-50",
+                    )}
+                  >
                     {v.venue.coverImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -205,9 +288,27 @@ export default async function VenuesPage({ searchParams }: PageProps) {
                         <Trophy className="size-10" aria-hidden="true" />
                       </div>
                     )}
-                    <span className="absolute right-2 top-2 rounded-full bg-[var(--color-bg)]/95 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-fg)] shadow-[var(--shadow-sm)]">
-                      {v.courtCount} {v.courtCount === 1 ? "court" : "courts"}
-                    </span>
+                    {/* Court count / availability badge */}
+                    {avail !== undefined ? (
+                      <span
+                        className={cn(
+                          "absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-[var(--shadow-sm)]",
+                          avail.availableCourts === 0
+                            ? "bg-red-100 text-red-700"
+                            : avail.availableCourts < avail.totalCourts
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700",
+                        )}
+                      >
+                        {avail.availableCourts === 0
+                          ? "Fully booked"
+                          : `${avail.availableCourts} of ${avail.totalCourts} free`}
+                      </span>
+                    ) : (
+                      <span className="absolute right-2 top-2 rounded-full bg-[var(--color-bg)]/95 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-fg)] shadow-[var(--shadow-sm)]">
+                        {v.courtCount} {v.courtCount === 1 ? "court" : "courts"}
+                      </span>
+                    )}
                     {v.avgRating !== null && (
                       <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-[var(--color-bg)]/95 px-2 py-0.5 text-[10px] font-bold text-[var(--color-fg)] shadow-[var(--shadow-sm)]">
                         <Star className="size-3 fill-amber-400 text-amber-400" aria-hidden="true" />
@@ -246,7 +347,8 @@ export default async function VenuesPage({ searchParams }: PageProps) {
                   </div>
                 </Link>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </Container>
