@@ -631,3 +631,151 @@ export async function recordOwnerRefundAction(
   revalidatePath(`/owner/bookings/${bookingId}`);
   return { ok: true, data: undefined as never };
 }
+
+// ============================================================================
+// Tier 6 — bulk venue/court closure
+// ============================================================================
+
+// Parses Manila wall-clock datetime strings (with +08:00 offset) from FormData.
+const isoOffsetToDate = z
+  .string()
+  .datetime({ offset: true })
+  .transform((s) => new Date(s));
+
+const closureFormBaseSchema = z.object({
+  venueId: z.string().uuid(),
+  // Comma-separated court IDs supplied by the multi-select.
+  courtIds: z.string().transform((s) =>
+    s
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean),
+  ),
+  fromAt: isoOffsetToDate,
+  untilAt: isoOffsetToDate,
+  category: z.enum([
+    "weather",
+    "court_unavailable",
+    "venue_closure",
+    "player_request",
+    "admin_action",
+    "other",
+  ]),
+  reason: z.string().min(3, "Reason must be at least 3 characters").max(500),
+});
+
+export interface ClosurePreviewData {
+  bookingCount: number;
+  totalCentavos: string; // bigint serialised as string for client
+}
+
+export async function previewClosureRangeAction(
+  _prev: ActionResult<ClosurePreviewData> | null,
+  form: FormData,
+): Promise<ActionResult<ClosurePreviewData>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = closureFormBaseSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const { venueId, courtIds, fromAt, untilAt, category, reason } = parsed.data;
+
+  const { previewClosureRange } = await import("@/features/booking/service");
+  const { isBookingError } = await import("@/features/booking/errors");
+
+  try {
+    const preview = await previewClosureRange({
+      venueId,
+      ownerId: guard.userId,
+      courtIds,
+      fromAt,
+      untilAt,
+      category,
+      reason,
+    });
+    return {
+      ok: true,
+      data: {
+        bookingCount: preview.bookingCount,
+        totalCentavos: preview.totalCentavos.toString(),
+      },
+    };
+  } catch (err) {
+    if (isBookingError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[closure-preview]", err);
+    return fail("Could not preview closure. Please try again.");
+  }
+}
+
+export interface CloseBookingsData {
+  cancelledCount: number;
+  skippedCount: number;
+}
+
+export async function closeBookingsForRangeAction(
+  _prev: ActionResult<CloseBookingsData> | null,
+  form: FormData,
+): Promise<ActionResult<CloseBookingsData>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = closureFormBaseSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const { venueId, courtIds, fromAt, untilAt, category, reason } = parsed.data;
+
+  const { closeBookingsForRange } = await import("@/features/booking/service");
+  const { isBookingError } = await import("@/features/booking/errors");
+  const { notifyBookingCancelledByOwner } = await import("@/features/booking/notifications");
+
+  let cancelledBookingIds: string[] = [];
+  let cancelledCount = 0;
+  let skippedCount = 0;
+
+  try {
+    const outcome = await closeBookingsForRange({
+      venueId,
+      ownerId: guard.userId,
+      courtIds,
+      fromAt,
+      untilAt,
+      category,
+      reason,
+    });
+    cancelledBookingIds = outcome.cancelledBookingIds;
+    cancelledCount = outcome.result.cancelledCount;
+    skippedCount = outcome.result.skippedCount;
+  } catch (err) {
+    if (isBookingError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[closure-commit]", err);
+    return fail("Could not close the venue. Please try again.");
+  }
+
+  // Best-effort — fire after tx commits, never block the response.
+  await Promise.allSettled(
+    cancelledBookingIds.map((id) => notifyBookingCancelledByOwner(id, reason)),
+  );
+
+  revalidatePath("/owner");
+  revalidatePath(`/owner/venues/${venueId}`);
+
+  return { ok: true, data: { cancelledCount, skippedCount } };
+}
+

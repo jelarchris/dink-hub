@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
@@ -222,3 +222,41 @@ export async function findHoldForSlot(
   return rows[0] ?? null;
 }
 
+/**
+ * Returns all active (non-terminal) bookings for the given venue courts that
+ * overlap the [fromAt, untilAt) window. Uses standard interval-overlap logic:
+ *   booking.startAt < untilAt  AND  booking.endAt > fromAt
+ *
+ * Used by the bulk-closure service to preview and cancel affected bookings.
+ */
+export async function findCancellableBookingsInRange(
+  args: {
+    courtIds: string[];
+    fromAt: Date;
+    untilAt: Date;
+  },
+  exec: Executor = db,
+): Promise<Pick<Booking, "id" | "version" | "courtId" | "startAt" | "endAt" | "totalCentavos" | "status">[]> {
+  if (args.courtIds.length === 0) return [];
+  const CANCELLABLE = ["pending_payment", "payment_submitted", "confirmed"] as const;
+  return exec
+    .select({
+      id: bookings.id,
+      version: bookings.version,
+      courtId: bookings.courtId,
+      startAt: bookings.startAt,
+      endAt: bookings.endAt,
+      totalCentavos: bookings.totalCentavos,
+      status: bookings.status,
+    })
+    .from(bookings)
+    .where(
+      and(
+        inArray(bookings.courtId, args.courtIds),
+        inArray(bookings.status, CANCELLABLE),
+        lt(bookings.startAt, args.untilAt),
+        gt(bookings.endAt, args.fromAt),
+      ),
+    )
+    .orderBy(bookings.startAt);
+}

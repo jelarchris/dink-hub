@@ -18,6 +18,7 @@ import { updateVenueAction } from "@/features/owner-venues/actions";
 import { VenueForm } from "../venue-form";
 import { VenuePublishCard } from "./publish-card";
 import { CourtArchiveButton } from "./court-archive-button";
+import { ClosureForm } from "./closure-form";
 import type { Court, Venue } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
@@ -130,6 +131,16 @@ export default async function EditVenuePage({
           </ul>
         )}
       </div>
+
+      {/* Bulk closure — only relevant for active venues with at least one active court */}
+      {venue.status === "active" && activeCourts.length > 0 && (
+        <div className="mt-4">
+          <ClosureForm
+            venueId={venue.id}
+            courts={activeCourts.map((c) => ({ id: c.id, name: c.name }))}
+          />
+        </div>
+      )}
 
       <div className="mt-5">
         <SectionLabel className="mb-2 block">Venue details</SectionLabel>

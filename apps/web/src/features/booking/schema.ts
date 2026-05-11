@@ -139,3 +139,34 @@ export const ownerRescheduleBookingInputSchema = z
     validateSlotTimes({ startAt: d.newStartAt, endAt: d.newEndAt }, ctx),
   );
 export type OwnerRescheduleBookingInput = z.infer<typeof ownerRescheduleBookingInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Tier 6 — bulk venue/court closure
+// ---------------------------------------------------------------------------
+
+/**
+ * Input for the preview query + the actual bulk-closure.
+ * `courtIds` — one or more active courts at the owner's venue.
+ * `fromAt` / `untilAt` — interval (overlap semantics: booking.startAt < untilAt AND booking.endAt > fromAt).
+ */
+export const closureRangeInputSchema = z.object({
+  venueId: uuidSchema,
+  ownerId: uuidSchema,
+  /** One or more court IDs. Must all belong to venueId (verified in service). */
+  courtIds: z.array(uuidSchema).min(1, "Select at least one court"),
+  fromAt: z.date(),
+  untilAt: z.date(),
+  category: cancellationCategorySchema,
+  reason: z.string().min(3, "Reason must be at least 3 characters").max(500),
+}).superRefine((d, ctx) => {
+  if (d.untilAt.getTime() <= d.fromAt.getTime()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "End of closure window must be after start",
+      path: ["untilAt"],
+    });
+  }
+});
+
+export type ClosureRangeInput = z.infer<typeof closureRangeInputSchema>;
+

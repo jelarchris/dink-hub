@@ -832,5 +832,163 @@ export async function recordOwnerRefund(
   });
 }
 
+// ============================================================================
+// 11. previewClosureRange — dry-run for bulk venue closure (Tier 6)
+//
+// Returns the count + total value of bookings that WOULD be cancelled for the
+// given closure window. No writes. Used to show the "12 bookings / ₱14,400"
+// confirmation before the owner commits.
+// ============================================================================
+export interface ClosurePreview {
+  bookingCount: number;
+  totalCentavos: bigint;
+}
+
+export async function previewClosureRange(
+  input: import("./schema").ClosureRangeInput,
+): Promise<ClosurePreview> {
+  const { courts, venues } = await import("@/db/schema");
+  const { and, eq, inArray } = await import("drizzle-orm");
+
+  // Verify caller owns the venue + all supplied courtIds belong to it.
+  const courtRows = await db
+    .select({ id: courts.id })
+    .from(courts)
+    .innerJoin(venues, eq(venues.id, courts.venueId))
+    .where(
+      and(
+        eq(venues.id, input.venueId),
+        eq(venues.ownerId, input.ownerId),
+        inArray(courts.id, input.courtIds),
+      ),
+    );
+  if (courtRows.length !== input.courtIds.length) {
+    throw new BookingError("not_authorized", "One or more courts do not belong to your venue");
+  }
+
+  const rows = await repo.findCancellableBookingsInRange({
+    courtIds: input.courtIds,
+    fromAt: input.fromAt,
+    untilAt: input.untilAt,
+  });
+
+  const totalCentavos = rows.reduce((sum, r) => sum + r.totalCentavos, 0n);
+  return { bookingCount: rows.length, totalCentavos };
+}
+
+// ============================================================================
+// 12. closeBookingsForRange — bulk cancel for venue closure (Tier 6)
+//
+// Cancels all active bookings on the given courts in the window in a SINGLE
+// transaction. All rows get the same cancellation metadata (category, reason,
+// timestamp, actor). Notifications fire after the tx commits via
+// Promise.allSettled (best-effort, never blocks the action result).
+//
+// Returns `{ cancelledCount, skippedCount }`. A booking is skipped if it was
+// modified between the preview and the commit (version mismatch — extremely
+// rare; caller may retry or ignore).
+//
+// Notification volume note: at ≤30 bookings per closure this is fine
+// synchronously. For larger volumes, move to a notification queue.
+// ============================================================================
+export interface CloseBookingsResult {
+  cancelledCount: number;
+  skippedCount: number;
+}
+
+export async function closeBookingsForRange(
+  input: import("./schema").ClosureRangeInput,
+): Promise<{ result: CloseBookingsResult; cancelledBookingIds: string[] }> {
+  const { bookings: bookingsTable, courts, venues } = await import("@/db/schema");
+  const { and, eq, inArray } = await import("drizzle-orm");
+
+  // Re-verify ownership inside the write path (defense in depth).
+  const courtRows = await db
+    .select({ id: courts.id })
+    .from(courts)
+    .innerJoin(venues, eq(venues.id, courts.venueId))
+    .where(
+      and(
+        eq(venues.id, input.venueId),
+        eq(venues.ownerId, input.ownerId),
+        inArray(courts.id, input.courtIds),
+      ),
+    );
+  if (courtRows.length !== input.courtIds.length) {
+    throw new BookingError("not_authorized", "One or more courts do not belong to your venue");
+  }
+
+  const candidates = await repo.findCancellableBookingsInRange({
+    courtIds: input.courtIds,
+    fromAt: input.fromAt,
+    untilAt: input.untilAt,
+  });
+
+  if (candidates.length === 0) {
+    return { result: { cancelledCount: 0, skippedCount: 0 }, cancelledBookingIds: [] };
+  }
+
+  const now = new Date();
+  const noteText = `[Owner closure · ${input.category}] ${input.reason}`;
+  let cancelledCount = 0;
+  let skippedCount = 0;
+  const cancelledBookingIds: string[] = [];
+
+  // Single transaction — all-or-nothing across the batch.
+  await db.transaction(async (tx) => {
+    for (const candidate of candidates) {
+      const wasConfirmed = candidate.status === "confirmed";
+      const noteExtra = wasConfirmed
+        ? "\n[Refund pending — coordinate GCash refund with player]"
+        : "";
+
+      // Reload within tx to get current version + notes (guard against races).
+      const fresh = await tx
+        .select({ version: bookingsTable.version, notes: bookingsTable.notes })
+        .from(bookingsTable)
+        .where(eq(bookingsTable.id, candidate.id))
+        .limit(1);
+      const row = fresh[0];
+      if (!row || row.version !== candidate.version) {
+        // Modified between preview and commit — skip rather than fail the batch.
+        skippedCount++;
+        continue;
+      }
+
+      const newNotes = row.notes
+        ? `${row.notes}\n\n${noteText}${noteExtra}`
+        : `${noteText}${noteExtra}`;
+
+      const updated = await tx
+        .update(bookingsTable)
+        .set({
+          status: "cancelled",
+          notes: newNotes,
+          cancelledAt: now,
+          cancelledBy: input.ownerId,
+          cancellationReason: input.reason,
+          cancellationCategory: input.category,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(bookingsTable.id, candidate.id),
+            eq(bookingsTable.version, row.version),
+          ),
+        )
+        .returning({ id: bookingsTable.id });
+
+      if (updated.length > 0 && updated[0]) {
+        cancelledCount++;
+        cancelledBookingIds.push(updated[0].id);
+      } else {
+        skippedCount++;
+      }
+    }
+  });
+
+  return { result: { cancelledCount, skippedCount }, cancelledBookingIds };
+}
+
 // Internal helper exposed for tests only — do not import from app code.
 export const _testing = { computeCourtFeeCentavos, randomUUID };
