@@ -144,6 +144,7 @@ export async function resolveDispute(
     }
 
     if (input.resolution === "refund_full") {
+      // version is NOT set manually — bookings_bump_version trigger increments it.
       const refundedBooking = await tx
         .update(bookings)
         .set({
@@ -155,7 +156,6 @@ export async function resolveDispute(
           cancelledBy: admin.id,
           cancellationReason: input.notes ?? p.disputeReason ?? null,
           cancellationCategory: "admin_action",
-          version: b.version + 1,
           updatedAt: now,
         })
         .where(and(eq(bookings.id, b.id), eq(bookings.version, b.version)))

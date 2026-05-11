@@ -24,6 +24,7 @@ import type { Booking, Payment } from "@/db/schema";
 import { NoShowForm } from "./_components/no-show-form";
 import { CancelBookingForm } from "./_components/cancel-booking-form";
 import { RescheduleForm } from "./_components/reschedule-form";
+import { RecordRefundForm } from "./_components/record-refund-form";
 
 export const dynamic = "force-dynamic";
 
@@ -261,6 +262,26 @@ export default async function OwnerBookingDetailPage({
               </div>
             );
           })()}
+
+          {/* Refund recording — shown when booking is refunded but payment is not yet reversed */}
+          {booking.status === "refunded" &&
+            payment?.status === "verified" && (
+              <div>
+                <SectionLabel className="mb-2 block">Refund</SectionLabel>
+                <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4">
+                  <p className="mb-3 text-xs text-[var(--color-fg-muted)]">
+                    Confirm that you have returned the player&apos;s payment via
+                    GCash. DinkHub will adjust your next weekly invoice accordingly.
+                  </p>
+                  <RecordRefundForm
+                    bookingId={booking.id}
+                    paymentId={payment.id}
+                    paymentVersion={payment.version}
+                    formattedTotal={formatPHP(booking.totalCentavos)}
+                  />
+                </div>
+              </div>
+            )}
         </aside>
       </div>
     </Container>

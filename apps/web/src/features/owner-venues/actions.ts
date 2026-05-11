@@ -579,3 +579,55 @@ export async function rescheduleBookingByOwnerAction(
   return { ok: true, data: undefined as never };
 }
 
+// ============================================================================
+// Owner record refund (Tier 5)
+// ============================================================================
+
+const recordOwnerRefundFormSchema = z.object({
+  bookingId: z.string().uuid(),
+  paymentId: z.string().uuid(),
+  paymentExpectedVersion: z.coerce.number().int().min(1),
+  notes: z.string().max(500).optional(),
+});
+
+export async function recordOwnerRefundAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = recordOwnerRefundFormSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const { bookingId, paymentId, paymentExpectedVersion, notes } = parsed.data;
+
+  const { recordOwnerRefund } = await import("@/features/booking/service");
+  const { isBookingError } = await import("@/features/booking/errors");
+
+  try {
+    await recordOwnerRefund({
+      bookingId,
+      paymentId,
+      paymentExpectedVersion,
+      ownerId: guard.userId,
+      ...(notes ? { notes } : {}),
+    });
+  } catch (err) {
+    if (isBookingError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[owner-record-refund]", err);
+    return fail("Could not record the refund. Please try again.");
+  }
+
+  revalidatePath("/owner");
+  revalidatePath(`/owner/bookings/${bookingId}`);
+  return { ok: true, data: undefined as never };
+}

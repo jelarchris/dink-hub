@@ -680,5 +680,157 @@ export async function releaseExpiredHolds(): Promise<{ released: number }> {
   return { released };
 }
 
+// ============================================================================
+// 10. recordOwnerRefund — owner confirms they have refunded the player (Tier 5)
+//
+// Preconditions:
+//   - booking.status MUST be 'refunded' (set by cancelBookingByOwner when the
+//     booking was already confirmed/paid, OR by the admin dispute flow).
+//   - payment.status MUST be 'verified' (i.e. not already reversed).
+//   - ownerId must own the venue the booking belongs to.
+//
+// Effect (atomic transaction):
+//   1. Marks payment.status → 'rejected' (idempotency: re-entry blocked by
+//      the unique ledger idempotency_key constraint).
+//   2. Writes three reversal ledger entries (mirrors dispute refund_full,
+//      but scoped with 'owner-refund' namespace so they don't collide with
+//      future admin dispute entries on the same booking).
+//
+// Ledger double-entry (debits = credits = total_centavos):
+//   DEBIT  venue_payable      = courtFeeCentavos   (cancel what the venue was owed)
+//   DEBIT  platform_revenue   = systemFeeCentavos  (write off the fee)
+//   CREDIT platform_cash      = totalCentavos      (record cash-out to player)
+// ============================================================================
+export interface RecordOwnerRefundInput {
+  bookingId: string;
+  paymentId: string;
+  paymentExpectedVersion: number;
+  ownerId: string;
+  /** Optional note shown in payment.rejectionReason. */
+  notes?: string;
+}
+
+export async function recordOwnerRefund(
+  input: RecordOwnerRefundInput,
+): Promise<Payment> {
+  const { payments: paymentsTable, bookings: bookingsTable, courts, venues } = await import(
+    "@/db/schema"
+  );
+  const { and, eq } = await import("drizzle-orm");
+
+  return db.transaction(async (tx) => {
+    // 1. Load and lock payment.
+    const payRows = await tx
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, input.paymentId))
+      .limit(1);
+    const payment = payRows[0];
+    if (!payment) throw new BookingError("payment_not_found", "Payment not found");
+    if (payment.bookingId !== input.bookingId) {
+      throw new BookingError("not_authorized", "Payment does not belong to this booking");
+    }
+    if (payment.version !== input.paymentExpectedVersion) {
+      throw new BookingError(
+        "concurrent_modification",
+        "Payment was changed in another tab — reload and retry",
+      );
+    }
+    if (payment.status !== "verified") {
+      throw new BookingError(
+        "booking_wrong_status",
+        `Cannot record refund — payment status is "${payment.status}"`,
+      );
+    }
+
+    // 2. Load booking + verify ownership.
+    const bookingRows = await tx
+      .select({
+        booking: bookingsTable,
+        venueOwnerId: venues.ownerId,
+      })
+      .from(bookingsTable)
+      .innerJoin(courts, eq(courts.id, bookingsTable.courtId))
+      .innerJoin(venues, eq(venues.id, bookingsTable.venueId))
+      .where(eq(bookingsTable.id, input.bookingId))
+      .limit(1);
+    const row = bookingRows[0];
+    if (!row) throw new BookingError("booking_not_found", "Booking not found");
+    if (row.venueOwnerId !== input.ownerId) {
+      throw new BookingError("not_authorized", "Only the venue owner can record this refund");
+    }
+    if (row.booking.status !== "refunded") {
+      throw new BookingError(
+        "booking_wrong_status",
+        `Refund can only be recorded on a refunded booking (current: "${row.booking.status}")`,
+      );
+    }
+    const b = row.booking;
+
+    // 3. Mark payment rejected (optimistic concurrency on payment.version).
+    const rejectionReason =
+      input.notes
+        ? `Owner refund: ${input.notes}`
+        : "Owner refund recorded";
+    const [updatedPayment] = await tx
+      .update(paymentsTable)
+      .set({
+        status: "rejected",
+        rejectionReason,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(paymentsTable.id, payment.id),
+          eq(paymentsTable.version, payment.version),
+        ),
+      )
+      .returning();
+    if (!updatedPayment) {
+      throw new BookingError(
+        "concurrent_modification",
+        "Payment was changed concurrently — reload and retry",
+      );
+    }
+
+    // 4. Write reversal ledger entries.
+    // Idempotency namespace 'owner-refund' is distinct from 'reverse' used by
+    // the admin dispute path so both can coexist without constraint collisions.
+    const reversals: NewLedgerEntry[] = [
+      {
+        bookingId: b.id,
+        account: "venue_payable" as const,
+        direction: "debit" as const,
+        amountCentavos: b.courtFeeCentavos,
+        description: `Owner refund — cancel court fee owed to venue (booking ${b.id})`,
+        idempotencyKey: `bk:${b.id}:owner-refund:venue_payable`,
+        createdBy: input.ownerId,
+      },
+      {
+        bookingId: b.id,
+        account: "platform_revenue" as const,
+        direction: "debit" as const,
+        amountCentavos: b.systemFeeCentavos,
+        description: `Owner refund — write off system fee (booking ${b.id})`,
+        idempotencyKey: `bk:${b.id}:owner-refund:platform_revenue`,
+        createdBy: input.ownerId,
+      },
+      {
+        bookingId: b.id,
+        account: "platform_cash" as const,
+        direction: "credit" as const,
+        amountCentavos: b.totalCentavos,
+        description: `Owner refund — cash returned to player (booking ${b.id})`,
+        idempotencyKey: `bk:${b.id}:owner-refund:platform_cash`,
+        createdBy: input.ownerId,
+      },
+    ].filter((e) => e.amountCentavos > 0n);
+
+    await repo.insertLedgerEntries(reversals, tx);
+
+    return updatedPayment;
+  });
+}
+
 // Internal helper exposed for tests only — do not import from app code.
 export const _testing = { computeCourtFeeCentavos, randomUUID };
