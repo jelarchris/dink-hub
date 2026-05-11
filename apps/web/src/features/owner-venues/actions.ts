@@ -361,3 +361,75 @@ export async function setCourtActiveAction(
   revalidatePath(`/owner/venues/${parsed.data.venueId}`);
   return { ok: true, data: undefined as never };
 }
+
+// ----------------------------------------------------------------------------
+// booking actions — no-show
+// ----------------------------------------------------------------------------
+
+const markNoShowFormSchema = z.object({
+  bookingId: z.string().uuid(),
+  expectedVersion: z.coerce.number().int().min(1),
+});
+
+/**
+ * Mark a confirmed booking as no-show.
+ *
+ * Only the venue owner (or admin) may call this. Authorization is enforced
+ * server-side by verifying `venues.owner_id = session.user.id` in the UPDATE.
+ * The booking must be `confirmed` — any other status is rejected.
+ */
+export async function markNoShowAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = markNoShowFormSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail("Invalid request.", "validation");
+
+  const { bookingId, expectedVersion } = parsed.data;
+
+  // Authorization + status check + optimistic concurrency in one atomic UPDATE.
+  // The WHERE clause joins through venues to verify ownership — the DB rejects
+  // any attempt to mark a booking at someone else's venue.
+  const { db } = await import("@/db/client");
+  const { bookings } = await import("@/db/schema");
+  const { eq, and, sql } = await import("drizzle-orm");
+
+  const updated = await db
+    .update(bookings)
+    .set({
+      status: "no_show",
+      version: sql`${bookings.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        eq(bookings.status, "confirmed"),
+        eq(bookings.version, expectedVersion),
+        // Ownership check via subquery — deny if venue doesn't belong to this owner.
+        sql`${bookings.venueId} in (
+          select id from venues
+          where owner_id = ${guard.userId}
+          and deleted_at is null
+        )`,
+      ),
+    )
+    .returning({ id: bookings.id, venueId: bookings.venueId });
+
+  if (updated.length === 0) {
+    // Could be: wrong version, wrong status, or not their venue.
+    return {
+      ok: false,
+      code: "conflict",
+      message:
+        "Could not mark as no-show. The booking may have already been updated — please refresh.",
+    };
+  }
+
+  revalidatePath("/owner");
+  revalidatePath(`/owner/bookings/${bookingId}`);
+  return { ok: true, data: undefined as never };
+}

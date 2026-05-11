@@ -51,6 +51,8 @@ export interface OwnerDashboardStats {
   /** Same metrics for the prior 7-day window — used to compute WoW deltas. */
   bookingsLastWeek: number;
   grossLastWeekCentavos: bigint;
+  /** No-show count this week (Mon 00:00 Manila → now). */
+  noShowsThisWeek: number;
 }
 
 /**
@@ -65,7 +67,7 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
   const { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC } =
     getManilaTimeBoundaries();
 
-  const [todayRow, thisWeekRow, lastWeekRow] = await Promise.all([
+  const [todayRow, thisWeekRow, lastWeekRow, noShowRow] = await Promise.all([
     db
       .select({
         n: sql<number>`count(*)::int`,
@@ -113,6 +115,18 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
           isNull(venues.deletedAt),
         ),
       ),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(bookings)
+      .innerJoin(venues, eq(venues.id, bookings.venueId))
+      .where(
+        and(
+          eq(venues.ownerId, ownerId),
+          eq(bookings.status, "no_show"),
+          gte(bookings.startAt, thisWeekStartUTC),
+          isNull(venues.deletedAt),
+        ),
+      ),
   ]);
 
   return {
@@ -122,6 +136,7 @@ export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDash
     grossThisWeekCentavos: BigInt(thisWeekRow[0]?.gross ?? "0"),
     bookingsLastWeek: lastWeekRow[0]?.n ?? 0,
     grossLastWeekCentavos: BigInt(lastWeekRow[0]?.gross ?? "0"),
+    noShowsThisWeek: noShowRow[0]?.n ?? 0,
   };
 }
 

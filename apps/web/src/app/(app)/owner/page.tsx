@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  AlertCircle,
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
@@ -140,6 +141,19 @@ export default async function OwnerDashboard() {
         />
       </div>
 
+      {/* ── No-show row ─────────────────────────────────────────────────── */}
+      {stats.noShowsThisWeek > 0 && (
+        <div className="mt-3 grid grid-cols-1">
+          <StatCard
+            title="No-shows this week"
+            value={stats.noShowsThisWeek.toString()}
+            subtitle="Confirmed bookings where player didn't show"
+            accent="rose"
+            icon={<AlertCircle className="size-4 text-rose-600" />}
+          />
+        </div>
+      )}
+
       {/* ── Today's schedule ────────────────────────────────────────────── */}
       <section className="mt-6">
         <SectionLabel className="mb-2 flex items-center gap-1.5">
@@ -237,17 +251,20 @@ function StatCard({
   subtitle,
   delta,
   icon,
+  accent,
 }: {
   title: string;
   value: string;
   subtitle?: string;
   delta?: number | null;
   icon: React.ReactNode;
+  accent?: "rose";
 }) {
+  const accentClass = accent === "rose" ? "bg-rose-50" : "bg-[var(--color-brand-100)]";
   return (
     <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4 shadow-[var(--shadow-sm)]">
       <div className="flex items-start justify-between gap-1">
-        <span className="flex size-9 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)]">
+        <span className={`flex size-9 items-center justify-center rounded-[var(--radius-md)] ${accentClass}`}>
           {icon}
         </span>
         {delta != null && <WoWBadge delta={delta} />}
@@ -268,29 +285,34 @@ function ScheduleRow({ item }: { item: ScheduleItem }) {
   const endLabel = TIME_FMT.format(item.endAt);
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      {/* Fixed-width time column keeps every row aligned */}
-      <div className="w-[5.5rem] shrink-0 text-center">
-        <div className="text-sm font-mono font-semibold tabular-nums">{startLabel}</div>
-        <div className="text-[10px] text-[var(--color-fg-subtle)]">{endLabel}</div>
-      </div>
-
-      {/* Visual pip */}
-      <div className="h-8 w-px shrink-0 rounded-full bg-[var(--color-brand-300)]" />
-
-      {/* Court + venue + player */}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          <span className="font-semibold leading-tight">{item.courtName}</span>
-          <span className="text-xs text-[var(--color-fg-muted)]">· {item.venueName}</span>
+    <li>
+      <Link
+        href={`/owner/bookings/${item.bookingId}`}
+        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--color-bg-subtle)]"
+      >
+        {/* Fixed-width time column keeps every row aligned */}
+        <div className="w-[5.5rem] shrink-0 text-center">
+          <div className="text-sm font-mono font-semibold tabular-nums">{startLabel}</div>
+          <div className="text-[10px] text-[var(--color-fg-subtle)]">{endLabel}</div>
         </div>
-        <div className="mt-0.5 text-xs text-[var(--color-fg-muted)]">{item.playerDisplayName}</div>
-      </div>
 
-      {/* Amount */}
-      <div className="shrink-0 text-sm font-semibold tabular-nums text-[var(--color-brand-700)]">
-        {formatPHP(item.totalCentavos)}
-      </div>
+        {/* Visual pip */}
+        <div className="h-8 w-px shrink-0 rounded-full bg-[var(--color-brand-300)]" />
+
+        {/* Court + venue + player */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+            <span className="font-semibold leading-tight">{item.courtName}</span>
+            <span className="text-xs text-[var(--color-fg-muted)]">· {item.venueName}</span>
+          </div>
+          <div className="mt-0.5 text-xs text-[var(--color-fg-muted)]">{item.playerDisplayName}</div>
+        </div>
+
+        {/* Amount */}
+        <div className="shrink-0 text-sm font-semibold tabular-nums text-[var(--color-brand-700)]">
+          {formatPHP(item.totalCentavos)}
+        </div>
+      </Link>
     </li>
   );
 }

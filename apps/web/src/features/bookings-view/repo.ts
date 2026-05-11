@@ -1,14 +1,16 @@
 import "server-only";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
   courts,
   payments,
+  profiles,
   venues,
   type Booking,
   type Court,
   type Payment,
+  type Profile,
   type Venue,
 } from "@/db/schema";
 
@@ -192,4 +194,58 @@ export async function findPaymentByIdForOwner(args: {
     .where(and(eq(payments.id, args.paymentId), eq(venues.ownerId, args.ownerId)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+// ============================================================================
+// owner — booking detail
+// ============================================================================
+
+export interface OwnerBookingDetail {
+  booking: Booking;
+  venue: Venue;
+  court: Court;
+  player: Pick<Profile, "id" | "displayName" | "email" | "phoneE164">;
+  payment: Payment | null;
+}
+
+/**
+ * Load a single booking scoped to the requesting owner.
+ *
+ * Returns null for both "not found" and "not your venue" to prevent
+ * id-enumeration disclosure. The caller should render a 404.
+ */
+export async function findBookingForOwner(args: {
+  bookingId: string;
+  ownerId: string;
+}): Promise<OwnerBookingDetail | null> {
+  const rows = await db
+    .select({
+      booking: bookings,
+      venue: venues,
+      court: courts,
+      player: {
+        id: profiles.id,
+        displayName: profiles.displayName,
+        email: profiles.email,
+        phoneE164: profiles.phoneE164,
+      },
+      payment: payments,
+    })
+    .from(bookings)
+    .innerJoin(venues, and(eq(venues.id, bookings.venueId), isNull(venues.deletedAt)))
+    .innerJoin(courts, eq(courts.id, bookings.courtId))
+    .innerJoin(profiles, eq(profiles.id, bookings.playerId))
+    .leftJoin(payments, eq(payments.bookingId, bookings.id))
+    .where(and(eq(bookings.id, args.bookingId), eq(venues.ownerId, args.ownerId)))
+    .limit(1);
+
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    booking: r.booking,
+    venue: r.venue,
+    court: r.court,
+    player: r.player,
+    payment: r.payment,
+  };
 }
