@@ -5,6 +5,7 @@ import {
   auditLog,
   bookings,
   courts,
+  ownerInvoices,
   payments,
   profiles,
   systemFeeSettings,
@@ -61,10 +62,20 @@ export interface AdminDashboardStats {
   feeAccruedLast7DaysCentavos: bigint;
   pendingPaymentBookings: number;
   recentPendingVenues: ReadonlyArray<{ venue: Venue; ownerEmail: string }>;
+  /** Sum of total_centavos for all verified invoices in the current calendar month (Manila). */
+  invoicesCollectedThisMonthCentavos: bigint;
+  /** Number of invoices currently awaiting admin review (status = submitted). */
+  pendingInvoices: number;
 }
 
 export async function getDashboardStats(): Promise<AdminDashboardStats> {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Manila month boundary: UTC+8, no DST.
+  const nowManila = new Date(Date.now() + 8 * 3_600_000);
+  const monthStartManila = new Date(
+    Date.UTC(nowManila.getUTCFullYear(), nowManila.getUTCMonth(), 1) - 8 * 3_600_000,
+  );
 
   const [
     [pendingV],
@@ -73,6 +84,8 @@ export async function getDashboardStats(): Promise<AdminDashboardStats> {
     [bookings7d],
     [pendingPay],
     pendingList,
+    [invoiceMonth],
+    [pendingInv],
   ] = await Promise.all([
     db
       .select({ n: count() })
@@ -102,6 +115,21 @@ export async function getDashboardStats(): Promise<AdminDashboardStats> {
       .where(and(eq(venues.status, "pending_review"), isNull(venues.deletedAt)))
       .orderBy(asc(venues.createdAt))
       .limit(5),
+    db
+      .select({
+        total: sql<string>`coalesce(sum(${ownerInvoices.totalCentavos}), 0)`.mapWith(String),
+      })
+      .from(ownerInvoices)
+      .where(
+        and(
+          eq(ownerInvoices.status, "verified"),
+          gte(ownerInvoices.verifiedAt, monthStartManila),
+        ),
+      ),
+    db
+      .select({ n: count() })
+      .from(ownerInvoices)
+      .where(eq(ownerInvoices.status, "submitted")),
   ]);
 
   return {
@@ -113,6 +141,8 @@ export async function getDashboardStats(): Promise<AdminDashboardStats> {
     feeAccruedLast7DaysCentavos: BigInt(bookings7d?.fee ?? "0"),
     pendingPaymentBookings: pendingPay?.n ?? 0,
     recentPendingVenues: pendingList,
+    invoicesCollectedThisMonthCentavos: BigInt(invoiceMonth?.total ?? "0"),
+    pendingInvoices: pendingInv?.n ?? 0,
   };
 }
 

@@ -6,6 +6,7 @@ import {
   aggregateBookingFeesForPeriod,
   applyReceiptToInvoice,
   findInvoiceForOwner,
+  getCarryoverForVenue,
   upsertOpenInvoice,
 } from "./repo";
 import { OwnerInvoiceError } from "./errors";
@@ -102,7 +103,15 @@ export async function generateWeeklyInvoices(args: {
       invoicesSkippedZeroFees += 1;
       continue;
     }
-    if (row.feesCentavos < MIN_INVOICE_CENTAVOS) {
+
+    // Carryover: unbilled fees from prior periods not yet covered by a non-void invoice.
+    const carryoverCentavos = await getCarryoverForVenue({
+      venueId: row.venueId,
+      periodStart: args.periodStart,
+    });
+    const totalCentavos = row.feesCentavos + carryoverCentavos;
+
+    if (totalCentavos < MIN_INVOICE_CENTAVOS) {
       invoicesSkippedBelowMin += 1;
       continue;
     }
@@ -112,7 +121,7 @@ export async function generateWeeklyInvoices(args: {
       periodEnd: args.periodEnd,
       bookingCount: row.bookingCount,
       feesCentavos: row.feesCentavos,
-      carryoverCentavos: 0n,
+      carryoverCentavos,
       dueDate: toDateString(dueDate),
       status: "open",
     });

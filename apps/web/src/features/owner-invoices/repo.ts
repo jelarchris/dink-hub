@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
@@ -49,6 +49,51 @@ export async function aggregateBookingFeesForPeriod(args: {
     bookingCount: Number(r.bookingCount),
     feesCentavos: BigInt(r.feesCentavos as unknown as string | number | bigint),
   }));
+}
+
+/**
+ * Compute the unbilled carryover for a single venue as of a given period start.
+ *
+ * Carryover = (all confirmed booking fees for the venue whose startAt < periodStart)
+ *           − (fees_centavos already billed in any non-void invoice for the venue)
+ *
+ * A negative result (over-billed edge case) is clamped to 0n.
+ * This is called per-venue during weekly invoice generation so each query hits
+ * a small row count; no full-table scan.
+ */
+export async function getCarryoverForVenue(args: {
+  venueId: string;
+  periodStart: Date;
+}): Promise<bigint> {
+  const [totalFees, alreadyBilled] = await Promise.all([
+    db
+      .select({
+        total: sql<string>`coalesce(sum(${bookings.systemFeeCentavos}), 0)`.mapWith(String),
+      })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.venueId, args.venueId),
+          eq(bookings.status, "confirmed"),
+          sql`${bookings.startAt} < ${args.periodStart}`,
+        ),
+      ),
+    db
+      .select({
+        billed: sql<string>`coalesce(sum(${ownerInvoices.feesCentavos}), 0)`.mapWith(String),
+      })
+      .from(ownerInvoices)
+      .where(
+        and(
+          eq(ownerInvoices.venueId, args.venueId),
+          ne(ownerInvoices.status, "void"),
+        ),
+      ),
+  ]);
+
+  const total = BigInt(totalFees[0]?.total ?? "0");
+  const billed = BigInt(alreadyBilled[0]?.billed ?? "0");
+  return total > billed ? total - billed : 0n;
 }
 
 /**

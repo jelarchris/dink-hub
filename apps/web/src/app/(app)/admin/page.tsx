@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Building2, Clock, Users, Wallet } from "lucide-react";
+import { ArrowRight, Building2, Clock, FileText, Receipt, Users, Wallet } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +49,24 @@ export default async function AdminDashboardPage() {
           subtitle={`Fee accrued: ${formatPHP(stats.feeAccruedLast7DaysCentavos)}`}
           icon={<Users className="size-5 text-[var(--color-brand-600)]" />}
           href="/admin/users"
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <StatCard
+          title="Fees collected this month"
+          value={formatPHP(stats.invoicesCollectedThisMonthCentavos)}
+          subtitle="Verified owner invoices (calendar month, Manila)"
+          icon={<Receipt className="size-5 text-emerald-600" />}
+          href="/admin/invoices?status=verified"
+        />
+        <StatCard
+          title="Invoices awaiting review"
+          value={stats.pendingInvoices.toString()}
+          subtitle="Submitted receipts in the queue"
+          icon={<FileText className="size-5 text-orange-600" />}
+          href="/admin/invoices?status=submitted"
+          accent={stats.pendingInvoices > 0 ? "warning" : "neutral"}
         />
       </div>
 
