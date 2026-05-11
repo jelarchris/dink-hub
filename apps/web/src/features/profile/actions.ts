@@ -3,16 +3,29 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/features/auth/service";
 import type { ActionResult } from "@/features/auth/actions";
+import { captureException } from "@/lib/observability";
+import { updateProfile, ProfileValidationError } from "./service";
 
-// Re-export so callers can import the type from here if needed.
+// Re-exported for callers that wire forms with useActionState.
 export type { ActionResult };
-import { updateProfileSchema } from "./schema";
-import { updateProfile } from "./service";
 
-function fail(message: string, code: string, fieldErrors?: Record<string, string[]>): ActionResult {
+function fail(
+  message: string,
+  code: string,
+  fieldErrors?: Record<string, string[]>,
+): ActionResult {
   return { ok: false, code, message, ...(fieldErrors ? { fieldErrors } : {}) };
 }
 
+/**
+ * Server action: update the current user's own profile.
+ *
+ * Auth: re-checks the session — never trust the form. The service receives
+ * `user.id` from the session, so a malicious payload cannot target another
+ * user's row.
+ *
+ * Idempotent: re-submitting the same values is a no-op (single UPDATE).
+ */
 export async function updateProfileAction(
   _prev: ActionResult | null,
   form: FormData,
@@ -20,32 +33,29 @@ export async function updateProfileAction(
   const user = await getCurrentUser();
   if (!user) return fail("Sign in to update your profile", "unauthenticated");
 
+  // Build raw input from the form. Checkbox absence == false (HTML default),
+  // so notif prefs are always booleans, never undefined.
+  const genderRaw = form.get("gender");
   const raw = {
-    displayName: form.get("displayName"),
-    phoneE164: form.get("phoneE164"),
-    gender: form.get("gender") || undefined,
-    city: form.get("city"),
+    displayName: form.get("displayName") ?? "",
+    phoneE164: form.get("phoneE164") ?? "",
+    gender: typeof genderRaw === "string" && genderRaw !== "" ? genderRaw : undefined,
+    city: form.get("city") ?? "",
     notifEmailDailyDigest: form.get("notifEmailDailyDigest") === "on",
     notifEmailPaymentSubmitted: form.get("notifEmailPaymentSubmitted") === "on",
     notifEmailBookingCancelled: form.get("notifEmailBookingCancelled") === "on",
   };
 
-  const parsed = updateProfileSchema.safeParse(raw);
-  if (!parsed.success) {
-    const fieldErrors: Record<string, string[]> = {};
-    for (const [field, errs] of Object.entries(parsed.error.flatten().fieldErrors)) {
-      if (errs) fieldErrors[field] = errs;
-    }
-    return fail("Please fix the errors below", "validation_failed", fieldErrors);
-  }
-
   try {
-    await updateProfile(user.id, parsed.data);
+    await updateProfile(user.id, raw);
     revalidatePath("/me/profile");
     revalidatePath("/me");
     return { ok: true, data: {} };
   } catch (err) {
-    console.error("[profile.update]", err);
+    if (err instanceof ProfileValidationError) {
+      return fail("Please fix the errors below", err.code, err.fieldErrors);
+    }
+    captureException(err, { scope: "profile.update", userId: user.id });
     return fail("Something went wrong. Please try again.", "unknown");
   }
 }

@@ -73,6 +73,7 @@ function sectionsFor(role: Role): DrawerSection[] {
         links: [
           { href: "/owner", label: "Owner dashboard", icon: LayoutDashboard },
           { href: "/me/bookings", label: "My bookings", icon: CalendarDays },
+          { href: "/me/profile", label: "Edit profile", icon: UserCircle2 },
         ],
       },
       {
@@ -99,6 +100,7 @@ function sectionsFor(role: Role): DrawerSection[] {
       heading: "Your account",
       links: [
         { href: "/admin", label: "Admin dashboard", icon: ShieldCheck },
+        { href: "/me/profile", label: "Edit profile", icon: UserCircle2 },
       ],
     },
     {
