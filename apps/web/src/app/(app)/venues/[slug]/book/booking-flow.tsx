@@ -25,12 +25,13 @@ export interface BookingFlowProps {
     imageUrl: string | null;
   }>;
   /** Occupancy for ALL courts across the full 14-day window. */
-  occupancy: ReadonlyArray<{ courtId: string; startAtIso: string; endAtIso: string }>;
+  occupancy: ReadonlyArray<{ courtId: string; startAtIso: string; endAtIso: string; kind: "booking" | "hold" | "closure" }>;
 }
 
 interface OccupiedRange {
   start: number;
   end: number;
+  kind: "booking" | "hold" | "closure";
 }
 
 export function BookingFlow({
@@ -52,7 +53,7 @@ export function BookingFlow({
     const map = new Map<string, OccupiedRange[]>();
     for (const r of occupancy) {
       const arr = map.get(r.courtId) ?? [];
-      arr.push({ start: new Date(r.startAtIso).getTime(), end: new Date(r.endAtIso).getTime() });
+      arr.push({ start: new Date(r.startAtIso).getTime(), end: new Date(r.endAtIso).getTime(), kind: r.kind });
       map.set(r.courtId, arr);
     }
     return map;
@@ -133,6 +134,11 @@ export function BookingFlow({
             const iso = s.toISOString();
             const available = isAvailable(s);
             const isPicked = pickedSlotIso === iso;
+            const slotStartMs = s.getTime();
+            const slotEndMs = slotStartMs + SLOT_MINUTES * 60_000;
+            const isClosed = !available && courtRanges.some(
+              (r) => r.kind === "closure" && r.start < slotEndMs && r.end > slotStartMs,
+            );
             return (
               <button
                 key={iso}
@@ -160,7 +166,7 @@ export function BookingFlow({
                       : "text-[var(--color-fg-subtle)]",
                   )}
                 >
-                  {available ? formatPHP(slotPriceCentavos) : "Booked"}
+                  {available ? formatPHP(slotPriceCentavos) : isClosed ? "Closed" : "Booked"}
                 </span>
               </button>
             );

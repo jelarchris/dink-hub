@@ -12,6 +12,7 @@ export type BookingErrorCode =
   | "court_inactive"
   | "venue_inactive"
   | "slot_not_available" // EXCLUDE constraint hit OR overlapping hold
+  | "court_closed" // slot overlaps an active court_closure window
   | "hold_not_found"
   | "hold_expired"
   | "hold_not_owned"

@@ -75,6 +75,7 @@ export default async function BookCourtPage({
           courtId: r.courtId,
           startAtIso: r.startAt.toISOString(),
           endAtIso: r.endAt.toISOString(),
+          kind: r.kind,
         }))}
       />
     </Container>

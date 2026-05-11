@@ -94,6 +94,10 @@ export async function holdSlot(input: HoldSlotInput): Promise<SlotHold> {
     throw new BookingError("venue_inactive", "Venue is not accepting bookings");
   }
 
+  if (await repo.hasActiveClosureInRange({ courtId, startAt, endAt })) {
+    throw new BookingError("court_closed", "Court is closed during this time window");
+  }
+
   try {
     return await repo.insertSlotHold({
       playerId,
@@ -151,6 +155,10 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
   }
   if (courtRow.venue.status !== "active" || courtRow.venue.deletedAt) {
     throw new BookingError("venue_inactive", "Venue is not accepting bookings");
+  }
+
+  if (await repo.hasActiveClosureInRange({ courtId, startAt, endAt })) {
+    throw new BookingError("court_closed", "Court is closed during this time window");
   }
 
   // Booking-fee snapshot. During the launch promo this is 0; otherwise it's
@@ -665,6 +673,10 @@ export async function rescheduleBookingByOwner(
       newCourtFeeCentavos = computeCourtFeeCentavos(durationMin, newCourtRow.court.hourlyRateCentavos);
     }
     // ────────────────────────────────────────────────────────────────────────
+
+    if (await repo.hasActiveClosureInRange({ courtId: targetCourtId, startAt: newStartAt, endAt: newEndAt }, tx)) {
+      throw new BookingError("court_closed", "Court is closed during this time window");
+    }
 
     // Preserve the truly-original time across multiple reschedules.
     const isFirstReschedule = booking.originalStartAt === null;

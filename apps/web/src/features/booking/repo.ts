@@ -1,8 +1,9 @@
 import "server-only";
-import { and, desc, eq, gt, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
+  courtClosures,
   courts,
   ledgerEntries,
   payments,
@@ -34,6 +35,30 @@ type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 // ----------------------------------------------------------------------------
 // Reads
 // ----------------------------------------------------------------------------
+
+/**
+ * Returns true if any active (non-deleted) closure for the given court
+ * overlaps the [startAt, endAt) window. Interval overlap: closure.startAt < endAt && closure.endAt > startAt.
+ * Called by booking and reschedule flows to block creation during scheduled closures.
+ */
+export async function hasActiveClosureInRange(
+  args: { courtId: string; startAt: Date; endAt: Date },
+  exec: Executor = db,
+): Promise<boolean> {
+  const rows = await exec
+    .select({ id: courtClosures.id })
+    .from(courtClosures)
+    .where(
+      and(
+        eq(courtClosures.courtId, args.courtId),
+        isNull(courtClosures.deletedAt),
+        lt(courtClosures.startAt, args.endAt),
+        gt(courtClosures.endAt, args.startAt),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
 
 export async function findCourtById(
   courtId: string,

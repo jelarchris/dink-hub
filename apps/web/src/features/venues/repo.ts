@@ -104,9 +104,9 @@ export async function getCourtOccupancy(args: {
   courtId: string;
   fromUtc: Date;
   toUtc: Date;
-}): Promise<{ ranges: Array<{ startAt: Date; endAt: Date; kind: "booking" | "hold" }> }> {
+}): Promise<{ ranges: Array<{ startAt: Date; endAt: Date; kind: "booking" | "hold" | "closure" }> }> {
   // Inline raw SQL for the union: faster + clearer than two queries.
-  const result = await db.execute<{ start_at: Date; end_at: Date; kind: "booking" | "hold" }>(sql`
+  const result = await db.execute<{ start_at: Date; end_at: Date; kind: "booking" | "hold" | "closure" }>(sql`
     select start_at, end_at, 'booking'::text as kind
     from bookings
     where court_id = ${args.courtId}
@@ -118,6 +118,13 @@ export async function getCourtOccupancy(args: {
     from slot_holds
     where court_id = ${args.courtId}
       and expires_at > now()
+      and start_at < ${args.toUtc.toISOString()}
+      and end_at > ${args.fromUtc.toISOString()}
+    union all
+    select start_at, end_at, 'closure'::text as kind
+    from court_closures
+    where court_id = ${args.courtId}
+      and deleted_at is null
       and start_at < ${args.toUtc.toISOString()}
       and end_at > ${args.fromUtc.toISOString()}
   `);
@@ -139,7 +146,7 @@ export async function getCourtsOccupancy(args: {
   courtIds: ReadonlyArray<string>;
   fromUtc: Date;
   toUtc: Date;
-}): Promise<Array<{ courtId: string; startAt: Date; endAt: Date; kind: "booking" | "hold" }>> {
+}): Promise<Array<{ courtId: string; startAt: Date; endAt: Date; kind: "booking" | "hold" | "closure" }>> {
   if (args.courtIds.length === 0) return [];
   const ids = sql.join(
     args.courtIds.map((id) => sql`${id}`),
@@ -149,7 +156,7 @@ export async function getCourtsOccupancy(args: {
     court_id: string;
     start_at: Date;
     end_at: Date;
-    kind: "booking" | "hold";
+    kind: "booking" | "hold" | "closure";
   }>(sql`
     select court_id, start_at, end_at, 'booking'::text as kind
     from bookings
@@ -162,6 +169,13 @@ export async function getCourtsOccupancy(args: {
     from slot_holds
     where court_id in (${ids})
       and expires_at > now()
+      and start_at < ${args.toUtc.toISOString()}
+      and end_at > ${args.fromUtc.toISOString()}
+    union all
+    select court_id, start_at, end_at, 'closure'::text as kind
+    from court_closures
+    where court_id in (${ids})
+      and deleted_at is null
       and start_at < ${args.toUtc.toISOString()}
       and end_at > ${args.fromUtc.toISOString()}
   `);
