@@ -35,8 +35,8 @@ function Hero() {
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-pretty text-lg text-[var(--color-fg-muted)]">
           DinkHub started with a simple frustration: there was no easy way to
-          see which pickleball courts were free in Agusan del Sur — let alone
-          book one.
+          see which pickleball courts were available in Agusan del Sur —
+          let alone book one.
         </p>
       </Container>
     </section>
@@ -64,7 +64,7 @@ function Story() {
           <p className="text-lg leading-relaxed">
             So I built DinkHub — the platform I wished existed when I picked
             up a paddle for the first time. A place where any player can see
-            which courts are free tonight, this weekend, or two weeks from
+            which courts are open tonight, this weekend, or two weeks from
             now, and reserve one in under a minute. And a place where venue
             owners stop losing bookings to missed messages.
           </p>
