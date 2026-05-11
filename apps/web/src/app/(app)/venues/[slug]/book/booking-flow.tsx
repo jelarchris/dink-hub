@@ -49,7 +49,8 @@ export function BookingFlow({
   const selectedCourt = courts.find((c) => c.id === selectedCourtId) ?? courts[0]!;
   const hourlyRate = BigInt(selectedCourt.hourlyRateCentavos);
   const slotPriceCentavos = (BigInt(SLOT_MINUTES) * hourlyRate) / 60n;
-  const totalPriceCentavos = slotPriceCentavos * BigInt(Math.max(pickedCount, 1));
+  // Total scales with selection; rendered only when pickedCount > 0.
+  const totalPriceCentavos = slotPriceCentavos * BigInt(pickedCount);
 
   // Index occupancy once: courtId -> sorted ranges (millis).
   const occupancyByCourt = useMemo(() => {
@@ -88,10 +89,13 @@ export function BookingFlow({
   const pickedDateLabel =
     days.find((d) => d.isoDate === selectedDateIso)?.label ?? selectedDateIso;
   const pickedStartDate = pickedStartIso ? new Date(pickedStartIso) : null;
+  // Derived once — reused in both the slot map and the footer bar.
+  const pickedStartMs = pickedStartDate ? pickedStartDate.getTime() : null;
   const pickedEndDate =
     pickedStartDate && pickedCount > 0
       ? addMinutes(pickedStartDate, SLOT_MINUTES * pickedCount)
       : null;
+  const pickedEndMs = pickedEndDate ? pickedEndDate.getTime() : null;
   const canContinue = pickedStartIso !== null && pickedCount > 0;
 
   function pickCourt(id: string): void {
@@ -155,22 +159,38 @@ export function BookingFlow({
       setPickedCount(pickedCount + 1);
       return;
     }
-    // inside selection or non-adjacent → reset to single
+    // Inside selection or non-adjacent. Guard: a mid-selection slot can become
+    // unavailable if a hold expires while the page is open. In that case clear
+    // rather than create a booking for a taken slot.
+    if (!isAvailable(slotStart)) {
+      setPickedStartIso(null);
+      setPickedCount(0);
+      return;
+    }
     setPickedStartIso(slotStart.toISOString());
     setPickedCount(1);
   }
 
-  /** Compact range label for a 1-hour slot, e.g. "6 – 7 PM" or "11 AM – 12 PM". */
+  /**
+   * Compact range label for a 1-hour slot, e.g. "6 – 7 PM" or "11 AM – 12 PM".
+   * Parses `formatTimeManila` output robustly: case-insensitive AM/PM, handles
+   * dot-separated variants ("a.m.") and narrow no-break spaces (\u202F) that
+   * some ICU versions emit before the period designator.
+   */
   function slotRangeLabel(start: Date): string {
     const end = addMinutes(start, SLOT_MINUTES);
-    const startLabel = formatTimeManila(start); // "6:00 AM"
+    const startLabel = formatTimeManila(start);
     const endLabel = formatTimeManila(end);
-    const startPeriod = startLabel.endsWith("PM") ? "PM" : "AM";
-    const endPeriod = endLabel.endsWith("PM") ? "PM" : "AM";
-    const stripPeriod = (s: string) => s.replace(/\s?(AM|PM)$/, "");
-    const stripMinsZero = (s: string) => s.replace(/:00$/, "");
-    const startCore = stripMinsZero(stripPeriod(startLabel));
-    const endCore = stripMinsZero(stripPeriod(endLabel));
+    // Detect period regardless of case or dot-separation
+    const isPm = (s: string) => /p\.?m\.?/i.test(s);
+    const startPeriod = isPm(startLabel) ? "PM" : "AM";
+    const endPeriod = isPm(endLabel) ? "PM" : "AM";
+    // Strip the period designator (and any preceding whitespace incl. \u202F)
+    const stripPeriod = (s: string) => s.replace(/[\s\u202f]*[ap]\.?m\.?\s*$/i, "").trim();
+    // Strip trailing ":00" (whole hours have no meaningful minute display)
+    const stripMins = (s: string) => s.replace(/:00$/, "");
+    const startCore = stripMins(stripPeriod(startLabel));
+    const endCore = stripMins(stripPeriod(endLabel));
     return startPeriod === endPeriod
       ? `${startCore} – ${endCore} ${endPeriod}`
       : `${startCore} ${startPeriod} – ${endCore} ${endPeriod}`;
@@ -215,9 +235,8 @@ export function BookingFlow({
             const available = isAvailable(s);
             const slotStartMs = s.getTime();
             const slotEndMs = slotStartMs + SLOT_MINUTES * 60_000;
-            const pickedStartMs = pickedStartIso ? new Date(pickedStartIso).getTime() : null;
-            const pickedEndMs =
-              pickedStartMs !== null ? pickedStartMs + pickedCount * SLOT_MINUTES * 60_000 : null;
+            // pickedStartMs / pickedEndMs are hoisted outside this map — no
+            // redundant Date construction per iteration.
             const isPicked =
               pickedStartMs !== null &&
               pickedEndMs !== null &&
