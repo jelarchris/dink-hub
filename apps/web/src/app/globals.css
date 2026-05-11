@@ -127,6 +127,28 @@ body {
   }
 }
 
+/* Mobile UX guards (iOS Safari):
+   1. Inputs ≥16px font-size prevent the focus auto-zoom.
+   2. `touch-action: manipulation` disables the 300ms double-tap-to-zoom on
+      interactive elements while preserving pinch-zoom for accessibility. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+button,
+a,
+[role="button"],
+input,
+textarea,
+select,
+label {
+  touch-action: manipulation;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-brand-500);
   outline-offset: 2px;

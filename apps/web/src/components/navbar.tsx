@@ -154,17 +154,24 @@ export function Navbar({ user }: NavbarProps) {
   );
 
   // Close mobile menu on Escape key + lock body scroll while drawer is open.
+  // Defense-in-depth: an outer effect ALWAYS resets body.overflow on unmount,
+  // so a stale lock can never persist after navigation, errors, or fast-refresh.
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
   useEffect(() => {
     if (!menuOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setMenuOpen(false);
     }
     document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = "";
     };
   }, [menuOpen]);
 
@@ -202,25 +209,21 @@ export function Navbar({ user }: NavbarProps) {
   // uses `backdrop-blur`, which per CSS spec creates a containing block for
   // `position: fixed` descendants — making the drawer scoped to the header
   // box (64px tall) instead of the viewport. Portaling to <body> avoids that.
-  const drawer = user && mounted
+  //
+  // The overlay is conditionally rendered (not just pointer-events toggled) so
+  // when closed it cannot intercept touches on iOS Safari — a real bug we hit
+  // where users could see the page but couldn't tap inputs / scroll until reload.
+  const drawer = user && mounted && menuOpen
     ? createPortal(
         <div
-          className={cn(
-            "fixed inset-0 z-50 sm:hidden",
-            menuOpen ? "pointer-events-auto" : "pointer-events-none",
-          )}
-          aria-hidden={!menuOpen}
+          className="fixed inset-0 z-50 sm:hidden"
         >
           {/* Backdrop */}
           <button
             type="button"
             aria-label="Close menu"
-            tabIndex={menuOpen ? 0 : -1}
             onClick={() => setMenuOpen(false)}
-            className={cn(
-              "absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200",
-              menuOpen ? "opacity-100" : "opacity-0",
-            )}
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
 
           {/* Panel */}
@@ -229,10 +232,7 @@ export function Navbar({ user }: NavbarProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Mobile navigation"
-            className={cn(
-              "absolute inset-y-0 right-0 flex h-full w-[88vw] max-w-sm flex-col bg-[var(--color-bg)] shadow-2xl transition-transform duration-300 ease-out",
-              menuOpen ? "translate-x-0" : "translate-x-full",
-            )}
+            className="absolute inset-y-0 right-0 flex h-full w-[88vw] max-w-sm flex-col bg-[var(--color-bg)] shadow-2xl"
           >
             {/* Drawer header: identity + close */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border-default)] px-5 pb-4 pt-5">
