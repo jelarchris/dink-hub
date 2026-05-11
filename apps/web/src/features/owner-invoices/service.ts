@@ -70,6 +70,8 @@ export interface GenerateWeeklyInvoicesResult {
   invoicesSkippedExisting: number;
   invoicesSkippedZeroFees: number;
   invoicesSkippedBelowMin: number;
+  /** IDs of invoices created in this run — used by the cron to send issued emails. */
+  createdInvoiceIds: string[];
 }
 
 /**
@@ -93,6 +95,7 @@ export async function generateWeeklyInvoices(args: {
   let invoicesSkippedExisting = 0;
   let invoicesSkippedZeroFees = 0;
   let invoicesSkippedBelowMin = 0;
+  const createdInvoiceIds: string[] = [];
 
   for (const row of aggregates) {
     if (row.feesCentavos <= 0n) {
@@ -103,7 +106,7 @@ export async function generateWeeklyInvoices(args: {
       invoicesSkippedBelowMin += 1;
       continue;
     }
-    const { inserted } = await upsertOpenInvoice({
+    const { inserted, invoice } = await upsertOpenInvoice({
       venueId: row.venueId,
       periodStart: args.periodStart,
       periodEnd: args.periodEnd,
@@ -113,8 +116,12 @@ export async function generateWeeklyInvoices(args: {
       dueDate: toDateString(dueDate),
       status: "open",
     });
-    if (inserted) invoicesCreated += 1;
-    else invoicesSkippedExisting += 1;
+    if (inserted) {
+      invoicesCreated += 1;
+      createdInvoiceIds.push(invoice.id);
+    } else {
+      invoicesSkippedExisting += 1;
+    }
   }
 
   const result: GenerateWeeklyInvoicesResult = {
@@ -125,6 +132,7 @@ export async function generateWeeklyInvoices(args: {
     invoicesSkippedExisting,
     invoicesSkippedZeroFees,
     invoicesSkippedBelowMin,
+    createdInvoiceIds,
   };
   return result;
 }

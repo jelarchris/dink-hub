@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { ownerInvoices, profiles, venues } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
 import {
+  ownerInvoiceIssuedEmail,
   ownerInvoiceRejectedEmail,
   ownerInvoiceVerifiedEmail,
 } from "@/lib/email/templates";
@@ -83,5 +84,23 @@ export async function notifyOwnerInvoiceRejected(
     await sendEmail({ to: ctx.ownerEmail, ...tpl, tag: "owner_invoice_rejected" });
   } catch (err) {
     captureException(err, { scope: "notify.owner_invoice_rejected", extra: { invoiceId } });
+  }
+}
+
+export async function notifyOwnerInvoiceIssued(invoiceId: string): Promise<void> {
+  try {
+    const ctx = await loadInvoiceJoin(invoiceId);
+    if (!ctx) return;
+    const tpl = ownerInvoiceIssuedEmail({
+      invoiceId: ctx.invoiceId,
+      venueName: ctx.venueName,
+      periodStart: ctx.periodStart,
+      periodEnd: ctx.periodEnd,
+      totalCentavos: ctx.totalCentavos,
+      ownerDisplayName: ctx.ownerDisplayName,
+    });
+    await sendEmail({ to: ctx.ownerEmail, ...tpl, tag: "owner_invoice_issued" });
+  } catch (err) {
+    captureException(err, { scope: "notify.owner_invoice_issued", extra: { invoiceId } });
   }
 }

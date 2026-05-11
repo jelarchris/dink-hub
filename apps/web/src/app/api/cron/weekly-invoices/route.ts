@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { captureException } from "@/lib/observability";
 import { computePriorWeekPeriod, generateWeeklyInvoices } from "@/features/owner-invoices";
+import { notifyOwnerInvoiceIssued } from "@/features/owner-invoices/notifications";
 
 /**
  * Cron route — runs every Monday 06:00 Manila (= 22:00 UTC Sunday) via the
@@ -36,6 +37,14 @@ export async function POST(req: Request) {
   try {
     const period = computePriorWeekPeriod(new Date());
     const result = await generateWeeklyInvoices(period);
+
+    // Notify each newly-issued invoice owner. notifyOwnerInvoiceIssued never
+    // throws — errors are captured to Sentry internally. We run them in
+    // parallel since each is an independent email dispatch.
+    if (result.createdInvoiceIds.length > 0) {
+      await Promise.all(result.createdInvoiceIds.map((id) => notifyOwnerInvoiceIssued(id)));
+    }
+
     return NextResponse.json({ ok: true, durationMs: Date.now() - startedAt, ...result });
   } catch (err) {
     captureException(err, { scope: "cron.weekly-invoices" });
