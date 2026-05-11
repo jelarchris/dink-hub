@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Menu, X } from "lucide-react";
 import { signOutAction } from "@/features/auth";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -12,26 +13,34 @@ export interface NavbarProps {
 }
 
 /**
- * Scroll-aware nav: visible at the top of the page, hides on scroll-down,
- * reveals on scroll-up. The promo banner above it scrolls away naturally.
+ * Scroll-aware nav: visible at the top, hides on scroll-down, reveals on scroll-up.
+ * On mobile the horizontal nav links are replaced by a hamburger menu that
+ * slides open a full-width panel below the header.
  *
- * Implementation notes:
- *   - rAF-throttled scroll listener avoids running React state updates on every
- *     scroll event (60+ Hz); we coalesce into one update per frame.
- *   - SHOW_THRESHOLD prevents the nav from flickering on tiny scroll jitters
- *     (e.g. iOS rubber-band, trackpad inertia).
- *   - HIDE_AFTER ensures the nav stays visible across the promo banner area;
- *     it can only hide once the user has scrolled past that height.
- *   - `passive: true` on the listener so we never block scroll on slow devices.
+ * rAF-throttled scroll listener coalesces updates to one per frame so React
+ * state never updates at 60+ Hz. SHOW/HIDE thresholds prevent jitter from iOS
+ * rubber-band and trackpad inertia. HIDE_AFTER keeps the nav visible while the
+ * promo banner is still on screen.
  */
-const SHOW_THRESHOLD = 6; // px of upward delta before showing
-const HIDE_THRESHOLD = 8; // px of downward delta before hiding
-const HIDE_AFTER = 80;    // don't hide while still near the top of the page
+const SHOW_THRESHOLD = 6; // px upward delta before revealing
+const HIDE_THRESHOLD = 8; // px downward delta before hiding
+const HIDE_AFTER = 80;    // don't hide until scrolled past this offset
 
 export function Navbar({ user }: NavbarProps) {
   const [hidden, setHidden] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const lastYRef = useRef(0);
   const tickingRef = useRef(false);
+
+  // Close mobile menu on Escape key.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   useEffect(() => {
     lastYRef.current = window.scrollY;
@@ -43,10 +52,11 @@ export function Navbar({ user }: NavbarProps) {
         const y = window.scrollY;
         const delta = y - lastYRef.current;
         if (y < HIDE_AFTER) {
-          // Always visible near the top.
           setHidden(false);
         } else if (delta > HIDE_THRESHOLD) {
+          // Collapse mobile menu when the nav hides so it doesn't reappear stale.
           setHidden(true);
+          setMenuOpen(false);
         } else if (delta < -SHOW_THRESHOLD) {
           setHidden(false);
         }
@@ -59,6 +69,9 @@ export function Navbar({ user }: NavbarProps) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const navLinkClass =
+    "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors";
+
   return (
     <header
       className={cn(
@@ -67,6 +80,7 @@ export function Navbar({ user }: NavbarProps) {
       )}
     >
       <Container>
+        {/* ── Top bar ── */}
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
             <span
@@ -78,31 +92,33 @@ export function Navbar({ user }: NavbarProps) {
             <span className="text-lg">DinkHub</span>
           </Link>
 
+          {/* Desktop nav */}
           <nav className="hidden items-center gap-6 text-sm sm:flex">
-            <Link href="/venues" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+            <Link href="/venues" className={navLinkClass}>
               Find courts
             </Link>
             {user?.role === "venue_owner" && (
-              <Link href="/owner" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+              <Link href="/owner" className={navLinkClass}>
                 Owner dashboard
               </Link>
             )}
             {user?.role === "admin" && (
-              <Link href="/admin" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+              <Link href="/admin" className={navLinkClass}>
                 Admin
               </Link>
             )}
             {user && (
-              <Link href="/me/bookings" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+              <Link href="/me/bookings" className={navLinkClass}>
                 My bookings
               </Link>
             )}
           </nav>
 
-          <div className="flex items-center gap-2">
+          {/* Desktop right actions */}
+          <div className="hidden items-center gap-2 sm:flex">
             {user ? (
               <>
-                <span className="hidden text-sm text-[var(--color-fg-muted)] sm:inline">
+                <span className="text-sm text-[var(--color-fg-muted)]">
                   {user.displayName}
                 </span>
                 <form action={signOutAction}>
@@ -114,9 +130,7 @@ export function Navbar({ user }: NavbarProps) {
             ) : (
               <>
                 <Link href="/sign-in">
-                  <Button variant="ghost" size="sm">
-                    Sign in
-                  </Button>
+                  <Button variant="ghost" size="sm">Sign in</Button>
                 </Link>
                 <Link href="/sign-up">
                   <Button size="sm">Get started</Button>
@@ -124,8 +138,115 @@ export function Navbar({ user }: NavbarProps) {
               </>
             )}
           </div>
+
+          {/* Mobile: sign-in/up buttons OR hamburger */}
+          <div className="flex items-center gap-2 sm:hidden">
+            {!user && (
+              <>
+                <Link href="/sign-in">
+                  <Button variant="ghost" size="sm">Sign in</Button>
+                </Link>
+                <Link href="/sign-up">
+                  <Button size="sm">Get started</Button>
+                </Link>
+              </>
+            )}
+            {user && (
+              <button
+                type="button"
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={menuOpen}
+                aria-controls="mobile-menu"
+                onClick={() => setMenuOpen((o) => !o)}
+                className="inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+              >
+                {menuOpen ? <X size={22} /> : <Menu size={22} />}
+              </button>
+            )}
+          </div>
         </div>
       </Container>
+
+      {/* ── Mobile drawer ── */}
+      {user && (
+        <div
+          id="mobile-menu"
+          role="navigation"
+          aria-label="Mobile navigation"
+          className={cn(
+            "overflow-hidden border-t border-[var(--color-border-default)] transition-[max-height,opacity] duration-200 ease-out sm:hidden",
+            menuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0",
+          )}
+        >
+          <Container>
+            <div className="flex flex-col gap-1 py-3">
+              {/* User identity */}
+              <p className="px-3 py-2 text-xs font-medium uppercase tracking-widest text-[var(--color-fg-subtle)]">
+                {user.displayName}
+              </p>
+
+              <Link
+                href="/venues"
+                onClick={() => setMenuOpen(false)}
+                className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+              >
+                Find courts
+              </Link>
+
+              {user.role === "player" && (
+                <Link
+                  href="/me/bookings"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+                >
+                  My bookings
+                </Link>
+              )}
+
+              {user.role === "venue_owner" && (
+                <>
+                  <Link
+                    href="/me/bookings"
+                    onClick={() => setMenuOpen(false)}
+                    className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+                  >
+                    My bookings
+                  </Link>
+                  <Link
+                    href="/owner"
+                    onClick={() => setMenuOpen(false)}
+                    className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+                  >
+                    Owner dashboard
+                  </Link>
+                </>
+              )}
+
+              {user.role === "admin" && (
+                <Link
+                  href="/admin"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+                >
+                  Admin
+                </Link>
+              )}
+
+              {/* Sign out at the bottom of the drawer */}
+              <div className="mt-1 border-t border-[var(--color-border-default)] pt-2">
+                <form action={signOutAction}>
+                  <button
+                    type="submit"
+                    className="w-full rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm font-medium text-[var(--color-danger-600)] hover:bg-[var(--color-bg-subtle)]"
+                  >
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            </div>
+          </Container>
+        </div>
+      )}
     </header>
   );
 }
