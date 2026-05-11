@@ -9,7 +9,7 @@ export interface NavbarProps {
 
 export function Navbar({ user }: NavbarProps) {
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--color-border-default)] bg-[var(--color-bg)]/80 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-bg)]/60">
+    <header className="border-b border-[var(--color-border-default)] bg-[var(--color-bg)]">
       <Container>
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
