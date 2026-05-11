@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -551,14 +552,14 @@ function Footer() {
     <footer className="mt-auto border-t border-[var(--color-border-default)] bg-[var(--color-bg)] px-4 py-6 sm:px-6 lg:px-8">
       <Container className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <div className="flex items-center gap-2 font-bold">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-7 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-500)] text-white"
-            >
-              D
-            </span>
-            <span>DinkHub</span>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/dinkhublogofinal.png"
+              alt="DinkHub"
+              className="h-7 w-auto"
+              width={105}
+              height={28}
+            />
           </div>
           <p className="mt-3 text-sm text-[var(--color-fg-muted)]">
             Pickleball court bookings for the Philippines. Built in Agusan del

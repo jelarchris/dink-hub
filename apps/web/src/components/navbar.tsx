@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type SVGProps } from "react";
 import { createPortal } from "react-dom";
@@ -321,14 +322,15 @@ export function Navbar({ user }: NavbarProps) {
       <Container>
         {/* ── Top bar ── */}
         <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
-            <span
-              aria-hidden="true"
-              className="inline-flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-500)] text-white"
-            >
-              D
-            </span>
-            <span className="text-lg">DinkHub</span>
+          <Link href="/" className="flex items-center gap-2">
+            <Image
+              src="/dinkhublogofinal.png"
+              alt="DinkHub"
+              className="h-8 w-auto"
+              width={120}
+              height={32}
+              priority
+            />
           </Link>
 
           {/* Desktop nav */}

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
@@ -11,14 +12,14 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
   return (
     <div className="flex min-h-svh flex-col bg-[var(--color-bg-subtle)]">
       <header className="px-4 py-6 sm:px-6 lg:px-8">
-        <Link href="/" className="inline-flex items-center gap-2 font-bold tracking-tight">
-          <span
-            aria-hidden="true"
-            className="inline-flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-500)] text-white"
-          >
-            D
-          </span>
-          <span className="text-lg">DinkHub</span>
+        <Link href="/" className="inline-flex items-center gap-2">
+          <Image
+            src="/dinkhublogofinal.png"
+            alt="DinkHub"
+            className="h-8 w-auto"
+            width={120}
+            height={32}
+          />
         </Link>
       </header>
       <main className="flex flex-1 items-center justify-center px-4 pb-16 pt-4 sm:px-6 lg:px-8">
