@@ -47,33 +47,21 @@ function Story() {
   return (
     <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <Container className="max-w-3xl">
-        <div className="prose prose-neutral max-w-none space-y-5 text-[var(--color-fg-muted)]">
-          <p className="text-lg leading-relaxed">
-            I&apos;m a pickleball player myself. Here in Agusan del Sur, just
-            finding a court to play on was a problem. I didn&apos;t know which
-            venues existed, where they were, or who to ask. The only way to
-            find out was to scroll through Facebook groups, ask around in
-            chats, and hope someone replied.
+        <div className="prose prose-neutral max-w-none space-y-4 text-[var(--color-fg-muted)]">
+          <p className="text-base leading-relaxed sm:text-lg">
+            I&apos;m a pickleball player myself. Here in Agusan del Sur,
+            even finding a court was hard — I&apos;d scroll Facebook groups
+            and ask around in chats just to know which venues existed. And
+            once I found one, I still had to message or call to check if a
+            slot was open, then wait. By the time I got a reply, the court
+            was usually taken.
           </p>
-          <p className="text-lg leading-relaxed">
-            And even after I found a venue, the booking part was just as
-            painful. I&apos;d message or call to ask if a slot was open, then
-            wait. Sometimes the reply came an hour later. Sometimes not at
-            all. By the time I got a confirmation, the court was already
-            taken — or the people I was supposed to play with had moved on.
-          </p>
-          <p className="text-lg leading-relaxed">
-            There was no shared calendar. No real-time availability. No way
-            to discover venues, see open slots, and pay in one place. Just a
-            group chat, a few screenshots, and a lot of waiting.
-          </p>
-          <p className="text-lg leading-relaxed">
-            So I built DinkHub — one place for every pickleball venue in the
-            country. A directory where players can discover courts in their
-            area, see what&apos;s open tonight or two weeks from now, and
-            reserve a slot in under a minute. And a home where venue owners
-            stop losing bookings to missed messages and finally get found by
-            the players already looking for them.
+          <p className="text-base leading-relaxed sm:text-lg">
+            So I built DinkHub — one place for every pickleball venue in
+            the country. Players discover courts in their area, see
+            what&apos;s open, and book in under a minute. Venue owners stop
+            losing bookings to missed messages and finally get found by the
+            players already looking for them.
           </p>
         </div>
       </Container>
