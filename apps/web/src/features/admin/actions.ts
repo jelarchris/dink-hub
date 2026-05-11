@@ -19,7 +19,7 @@ import {
   togglePayoutHold,
 } from "./payouts";
 import { openDispute, resolveDispute } from "./disputes";
-import { rejectOwnerInvoice, verifyOwnerInvoice } from "./owner-invoices";
+import { rejectOwnerInvoice, verifyOwnerInvoice, voidOwnerInvoice } from "./owner-invoices";
 import {
   notifyBookingForceCancelled,
   notifyDisputeOpened,
@@ -42,6 +42,7 @@ import {
   updateUserRoleInputSchema,
   venueReviewInputSchema,
   verifyOwnerInvoiceInputSchema,
+  voidOwnerInvoiceInputSchema,
 } from "./schema";
 
 function fail(message: string, code = "unknown"): ActionResult {
@@ -486,6 +487,40 @@ export async function rejectOwnerInvoiceAction(
   }
 
   await notifyOwnerInvoiceRejected(parsed.data.invoiceId, parsed.data.reason);
+
+  revalidatePath("/admin/invoices");
+  revalidatePath(`/admin/invoices/${parsed.data.invoiceId}`);
+  revalidatePath("/owner/invoices");
+  revalidatePath(`/owner/invoices/${parsed.data.invoiceId}`);
+  return { ok: true, data: undefined };
+}
+
+export async function voidOwnerInvoiceAction(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  let admin;
+  try {
+    admin = await requireAdmin();
+  } catch (err) {
+    return unwrap(err);
+  }
+
+  const parsed = voidOwnerInvoiceInputSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the errors below.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  try {
+    await voidOwnerInvoice(admin, parsed.data);
+  } catch (err) {
+    return unwrap(err);
+  }
 
   revalidatePath("/admin/invoices");
   revalidatePath(`/admin/invoices/${parsed.data.invoiceId}`);

@@ -256,4 +256,11 @@ export const rejectOwnerInvoiceInputSchema = z.object({
 });
 export type RejectOwnerInvoiceInput = z.infer<typeof rejectOwnerInvoiceInputSchema>;
 
+export const voidOwnerInvoiceInputSchema = z.object({
+  invoiceId: uuidSchema,
+  expectedVersion: z.coerce.number().int().min(1),
+  reason: z.string().trim().min(3, "Reason is required").max(500),
+});
+export type VoidOwnerInvoiceInput = z.infer<typeof voidOwnerInvoiceInputSchema>;
+
 export const PAGE_SIZE = 25;

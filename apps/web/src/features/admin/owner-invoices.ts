@@ -19,6 +19,7 @@ import {
   type OwnerInvoiceListFilter,
   type RejectOwnerInvoiceInput,
   type VerifyOwnerInvoiceInput,
+  type VoidOwnerInvoiceInput,
 } from "./schema";
 
 /**
@@ -300,6 +301,75 @@ export async function rejectOwnerInvoice(
     await recordAudit({
       actor: admin,
       action: "owner_invoice.reject",
+      targetType: "owner_invoice",
+      targetId: updated.id,
+      before: { status: inv.status, version: inv.version },
+      after: { status: updated.status, version: updated.version },
+      reason: input.reason,
+    });
+
+    return updated;
+  });
+}
+
+// ============================================================================
+// void — admin cancels an invoice (dispute resolution, data correction, etc.)
+// Only open / submitted / rejected invoices can be voided.
+// Verified invoices cannot — the cash was already received and ledger settled.
+// ============================================================================
+export async function voidOwnerInvoice(
+  admin: Profile,
+  input: VoidOwnerInvoiceInput,
+): Promise<OwnerInvoice> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(ownerInvoices)
+      .where(eq(ownerInvoices.id, input.invoiceId))
+      .limit(1);
+    const inv = rows[0];
+    if (!inv) throw new AdminError("invoice_not_found", "Invoice not found.");
+    if (inv.version !== input.expectedVersion) {
+      throw new AdminError(
+        "version_conflict",
+        "Invoice was changed in another tab. Reload to see the latest.",
+      );
+    }
+    const VOIDABLE: ReadonlyArray<string> = ["open", "submitted", "rejected"];
+    if (!VOIDABLE.includes(inv.status)) {
+      throw new AdminError(
+        "invalid_status_transition",
+        `Cannot void an invoice in status "${inv.status}". Only open, submitted, or rejected invoices may be voided.`,
+      );
+    }
+
+    const [updated] = await tx
+      .update(ownerInvoices)
+      .set({
+        status: "void",
+        rejectionReason: input.reason,
+        verifiedAt: null,
+        verifiedBy: null,
+        version: inv.version + 1,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(ownerInvoices.id, inv.id),
+          eq(ownerInvoices.version, inv.version),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      throw new AdminError(
+        "version_conflict",
+        "Invoice was changed in another tab. Reload to see the latest.",
+      );
+    }
+
+    await recordAudit({
+      actor: admin,
+      action: "owner_invoice.void",
       targetType: "owner_invoice",
       targetId: updated.id,
       before: { status: inv.status, version: inv.version },

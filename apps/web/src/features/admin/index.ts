@@ -13,4 +13,5 @@ export {
   updateSystemFeeAction,
   updateUserRoleAction,
   verifyOwnerInvoiceAction,
+  voidOwnerInvoiceAction,
 } from "./actions";

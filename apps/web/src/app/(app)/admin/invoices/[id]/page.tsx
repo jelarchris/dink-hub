@@ -12,6 +12,7 @@ import { formatPHP } from "@/lib/money";
 import { OwnerInvoiceStatusBadge } from "../_components/owner-invoice-status-badge";
 import { RejectInvoiceForm } from "../_components/reject-invoice-form";
 import { VerifyInvoiceForm } from "../_components/verify-invoice-form";
+import { VoidInvoiceForm } from "../_components/void-invoice-form";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin · Invoice" };
@@ -49,7 +50,11 @@ export default async function AdminInvoiceDetailPage({ params }: PageProps) {
   }
 
   const { invoice, venue, owner, submittedByEmail, ledger } = detail;
-  const isActionable = invoice.status === "submitted";
+  const isVerifiable = invoice.status === "submitted";
+  const isVoidable =
+    invoice.status === "open" ||
+    invoice.status === "submitted" ||
+    invoice.status === "rejected";
 
   // Receipt is private — admin-authorized signed URL with 5-min TTL.
   const receiptUrl = invoice.receiptImagePath
@@ -140,7 +145,7 @@ export default async function AdminInvoiceDetailPage({ params }: PageProps) {
             </CardContent>
           </Card>
 
-          {isActionable && (
+          {isVerifiable && (
             <>
               <Card>
                 <CardContent className="space-y-3 pt-6">
@@ -171,7 +176,23 @@ export default async function AdminInvoiceDetailPage({ params }: PageProps) {
             </>
           )}
 
-          {!isActionable && (
+          {isVoidable && (
+            <Card>
+              <CardContent className="space-y-3 pt-6">
+                <h2 className="font-semibold">Void invoice</h2>
+                <p className="text-xs text-[var(--color-fg-muted)]">
+                  Permanently cancels this invoice. Use for dispute resolution
+                  or data corrections. Verified invoices cannot be voided.
+                </p>
+                <VoidInvoiceForm
+                  invoiceId={invoice.id}
+                  version={invoice.version}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {!isVerifiable && !isVoidable && (
             <Alert variant="info" className="text-xs">
               No further actions available — this invoice is{" "}
               <strong>{invoice.status}</strong>.
