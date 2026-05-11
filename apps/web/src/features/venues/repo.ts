@@ -1,8 +1,10 @@
 import "server-only";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { courts, venues, type Court, type Venue } from "@/db/schema";
+import { courts, reviews, venues, type Court, type Venue } from "@/db/schema";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
+
+export type VenueSort = "name" | "price_asc" | "rating_desc";
 
 /**
  * Read-only repo for the public venue browsing surface.
@@ -23,12 +25,62 @@ export interface VenueListItem {
   >;
   courtCount: number;
   minHourlyRateCentavos: bigint | null;
+  avgRating: number | null;
+  reviewCount: number;
 }
 
-export async function listActiveVenues(opts: {
+export interface ListActiveVenuesOptions {
   limit: number;
   offset?: number;
-}): Promise<VenueListItem[]> {
+  /** Case-insensitive substring match on venue name. */
+  query?: string;
+  /** Exact city match. */
+  city?: string;
+  /** Default: name asc. */
+  sort?: VenueSort;
+}
+
+export async function listActiveVenues(opts: ListActiveVenuesOptions): Promise<VenueListItem[]> {
+  const wheres = [eq(venues.status, "active"), isNull(venues.deletedAt)];
+  const trimmedQuery = opts.query?.trim();
+  if (trimmedQuery) {
+    // ILIKE with escaped wildcard chars to keep pure substring semantics.
+    const escaped = trimmedQuery.replace(/[\\%_]/g, (c) => `\\${c}`);
+    wheres.push(ilike(venues.name, `%${escaped}%`));
+  }
+  if (opts.city) {
+    wheres.push(eq(venues.city, opts.city));
+  }
+
+  // Rating aggregate joined as a correlated subquery so the LEFT JOIN on
+  // courts doesn't multiply review counts. Hidden reviews excluded.
+  const ratingAgg = sql<string | null>`(
+    select avg(${reviews.rating})::text
+    from ${reviews}
+    where ${reviews.venueId} = ${venues.id} and ${reviews.isHidden} = false
+  )`;
+  const reviewCountAgg = sql<number>`(
+    select count(*)::int
+    from ${reviews}
+    where ${reviews.venueId} = ${venues.id} and ${reviews.isHidden} = false
+  )`;
+
+  const orderBy = (() => {
+    switch (opts.sort) {
+      case "price_asc":
+        return [
+          // NULLS LAST so venues with no courts sink to the bottom.
+          sql`min(${courts.hourlyRateCentavos}) asc nulls last`,
+          asc(venues.name),
+        ];
+      case "rating_desc":
+        return [sql`${ratingAgg} desc nulls last`, asc(venues.name)];
+      case "name":
+      default:
+        return [asc(venues.name)];
+    }
+  })();
+
   const rows = await db
     .select({
       id: venues.id,
@@ -42,15 +94,17 @@ export async function listActiveVenues(opts: {
       description: venues.description,
       courtCount: sql<number>`count(${courts.id})::int`,
       minHourlyRateCentavos: sql<string | null>`min(${courts.hourlyRateCentavos})::text`,
+      avgRating: ratingAgg,
+      reviewCount: reviewCountAgg,
     })
     .from(venues)
     .leftJoin(
       courts,
       and(eq(courts.venueId, venues.id), eq(courts.isActive, true), isNull(courts.deletedAt)),
     )
-    .where(and(eq(venues.status, "active"), isNull(venues.deletedAt)))
+    .where(and(...wheres))
     .groupBy(venues.id)
-    .orderBy(asc(venues.name))
+    .orderBy(...orderBy)
     .limit(opts.limit)
     .offset(opts.offset ?? 0);
 
@@ -67,7 +121,28 @@ export async function listActiveVenues(opts: {
     },
     courtCount: r.courtCount,
     minHourlyRateCentavos: r.minHourlyRateCentavos !== null ? BigInt(r.minHourlyRateCentavos) : null,
+    avgRating: r.avgRating !== null ? Number(r.avgRating) : null,
+    reviewCount: r.reviewCount,
   }));
+}
+
+export interface CityOption {
+  city: string;
+  venueCount: number;
+}
+
+/** Distinct cities with at least one active, non-deleted venue. Ordered by venue count desc. */
+export async function listActiveVenueCities(): Promise<CityOption[]> {
+  const rows = await db
+    .select({
+      city: venues.city,
+      venueCount: sql<number>`count(*)::int`,
+    })
+    .from(venues)
+    .where(and(eq(venues.status, "active"), isNull(venues.deletedAt)))
+    .groupBy(venues.city)
+    .orderBy(desc(sql`count(*)`), asc(venues.city));
+  return rows.map((r) => ({ city: r.city, venueCount: r.venueCount }));
 }
 
 export async function findActiveVenueBySlug(
