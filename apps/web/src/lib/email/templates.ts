@@ -542,3 +542,138 @@ export function ownerDailyDigestEmail(ctx: {
       `\nTurn off this digest: ${APP_URL}/owner/settings\n`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// booking_rescheduled_by_owner → player
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the email template for owner-initiated reschedules.
+ * Also exports a helper to generate a minimal iCalendar VEVENT string so
+ * callers can attach it (as text/calendar) when the player needs to update
+ * their calendar app.
+ */
+export function bookingRescheduledByOwnerEmail(
+  ctx: BookingEmailContext & {
+    playerDisplayName: string;
+    oldStartAt: Date;
+    oldEndAt: Date;
+    reason?: string | null;
+  },
+) {
+  const fmtDt = (d: Date) =>
+    d.toLocaleString("en-PH", {
+      timeZone: "Asia/Manila",
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+  const oldWhen = `${fmtDt(ctx.oldStartAt)} – ${fmtDt(ctx.oldEndAt)}`;
+  const newWhen = `${fmtDt(ctx.startAt)} – ${fmtDt(ctx.endAt)}`;
+  const bookingLink = `${APP_URL}/me/bookings`;
+
+  const reasonHtml = ctx.reason
+    ? `<p style="margin:0 0 12px 0;font-size:14px;color:#64748b;"><strong>Reason:</strong> ${escapeHtml(ctx.reason)}</p>`
+    : "";
+  const reasonText = ctx.reason ? `Reason: ${ctx.reason}\n` : "";
+
+  return {
+    subject: `Your booking has been rescheduled — ${ctx.venueName}`,
+    html: shell({
+      heading: `Booking rescheduled`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)},</p>
+        <p style="margin:0 0 12px 0;"><strong>${escapeHtml(ctx.venueName)}</strong> has rescheduled your booking on <strong>${escapeHtml(ctx.courtName)}</strong>.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Original:</strong> ${escapeHtml(oldWhen)}</p>
+          <p style="margin:0 0 6px 0;"><strong>New time:</strong> ${escapeHtml(newWhen)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+        </div>
+        ${reasonHtml}
+        <p style="margin:0 0 12px 0;">A calendar invite is attached. If the new time doesn't work for you, please reply to this email to coordinate with the venue.</p>
+      `,
+      ctaHref: bookingLink,
+      ctaLabel: "View my bookings",
+    }),
+    text:
+      `Booking rescheduled — ${ctx.venueName}\n\n` +
+      `Hi ${ctx.playerDisplayName},\n\n` +
+      `${ctx.venueName} rescheduled your booking on ${ctx.courtName}.\n\n` +
+      `Original time: ${oldWhen}\n` +
+      `New time:      ${newWhen}\n` +
+      reasonText +
+      `\nA calendar invite (.ics) is attached.\n` +
+      `If the new time doesn't work, reply to this email to coordinate.\n\n` +
+      `View bookings: ${bookingLink}\n`,
+  };
+}
+
+/**
+ * Build a minimal RFC 5545 VEVENT string for the rescheduled booking.
+ * Returns a base64-encoded string suitable for Resend's `attachments[].content`.
+ *
+ * Notes:
+ *   - DTSTART/DTEND use the Asia/Manila TZID form so calendar apps display the
+ *     correct wall-clock time even when the server is UTC.
+ *   - UID is stable (booking ID) so repeated reschedules update the event.
+ *   - SEQUENCE increments with rescheduledCount so calendar apps replace the
+ *     old invite rather than adding a duplicate.
+ */
+export function buildRescheduleIcs(ctx: {
+  bookingId: string;
+  startAt: Date;
+  endAt: Date;
+  venueName: string;
+  courtName: string;
+  rescheduledCount: number;
+}): string {
+  // Format as local Manila wall-clock in iCal compact form: YYYYMMDDTHHmmss
+  const toIcalLocal = (d: Date): string => {
+    const manila = new Date(d.getTime() + 8 * 3_600_000); // UTC → UTC+8
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return (
+      String(manila.getUTCFullYear()) +
+      pad(manila.getUTCMonth() + 1) +
+      pad(manila.getUTCDate()) +
+      "T" +
+      pad(manila.getUTCHours()) +
+      pad(manila.getUTCMinutes()) +
+      pad(manila.getUTCSeconds())
+    );
+  };
+
+  const nowUtc = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//DinkHub//BookingCalendar//EN",
+    "METHOD:REQUEST",
+    "BEGIN:VTIMEZONE",
+    "TZID:Asia/Manila",
+    "BEGIN:STANDARD",
+    "TZOFFSETFROM:+0800",
+    "TZOFFSETTO:+0800",
+    "TZNAME:PST",
+    "DTSTART:19700101T000000",
+    "END:STANDARD",
+    "END:VTIMEZONE",
+    "BEGIN:VEVENT",
+    `UID:booking-${ctx.bookingId}@dinkhub.ph`,
+    `DTSTAMP:${nowUtc}`,
+    `DTSTART;TZID=Asia/Manila:${toIcalLocal(ctx.startAt)}`,
+    `DTEND;TZID=Asia/Manila:${toIcalLocal(ctx.endAt)}`,
+    `SUMMARY:Pickleball @ ${ctx.venueName} — ${ctx.courtName}`,
+    `DESCRIPTION:Court booking at ${ctx.venueName}\\, ${ctx.courtName}. Manage at ${APP_URL}/me/bookings`,
+    `SEQUENCE:${ctx.rescheduledCount}`,
+    "STATUS:CONFIRMED",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+
+  return Buffer.from(ics, "utf8").toString("base64");
+}

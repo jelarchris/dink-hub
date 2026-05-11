@@ -119,3 +119,35 @@ export function centavosToPhpString(centavos: bigint): string {
   const frac = (abs % 100n).toString().padStart(2, "0");
   return `${sign}${whole.toString()}.${frac}`;
 }
+
+// ----------------------------------------------------------------------------
+// court closure schemas (Tier 9)
+// ----------------------------------------------------------------------------
+
+export const courtClosureSchema = z.object({
+  courtId: z.string().uuid(),
+  // ISO 8601 with offset (+08:00) — the form serialises Manila wall-clock time.
+  startAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
+  endAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
+  reason: z
+    .string()
+    .trim()
+    .max(500, "Reason is too long")
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+}).refine((d) => d.endAt > d.startAt, {
+  message: "End time must be after start time.",
+  path: ["endAt"],
+});
+
+export type CourtClosureFormInput = z.infer<typeof courtClosureSchema>;
+
+export const removeCourtClosureSchema = z.object({
+  closureId: z.string().uuid(),
+});

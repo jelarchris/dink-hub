@@ -12,6 +12,12 @@ import { captureException } from "@/lib/observability";
  * business-critical path. We capture to Sentry and return an error result.
  */
 
+export interface EmailAttachment {
+  filename: string;
+  /** Base64-encoded file content. */
+  content: string;
+}
+
 export interface SendEmailInput {
   to: string | readonly string[];
   subject: string;
@@ -20,6 +26,7 @@ export interface SendEmailInput {
   replyTo?: string;
   /** Idempotency hint surfaced to Resend (and our logs). */
   tag?: string;
+  attachments?: readonly EmailAttachment[];
 }
 
 export type SendEmailResult =
@@ -51,6 +58,9 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     text: input.text,
     ...(input.replyTo ? { reply_to: input.replyTo } : {}),
     ...(input.tag ? { tags: [{ name: "category", value: input.tag }] } : {}),
+    ...(input.attachments && input.attachments.length > 0
+      ? { attachments: input.attachments.map((a) => ({ filename: a.filename, content: a.content })) }
+      : {}),
   };
 
   try {

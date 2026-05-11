@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { bookings, courts, payments, profiles, venues } from "@/db/schema";
@@ -6,6 +6,8 @@ import { sendEmail } from "@/lib/email/send";
 import {
   bookingCancelledByPlayerEmail,
   bookingForceCancelledEmail,
+  bookingRescheduledByOwnerEmail,
+  buildRescheduleIcs,
   disputeOpenedEmail,
   disputeResolvedEmail,
   paymentRejectedEmail,
@@ -27,6 +29,7 @@ interface BookingJoin {
   startAt: Date;
   endAt: Date;
   totalCentavos: bigint;
+  rescheduledCount: number;
   courtName: string;
   venueName: string;
   ownerEmail: string;
@@ -48,6 +51,7 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
       startAt: bookings.startAt,
       endAt: bookings.endAt,
       totalCentavos: bookings.totalCentavos,
+      rescheduledCount: bookings.rescheduledCount,
       playerId: bookings.playerId,
       courtName: courts.name,
       venueName: venues.name,
@@ -90,6 +94,7 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
     startAt: base.startAt,
     endAt: base.endAt,
     totalCentavos: base.totalCentavos,
+    rescheduledCount: base.rescheduledCount,
     courtName: base.courtName,
     venueName: base.venueName,
     ownerEmail: ownerRow.email,
@@ -232,43 +237,45 @@ export async function notifyBookingCancelledByOwner(bookingId: string, reason: s
 }
 
 /**
- * Owner-initiated reschedule notification. Inline minimal email \u2014 dedicated
- * template + ICS attachment is a follow-up.
+ * Owner-initiated reschedule notification. Sends a styled HTML email to the
+ * player with a .ics calendar invite so they can update their calendar app.
+ * The ICS UID is stable (booking ID) so repeated reschedules replace the
+ * existing calendar event rather than creating duplicates.
  */
 export async function notifyBookingRescheduledByOwner(
   bookingId: string,
   oldStartAt: Date,
   oldEndAt: Date,
+  reason?: string | null,
 ): Promise<void> {
   try {
     const ctx = await loadBookingJoin(bookingId);
     if (!ctx) return;
-    const fmt = (d: Date) =>
-      d.toLocaleString("en-PH", {
-        timeZone: "Asia/Manila",
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
-    const oldWhen = `${fmt(oldStartAt)} \u2013 ${fmt(oldEndAt)}`;
-    const newWhen = `${fmt(ctx.startAt)} \u2013 ${fmt(ctx.endAt)}`;
-    const subject = `Your booking was rescheduled \u2014 ${ctx.venueName}`;
-    const text =
-      `Hi ${ctx.playerDisplayName},\n\n` +
-      `${ctx.venueName} rescheduled your booking on ${ctx.courtName}.\n\n` +
-      `Original time: ${oldWhen}\n` +
-      `New time:      ${newWhen}\n\n` +
-      `If the new time doesn't work, reply to this email to coordinate with the venue.\n`;
-    const html =
-      `<p>Hi ${ctx.playerDisplayName},</p>` +
-      `<p><strong>${ctx.venueName}</strong> rescheduled your booking on <strong>${ctx.courtName}</strong>.</p>` +
-      `<p><strong>Original:</strong> ${oldWhen}<br/><strong>New:</strong> ${newWhen}</p>` +
-      `<p>If the new time doesn't work, reply to this email to coordinate with the venue.</p>`;
+    const tpl = bookingRescheduledByOwnerEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      playerDisplayName: ctx.playerDisplayName,
+      oldStartAt,
+      oldEndAt,
+      ...(reason ? { reason } : {}),
+    });
+    const icsContent = buildRescheduleIcs({
+      bookingId: ctx.bookingId,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      rescheduledCount: ctx.rescheduledCount,
+    });
     await sendEmail({
       to: ctx.playerEmail,
-      subject,
-      html,
-      text,
+      ...tpl,
       tag: "booking_rescheduled_by_owner",
+      attachments: [{ filename: "booking.ics", content: icsContent }],
     });
   } catch (err) {
     captureException(err, { scope: "notify.booking_rescheduled_by_owner", extra: { bookingId } });

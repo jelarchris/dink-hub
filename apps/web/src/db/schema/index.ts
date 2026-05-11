@@ -345,6 +345,22 @@ export const auditLog = pgTable("audit_log", {
 });
 
 // ----------------------------------------------------------------------------
+// court_closures — owner-scheduled blocks (maintenance, private events, etc.)
+// ----------------------------------------------------------------------------
+export const courtClosures = pgTable("court_closures", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  courtId: uuid("court_id")
+    .notNull()
+    .references(() => courts.id, { onDelete: "cascade" }),
+  createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  endAt: timestamp("end_at", { withTimezone: true }).notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+// ----------------------------------------------------------------------------
 // Inferred types — single source of truth for app code
 // ----------------------------------------------------------------------------
 export type Profile = typeof profiles.$inferSelect;
@@ -371,3 +387,5 @@ export type SystemSettings = typeof systemSettings.$inferSelect;
 export type NewSystemSettings = typeof systemSettings.$inferInsert;
 export type OwnerInvoice = typeof ownerInvoices.$inferSelect;
 export type NewOwnerInvoice = typeof ownerInvoices.$inferInsert;
+export type CourtClosure = typeof courtClosures.$inferSelect;
+export type NewCourtClosure = typeof courtClosures.$inferInsert;

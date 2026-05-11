@@ -3,10 +3,11 @@ import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { Alert } from "@/components/ui/alert";
 import { PageHeader } from "@/components/ui/page-header";
-import { getCourtForOwner } from "@/features/owner-venues/service";
+import { getCourtForOwner, listCourtClosures } from "@/features/owner-venues/service";
 import { OwnerVenueError } from "@/features/owner-venues/errors";
 import { updateCourtAction } from "@/features/owner-venues/actions";
 import { CourtForm } from "../court-form";
+import { CourtClosuresPanel } from "./_components/court-closures-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Edit court" };
@@ -32,10 +33,12 @@ export default async function EditCourtPage({
   }
 
   let court;
+  let closures;
   try {
     const data = await getCourtForOwner(courtId, profile.id);
     court = data.court;
     if (data.venue.id !== id) notFound();
+    closures = await listCourtClosures({ ownerId: profile.id, courtId });
   } catch (err) {
     if (err instanceof OwnerVenueError && err.code === "court_not_found") notFound();
     if (err instanceof OwnerVenueError && err.code === "forbidden") {
@@ -63,6 +66,9 @@ export default async function EditCourtPage({
         venueId={id}
         initial={court}
       />
+      <div className="mt-6 border-t border-[var(--color-border-default)] pt-6">
+        <CourtClosuresPanel courtId={courtId} initialClosures={closures} />
+      </div>
     </Container>
   );
 }

@@ -519,7 +519,7 @@ export async function cancelBookingByOwner(
   }
   const { bookingId, ownerId, expectedVersion, category, reason } = parsed.data;
 
-  return db.transaction(async (tx) => {
+  const { cancelled, oldStatus } = await db.transaction(async (tx) => {
     const booking = await repo.findBookingById(bookingId, tx);
     if (!booking) throw new BookingError("booking_not_found", "Booking not found");
     if (booking.version !== expectedVersion) {
@@ -545,7 +545,7 @@ export async function cancelBookingByOwner(
         : `[Owner cancel · ${category}] ${reason}`;
     const newNotes = booking.notes ? `${booking.notes}\n\n${noteSuffix}` : noteSuffix;
 
-    const cancelled = await repo.updateBookingStatus(
+    const cancelledRow = await repo.updateBookingStatus(
       bookingId,
       booking.version,
       {
@@ -558,11 +558,39 @@ export async function cancelBookingByOwner(
       },
       tx,
     );
-    if (!cancelled) {
+    if (!cancelledRow) {
       throw new BookingError("concurrent_modification", "Booking was modified concurrently");
     }
-    return cancelled;
+    return { cancelled: cancelledRow, oldStatus: booking.status };
   });
+
+  // Best-effort audit — never blocks or swallows the booking result.
+  try {
+    const { profiles: profilesTable } = await import("@/db/schema");
+    const { eq: eqOp } = await import("drizzle-orm");
+    const actorRows = await db
+      .select({ id: profilesTable.id, email: profilesTable.email })
+      .from(profilesTable)
+      .where(eqOp(profilesTable.id, ownerId))
+      .limit(1);
+    const actor = actorRows[0];
+    if (actor) {
+      const { recordAudit } = await import("@/features/admin/audit");
+      await recordAudit({
+        actor,
+        action: "booking.owner_cancel",
+        targetType: "booking",
+        targetId: bookingId,
+        before: { status: oldStatus },
+        after: { status: "cancelled" },
+        reason,
+      });
+    }
+  } catch (auditErr) {
+    console.error("[audit] booking.owner_cancel failed", auditErr);
+  }
+
+  return cancelled;
 }
 
 // ============================================================================
@@ -593,7 +621,7 @@ export async function rescheduleBookingByOwner(
     throw new BookingError("validation_failed", "New start time must be in the future");
   }
 
-  return db.transaction(async (tx) => {
+  const { updated, beforeState } = await db.transaction(async (tx) => {
     const booking = await repo.findBookingById(bookingId, tx);
     if (!booking) throw new BookingError("booking_not_found", "Booking not found");
     if (booking.version !== expectedVersion) {
@@ -672,11 +700,18 @@ export async function rescheduleBookingByOwner(
           ),
         )
         .returning();
-      const updated = rows[0];
-      if (!updated) {
+      const updatedRow = rows[0];
+      if (!updatedRow) {
         throw new BookingError("concurrent_modification", "Booking was modified concurrently");
       }
-      return updated;
+      return {
+        updated: updatedRow,
+        beforeState: {
+          startAt: booking.startAt,
+          endAt: booking.endAt,
+          courtId: booking.courtId,
+        },
+      };
     } catch (err) {
       if (isPgError(err, PG_EXCLUSION_VIOLATION)) {
         throw new BookingError("slot_not_available", "Target slot conflicts with another booking");
@@ -684,6 +719,38 @@ export async function rescheduleBookingByOwner(
       throw err;
     }
   });
+
+  // Best-effort audit — never blocks or swallows the booking result.
+  try {
+    const { profiles: profilesTable } = await import("@/db/schema");
+    const { eq: eqOp } = await import("drizzle-orm");
+    const actorRows = await db
+      .select({ id: profilesTable.id, email: profilesTable.email })
+      .from(profilesTable)
+      .where(eqOp(profilesTable.id, ownerId))
+      .limit(1);
+    const actor = actorRows[0];
+    if (actor) {
+      const { recordAudit } = await import("@/features/admin/audit");
+      await recordAudit({
+        actor,
+        action: "booking.owner_reschedule",
+        targetType: "booking",
+        targetId: bookingId,
+        before: beforeState,
+        after: {
+          startAt: updated.startAt,
+          endAt: updated.endAt,
+          courtId: updated.courtId,
+        },
+        reason: reason ?? null,
+      });
+    }
+  } catch (auditErr) {
+    console.error("[audit] booking.owner_reschedule failed", auditErr);
+  }
+
+  return updated;
 }
 
 // ============================================================================

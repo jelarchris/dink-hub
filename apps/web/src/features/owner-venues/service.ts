@@ -3,9 +3,11 @@ import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
+  courtClosures,
   courts,
   venues,
   type Court,
+  type CourtClosure,
   type Venue,
 } from "@/db/schema";
 import { OwnerVenueError } from "./errors";
@@ -340,3 +342,110 @@ export async function setCourtActive(args: {
 // Reference imports kept to satisfy lint when only some are used per build.
 void or;
 void sql;
+
+// ----------------------------------------------------------------------------
+// court closures — create / list / soft-delete (Tier 9)
+// ----------------------------------------------------------------------------
+
+export interface CourtClosureInput {
+  startAt: Date;
+  endAt: Date;
+  reason?: string | null;
+}
+
+/**
+ * Creates a scheduled closure block for a court. The DB EXCLUDE constraint
+ * rejects overlapping active closures on the same court automatically.
+ *
+ * Authorization: caller must own the venue the court belongs to.
+ */
+export async function addCourtClosure(args: {
+  ownerId: string;
+  courtId: string;
+  input: CourtClosureInput;
+}): Promise<CourtClosure> {
+  const { court } = await getCourtForOwner(args.courtId, args.ownerId);
+
+  if (args.input.endAt <= args.input.startAt) {
+    throw new OwnerVenueError("validation", "End time must be after start time.");
+  }
+
+  try {
+    const [created] = await db
+      .insert(courtClosures)
+      .values({
+        courtId: court.id,
+        createdBy: args.ownerId,
+        startAt: args.input.startAt,
+        endAt: args.input.endAt,
+        ...(args.input.reason ? { reason: args.input.reason } : {}),
+      })
+      .returning();
+    if (!created) throw new OwnerVenueError("unknown", "Failed to create closure.");
+    return created;
+  } catch (err) {
+    // PG EXCLUDE violation (23P01) → overlapping closure already exists
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code: string }).code === "23P01"
+    ) {
+      throw new OwnerVenueError(
+        "closure_overlap",
+        "This time window overlaps an existing closure for this court.",
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * Lists active (non-deleted) closures for a court, ordered by start_at asc.
+ * Does NOT paginate — courts are expected to have a small number of future
+ * closures at any time (< 50). Cap at 200 as a safety net.
+ */
+export async function listCourtClosures(args: {
+  ownerId: string;
+  courtId: string;
+}): Promise<CourtClosure[]> {
+  await getCourtForOwner(args.courtId, args.ownerId); // ownership guard
+
+  return db
+    .select()
+    .from(courtClosures)
+    .where(and(eq(courtClosures.courtId, args.courtId), isNull(courtClosures.deletedAt)))
+    .orderBy(asc(courtClosures.startAt))
+    .limit(200);
+}
+
+/**
+ * Soft-deletes a court closure. Idempotent — deleting an already-deleted
+ * closure is a no-op (not an error).
+ *
+ * Authorization: caller must own the venue the court belongs to.
+ */
+export async function removeCourtClosure(args: {
+  ownerId: string;
+  closureId: string;
+}): Promise<void> {
+  // Load the closure to verify ownership.
+  const rows = await db
+    .select({ closure: courtClosures, venueOwnerId: venues.ownerId })
+    .from(courtClosures)
+    .innerJoin(courts, eq(courts.id, courtClosures.courtId))
+    .innerJoin(venues, eq(venues.id, courts.venueId))
+    .where(eq(courtClosures.id, args.closureId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new OwnerVenueError("not_found", "Closure not found.");
+  if (row.venueOwnerId !== args.ownerId) {
+    throw new OwnerVenueError("forbidden", "You do not have access to this closure.");
+  }
+
+  // Soft-delete; already-deleted rows are silently skipped.
+  await db
+    .update(courtClosures)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(courtClosures.id, args.closureId), isNull(courtClosures.deletedAt)));
+}

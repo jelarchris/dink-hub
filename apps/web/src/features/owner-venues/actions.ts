@@ -579,7 +579,7 @@ export async function rescheduleBookingByOwnerAction(
   }
 
   if (oldStartAt && oldEndAt) {
-    await notifyBookingRescheduledByOwner(bookingId, oldStartAt, oldEndAt);
+    await notifyBookingRescheduledByOwner(bookingId, oldStartAt, oldEndAt, reason ?? null);
   }
 
   revalidatePath("/owner");
@@ -785,5 +785,108 @@ export async function closeBookingsForRangeAction(
   revalidatePath(`/owner/venues/${venueId}`);
 
   return { ok: true, data: { cancelledCount, skippedCount } };
+}
+
+// ============================================================================
+// Tier 9 — per-court closures (maintenance / private events)
+// ============================================================================
+
+const addCourtClosureFormSchema = z.object({
+  courtId: z.string().uuid(),
+  startAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
+  endAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s)),
+  reason: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+});
+
+export async function addCourtClosureAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = addCourtClosureFormSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const { courtId, startAt, endAt, reason } = parsed.data;
+
+  const { addCourtClosure } = await import("@/features/owner-venues/service");
+
+  try {
+    await addCourtClosure({
+      ownerId: guard.userId,
+      courtId,
+      input: { startAt, endAt, ...(reason ? { reason } : {}) },
+    });
+  } catch (err) {
+    if (isOwnerVenueError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[add-court-closure]", err);
+    return fail("Could not add closure. Please try again.");
+  }
+
+  revalidatePath("/owner");
+  // Revalidate court detail page — caller passes courtId, venueId is unknown
+  // here so we do a broad revalidate.
+  revalidatePath("/owner/venues", "layout");
+  return { ok: true, data: undefined as never };
+}
+
+const removeCourtClosureFormSchema = z.object({
+  closureId: z.string().uuid(),
+  courtId: z.string().uuid(),
+});
+
+export async function removeCourtClosureAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = removeCourtClosureFormSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Invalid request.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const { closureId } = parsed.data;
+
+  const { removeCourtClosure } = await import("@/features/owner-venues/service");
+
+  try {
+    await removeCourtClosure({ ownerId: guard.userId, closureId });
+  } catch (err) {
+    if (isOwnerVenueError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[remove-court-closure]", err);
+    return fail("Could not remove closure. Please try again.");
+  }
+
+  revalidatePath("/owner");
+  revalidatePath("/owner/venues", "layout");
+  return { ok: true, data: undefined as never };
 }
 
