@@ -10,6 +10,7 @@
     "lint": "pnpm --filter @dinkhub/web lint",
     "typecheck": "pnpm --filter @dinkhub/web typecheck",
     "test": "pnpm --filter @dinkhub/web test",
+    "test:e2e": "pnpm --filter @dinkhub/web test:e2e",
     "prepare": "husky"
   },
   "engines": {

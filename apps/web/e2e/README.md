@@ -1,7 +1,8 @@
 # E2E (Playwright)
 
 Catch-fire harness for Next 16 + Supabase. Covers public catalog smoke flows
-and authenticated player / owner / admin shells.
+and authenticated player / owner / admin shells, including the admin owner-
+invoice verification queue.
 
 ## Run
 

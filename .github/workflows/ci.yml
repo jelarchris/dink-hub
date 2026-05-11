@@ -52,6 +52,8 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
     # Tests need a real Supabase Postgres (cross-schema writes to auth.users
     # plus the EXCLUDE constraint cannot run on a stub). Skip when the
     # secret is not configured (forks, dependabot) so CI stays green.
@@ -75,7 +77,6 @@ jobs:
         if: ${{ env.DIRECT_URL != '' }}
         run: pnpm test
         env:
-          DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
           DATABASE_URL: ${{ secrets.TEST_DIRECT_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
@@ -85,9 +86,54 @@ jobs:
 
       - name: Skip tests notice
         if: ${{ env.DIRECT_URL == '' }}
-        env:
-          DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
         run: echo "::notice::TEST_DIRECT_URL secret not set — unit tests skipped. Configure it in repo Settings → Secrets to gate merges on tests."
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+    # Like unit tests, e2e needs a real Supabase Postgres/auth stack. Skip on
+    # forks and when TEST_DIRECT_URL is absent so outside PRs cannot access
+    # secrets and the quality job still gates type/lint/build.
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        if: ${{ env.DIRECT_URL != '' }}
+        run: pnpm --filter @dinkhub/web exec playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        if: ${{ env.DIRECT_URL != '' }}
+        run: pnpm --filter @dinkhub/web test:e2e
+        env:
+          E2E_PORT: 3100
+          E2E_TEST_TOKEN: ci_e2e_token_for_github_actions_2026
+          DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+          DATABASE_URL: ${{ secrets.TEST_DIRECT_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+          NEXT_PUBLIC_APP_ENV: ci
+
+      - name: Skip e2e notice
+        if: ${{ env.DIRECT_URL == '' }}
+        run: echo "::notice::TEST_DIRECT_URL secret not set — e2e tests skipped. Configure TEST_* Supabase secrets to gate merges on Playwright coverage."
 
   security-audit:
     name: Dependency Audit

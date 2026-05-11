@@ -32,6 +32,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
   async headers() {
     return [
       {
@@ -53,6 +54,6 @@ export default sentryEnabled
       silent: !process.env.SENTRY_AUTH_TOKEN,
       ...(process.env.SENTRY_ORG ? { org: process.env.SENTRY_ORG } : {}),
       ...(process.env.SENTRY_PROJECT ? { project: process.env.SENTRY_PROJECT } : {}),
-      disableLogger: true,
+      webpack: { treeshake: { removeDebugLogging: true } },
     })
   : nextConfig;

@@ -127,6 +127,23 @@ export interface SeededWorld {
   courtId: string;
 }
 
+export interface SeededOwnerInvoice {
+  id: string;
+  venueId: string;
+  ownerId: string;
+  version: number;
+}
+
+export interface CreateSubmittedOwnerInvoiceOptions {
+  label: string;
+  periodOffsetWeeks: number;
+  bookingCount?: number;
+  feesCentavos?: number;
+  carryoverCentavos?: number;
+}
+
+const DAY_MS = 86_400_000;
+
 export async function seedWorld(): Promise<SeededWorld> {
   const sql = pg();
   try {
@@ -186,6 +203,14 @@ async function wipeDomainData(
   ownerId: string,
   playerId: string,
 ): Promise<void> {
+  await sql`delete from public.ledger_entries where owner_invoice_id in (
+    select oi.id from public.owner_invoices oi
+    inner join public.venues v on v.id = oi.venue_id
+    where v.owner_id = ${ownerId}::uuid
+  )`;
+  await sql`delete from public.owner_invoices where venue_id in (
+    select id from public.venues where owner_id = ${ownerId}::uuid
+  )`;
   await sql`delete from public.ledger_entries where booking_id in (
     select id from public.bookings where player_id = ${playerId}::uuid
   )`;
@@ -200,6 +225,77 @@ async function wipeDomainData(
   await sql`delete from public.venues where owner_id = ${ownerId}::uuid`;
 }
 
+export async function createSubmittedOwnerInvoice(
+  opts: CreateSubmittedOwnerInvoiceOptions,
+): Promise<SeededOwnerInvoice> {
+  const sql = pg();
+  try {
+    const worldRows = (await sql`
+      select
+        v.id::text as venue_id,
+        v.owner_id::text as owner_id
+      from public.venues v
+      where v.slug = ${E2E.venue.slug}
+      limit 1
+    `) as Array<{ venue_id: string; owner_id: string }>;
+    const world = worldRows[0];
+    if (!world) throw new Error("[e2e seed] seeded venue not found");
+
+    const periodStart = new Date(
+      Date.parse("2026-01-05T00:00:00+08:00") + opts.periodOffsetWeeks * 7 * DAY_MS,
+    );
+    const periodEnd = new Date(periodStart.getTime() + 7 * DAY_MS);
+    const feesCentavos = opts.feesCentavos ?? 4_000;
+    const carryoverCentavos = opts.carryoverCentavos ?? 0;
+    const bookingCount = opts.bookingCount ?? 2;
+
+    const rows = (await sql`
+      insert into public.owner_invoices (
+        venue_id,
+        period_start,
+        period_end,
+        booking_count,
+        fees_centavos,
+        carryover_centavos,
+        due_date,
+        status,
+        receipt_hash,
+        gcash_reference_number,
+        amount_paid_centavos,
+        submitted_at,
+        submitted_by
+      )
+      values (
+        ${world.venue_id}::uuid,
+        ${periodStart},
+        ${periodEnd},
+        ${bookingCount},
+        ${feesCentavos},
+        ${carryoverCentavos},
+        ((${periodEnd}::timestamptz at time zone 'Asia/Manila')::date + 7),
+        'submitted'::public.owner_invoice_status,
+        ${`e2e-${opts.label}-${randomUUID()}`},
+        ${`E2E-${opts.label.toUpperCase()}`},
+        ${feesCentavos + carryoverCentavos},
+        now(),
+        ${world.owner_id}::uuid
+      )
+      returning id::text as id, venue_id::text as venue_id, version
+    `) as Array<{ id: string; venue_id: string; version: number }>;
+    const invoice = rows[0];
+    if (!invoice) throw new Error("[e2e seed] failed to insert owner invoice");
+
+    return {
+      id: invoice.id,
+      venueId: invoice.venue_id,
+      ownerId: world.owner_id,
+      version: invoice.version,
+    };
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
 export async function teardownWorld(): Promise<void> {
   const sql = pg();
   try {
@@ -207,7 +303,31 @@ export async function teardownWorld(): Promise<void> {
       select id::text as id from auth.users
       where email in (${E2E.admin.email}, ${E2E.owner.email}, ${E2E.player.email})
     `) as Array<{ id: string }>;
+
     for (const u of rows) {
+      await sql`delete from public.audit_log where actor_id = ${u.id}::uuid`;
+      await sql`delete from public.audit_log where target_id in (
+        select oi.id from public.owner_invoices oi
+        inner join public.venues v on v.id = oi.venue_id
+        where v.owner_id = ${u.id}::uuid
+      )`;
+      await sql`delete from public.audit_log where target_id in (
+        select id from public.venues where owner_id = ${u.id}::uuid
+      )`;
+      await sql`delete from public.audit_log where target_id in (
+        select id from public.bookings where player_id = ${u.id}::uuid
+      )`;
+    }
+
+    for (const u of rows) {
+      await sql`delete from public.ledger_entries where owner_invoice_id in (
+        select oi.id from public.owner_invoices oi
+        inner join public.venues v on v.id = oi.venue_id
+        where v.owner_id = ${u.id}::uuid
+      )`;
+      await sql`delete from public.owner_invoices where venue_id in (
+        select id from public.venues where owner_id = ${u.id}::uuid
+      )`;
       await sql`delete from public.ledger_entries where booking_id in (
         select id from public.bookings where player_id = ${u.id}::uuid
       )`;
@@ -220,6 +340,9 @@ export async function teardownWorld(): Promise<void> {
         select id from public.venues where owner_id = ${u.id}::uuid
       )`;
       await sql`delete from public.venues where owner_id = ${u.id}::uuid`;
+    }
+
+    for (const u of rows) {
       await sql`delete from public.profiles where id = ${u.id}::uuid`;
       await sql`delete from auth.identities where user_id = ${u.id}::uuid`;
       await sql`delete from auth.users where id = ${u.id}::uuid`;

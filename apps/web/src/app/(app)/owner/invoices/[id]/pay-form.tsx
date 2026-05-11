@@ -61,12 +61,7 @@ export function InvoiceReceiptForm({ invoiceId }: { invoiceId: string }) {
   }
 
   return (
-    <form
-      action={formAction}
-      className="flex flex-col gap-4"
-      encType="multipart/form-data"
-      noValidate
-    >
+    <form action={formAction} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="invoiceId" value={invoiceId} />
 
       {formError && <Alert variant="danger">{formError}</Alert>}
