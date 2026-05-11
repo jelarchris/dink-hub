@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type SVGProps } from "react";
+import { createPortal } from "react-dom";
 import {
   Menu,
   X,
@@ -137,6 +138,15 @@ export function Navbar({ user }: NavbarProps) {
   const lastYRef = useRef(0);
   const tickingRef = useRef(false);
 
+  // SSR-safe "is on client" flag for portal rendering. Server snapshot is
+  // false; client snapshot is true. Avoids hydration mismatch and avoids
+  // setState-in-effect.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+
   // Close mobile menu on Escape key + lock body scroll while drawer is open.
   useEffect(() => {
     if (!menuOpen) return;
@@ -182,8 +192,117 @@ export function Navbar({ user }: NavbarProps) {
   const navLinkClass =
     "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors";
 
+  // The drawer must be rendered OUTSIDE the <header> via a portal: the header
+  // uses `backdrop-blur`, which per CSS spec creates a containing block for
+  // `position: fixed` descendants — making the drawer scoped to the header
+  // box (64px tall) instead of the viewport. Portaling to <body> avoids that.
+  const drawer = user && mounted
+    ? createPortal(
+        <div
+          className={cn(
+            "fixed inset-0 z-50 sm:hidden",
+            menuOpen ? "pointer-events-auto" : "pointer-events-none",
+          )}
+          aria-hidden={!menuOpen}
+        >
+          {/* Backdrop */}
+          <button
+            type="button"
+            aria-label="Close menu"
+            tabIndex={menuOpen ? 0 : -1}
+            onClick={() => setMenuOpen(false)}
+            className={cn(
+              "absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200",
+              menuOpen ? "opacity-100" : "opacity-0",
+            )}
+          />
+
+          {/* Panel */}
+          <aside
+            id="mobile-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mobile navigation"
+            className={cn(
+              "absolute inset-y-0 right-0 flex h-full w-[88vw] max-w-sm flex-col bg-[var(--color-bg)] shadow-2xl transition-transform duration-300 ease-out",
+              menuOpen ? "translate-x-0" : "translate-x-full",
+            )}
+          >
+            {/* Drawer header: identity + close */}
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border-default)] px-5 pb-4 pt-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-subtle)] text-lg font-semibold text-[var(--color-fg)]"
+                >
+                  {initialsOf(user.displayName)}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-[var(--color-fg)]">
+                    {user.displayName}
+                  </p>
+                  <p className="truncate text-xs text-[var(--color-fg-muted)]">{user.email}</p>
+                  <span className="mt-1 inline-flex items-center rounded-full bg-[var(--color-brand-500)]/10 px-2 py-0.5 text-xs font-medium text-[var(--color-brand-600)]">
+                    {ROLE_BADGE[user.role]}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMenuOpen(false)}
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Sections (scrollable) */}
+            <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+              {sectionsFor(user.role).map((section) => (
+                <div key={section.heading}>
+                  <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-fg-subtle)]">
+                    {section.heading}
+                  </p>
+                  <div className="divide-y divide-[var(--color-border-default)] overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-bg-subtle)]">
+                    {section.links.map(({ href, label, icon: Icon }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)]"
+                      >
+                        <Icon size={18} className="text-[var(--color-fg-muted)]" />
+                        <span className="flex-1">{label}</span>
+                        <ChevronRight size={16} className="text-[var(--color-fg-subtle)]" />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Sign out pinned to bottom */}
+            <div className="border-t border-[var(--color-border-default)] p-4">
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--color-danger-600)] hover:bg-[var(--color-danger-600)]/10"
+                >
+                  <LogOut size={16} />
+                  Sign out
+                </button>
+              </form>
+            </div>
+          </aside>
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
-    <header
+    <>
+      <header
       className={cn(
         "sticky top-0 z-40 border-b border-[var(--color-border-default)] bg-[var(--color-bg)]/80 backdrop-blur transition-transform duration-200 ease-out supports-[backdrop-filter]:bg-[var(--color-bg)]/60",
         hidden && "-translate-y-full",
@@ -277,107 +396,9 @@ export function Navbar({ user }: NavbarProps) {
         </div>
       </Container>
 
-      {/* ── Mobile slide-in drawer ── */}
-      {user && (
-        <div
-          className={cn(
-            "fixed inset-0 z-50 sm:hidden",
-            menuOpen ? "pointer-events-auto" : "pointer-events-none",
-          )}
-          aria-hidden={!menuOpen}
-        >
-          {/* Backdrop */}
-          <button
-            type="button"
-            aria-label="Close menu"
-            tabIndex={menuOpen ? 0 : -1}
-            onClick={() => setMenuOpen(false)}
-            className={cn(
-              "absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200",
-              menuOpen ? "opacity-100" : "opacity-0",
-            )}
-          />
-
-          {/* Panel */}
-          <aside
-            id="mobile-menu"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Mobile navigation"
-            className={cn(
-              "absolute inset-y-0 right-0 flex h-full w-[88vw] max-w-sm flex-col bg-[var(--color-bg)] shadow-2xl transition-transform duration-300 ease-out",
-              menuOpen ? "translate-x-0" : "translate-x-full",
-            )}
-          >
-            {/* Drawer header: identity + close */}
-            <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
-              <div className="flex min-w-0 items-center gap-3">
-                <span
-                  aria-hidden="true"
-                  className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-subtle)] text-lg font-semibold text-[var(--color-fg)]"
-                >
-                  {initialsOf(user.displayName)}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-[var(--color-fg)]">
-                    {user.displayName}
-                  </p>
-                  <p className="truncate text-xs text-[var(--color-fg-muted)]">{user.email}</p>
-                  <span className="mt-1 inline-flex items-center rounded-full bg-[var(--color-brand-500)]/10 px-2 py-0.5 text-xs font-medium text-[var(--color-brand-600)]">
-                    {ROLE_BADGE[user.role]}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                aria-label="Close menu"
-                onClick={() => setMenuOpen(false)}
-                className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Sections (scrollable) */}
-            <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-4">
-              {sectionsFor(user.role).map((section) => (
-                <div key={section.heading}>
-                  <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-fg-subtle)]">
-                    {section.heading}
-                  </p>
-                  <div className="divide-y divide-[var(--color-border-default)] overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-bg-subtle)]/60">
-                    {section.links.map(({ href, label, icon: Icon }) => (
-                      <Link
-                        key={href}
-                        href={href}
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
-                      >
-                        <Icon size={18} className="text-[var(--color-fg-muted)]" />
-                        <span className="flex-1">{label}</span>
-                        <ChevronRight size={16} className="text-[var(--color-fg-subtle)]" />
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Sign out pinned to bottom */}
-            <div className="border-t border-[var(--color-border-default)] p-4">
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--color-danger-600)] hover:bg-[var(--color-danger-600)]/10"
-                >
-                  <LogOut size={16} />
-                  Sign out
-                </button>
-              </form>
-            </div>
-          </aside>
-        </div>
-      )}
+      {/* Mobile drawer is rendered via portal in `drawer` (see above). */}
     </header>
+    {drawer}
+    </>
   );
 }
