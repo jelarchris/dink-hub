@@ -119,7 +119,7 @@ function Hero() {
         </div>
 
         <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
-          Free for players · Venue owners pay only when players book
+          Always free for players. No account needed to browse.
         </p>
       </Container>
     </section>
