@@ -128,6 +128,18 @@ export default function SignUpPage() {
 
         <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signup" />
 
+        <p className="text-xs text-[var(--color-fg-subtle)] leading-relaxed">
+          By creating an account you agree to our{" "}
+          <Link href="/terms" className="underline hover:text-[var(--color-fg-muted)]" target="_blank" rel="noopener">
+            Terms of Service
+          </Link>{" "}
+          and acknowledge our{" "}
+          <Link href="/privacy" className="underline hover:text-[var(--color-fg-muted)]" target="_blank" rel="noopener">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+
         <SubmitButton size="lg" pendingLabel="Creating account" className="mt-1">
           Create account
         </SubmitButton>
