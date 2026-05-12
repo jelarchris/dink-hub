@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { BrandWordmark } from "@/components/brand-wordmark";
 import { OpenPlayTeaserForm } from "@/features/open-play-interest/components/open-play-teaser-form";
 import { redirect } from "next/navigation";
 import {
@@ -48,7 +47,6 @@ export default async function HomePage() {
       <Features />
       <OpenPlayTeaser />
       <FaqSection />
-      <Footer />
     </main>
   );
 }
@@ -119,7 +117,7 @@ function Hero() {
         </div>
 
         <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
-          One GCash payment. Court fee + small booking fee. No hidden charges.
+          One GCash payment. Court fee only during launch promo. No hidden charges.
         </p>
       </Container>
     </section>
@@ -563,7 +561,7 @@ function FaqSection() {
     },
     {
       q: "Are there extra fees?",
-      a: "No fees for players. The price you see is the price you pay — directly to the venue.",
+      a: "During the launch promo, players pay only the court fee directly to the venue. Any future booking fee will be shown clearly before you confirm.",
     },
     {
       q: "Can I cancel?",
@@ -612,85 +610,3 @@ function FaqSection() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Footer
-// ---------------------------------------------------------------------------
-
-function Footer() {
-  return (
-    <footer className="mt-auto border-t border-[var(--color-border-default)] bg-[var(--color-bg)] px-4 py-6 sm:px-6 lg:px-8">
-      <Container className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <BrandWordmark className="text-2xl" />
-          <p className="mt-3 text-sm text-[var(--color-fg-muted)]">
-            Pickleball court bookings for the Philippines. Built in Agusan del
-            Sur 🇵🇭
-          </p>
-          <p className="mt-2 text-xs text-[var(--color-fg-subtle)]">
-            Founded by{" "}
-            <Link
-              href="/about"
-              className="font-medium text-[var(--color-fg-muted)] underline-offset-2 hover:text-[var(--color-brand-600)] hover:underline"
-            >
-              Christian Jelar Joy D. Hisola
-            </Link>
-            {" "}· Founder
-          </p>
-        </div>
-        <FooterCol
-          title="Players"
-          links={[
-            { label: "Find a court", href: "/venues" },
-            { label: "Sign in", href: "/sign-in" },
-            { label: "Create account", href: "/sign-up" },
-          ]}
-        />
-        <FooterCol
-          title="Venues"
-          links={[
-            { label: "List your venue", href: "/sign-up?role=venue_owner" },
-            { label: "Owner sign in", href: "/sign-in?next=/owner" },
-          ]}
-        />
-        <FooterCol
-          title="Company"
-          links={[
-            { label: "About", href: "/about" },
-            { label: "Email us", href: "mailto:dinkhubofficial@gmail.com" },
-          ]}
-        />
-      </Container>
-      <Container className="mt-6 border-t border-[var(--color-border-default)] pt-4 text-center text-xs text-[var(--color-fg-subtle)]">
-        © {new Date().getFullYear()} DinkHub. All rights reserved.
-      </Container>
-    </footer>
-  );
-}
-
-function FooterCol({
-  title,
-  links,
-}: {
-  title: string;
-  links: ReadonlyArray<{ label: string; href: string }>;
-}) {
-  return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-fg)]">
-        {title}
-      </div>
-      <ul className="mt-3 space-y-2 text-sm">
-        {links.map((l) => (
-          <li key={l.href}>
-            <Link
-              href={l.href}
-              className="text-[var(--color-fg-muted)] hover:text-[var(--color-brand-700)]"
-            >
-              {l.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}

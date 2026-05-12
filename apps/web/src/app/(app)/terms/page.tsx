@@ -356,7 +356,9 @@ function Section({
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-semibold text-[var(--color-fg)]">{title}</h2>
-      <div className="space-y-3 text-sm leading-relaxed sm:text-base">{children}</div>
+      <div className="space-y-3 text-sm leading-relaxed sm:text-base [&_li]:mt-1 [&_li]:pl-1 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
+        {children}
+      </div>
     </section>
   );
 }
