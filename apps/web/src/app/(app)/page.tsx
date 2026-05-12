@@ -424,35 +424,84 @@ function ForOwnersBand() {
 }
 
 // ---------------------------------------------------------------------------
-// Open Play teaser — demand validation for Phase 2.5
+// Coming-soon roadmap — communicates ambition + captures interest
 // ---------------------------------------------------------------------------
 
 function OpenPlayTeaser() {
   return (
     <section
       className="border-t border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-12 sm:px-6 lg:px-8 lg:py-16"
-      aria-labelledby="open-play-heading"
+      aria-labelledby="roadmap-heading"
     >
-      <Container className="mx-auto max-w-2xl text-center">
-        <Badge variant="info" className="mb-4">
-          Coming soon
-        </Badge>
-        <h2
-          id="open-play-heading"
-          className="text-balance text-2xl font-bold tracking-tight sm:text-3xl"
+      <Container>
+        <div className="mx-auto max-w-2xl text-center">
+          <Badge variant="info" className="mb-4">
+            Roadmap
+          </Badge>
+          <h2
+            id="roadmap-heading"
+            className="text-balance text-2xl font-bold tracking-tight sm:text-3xl"
+          >
+            What&apos;s coming next
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-pretty text-sm text-[var(--color-fg-muted)] sm:text-base">
+            We&apos;re just getting started. Here&apos;s what we&apos;re building so
+            DinkHub becomes the home of pickleball in the Philippines.
+          </p>
+        </div>
+
+        <ul
+          role="list"
+          className="mx-auto mt-8 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3"
         >
-          Open Play sessions, near you.
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-pretty text-sm text-[var(--color-fg-muted)] sm:text-base">
-          No group? No problem. Drop in to scheduled sessions at your local court,
-          pay one small fee, and meet other players. We&apos;ll let you know the
-          moment Open Play opens in your area.
-        </p>
-        <div className="mx-auto mt-6 max-w-md text-left">
+          <RoadmapCard
+            icon={<Users />}
+            title="Open Play"
+            description="Drop in to scheduled sessions at your local court. No group needed — just show up, pay one small fee, and meet other players."
+          />
+          <RoadmapCard
+            icon={<Zap />}
+            title="Game Management"
+            description="In-app paddle queue, automatic court rotation, and live score keeping. Run your open play night without spreadsheets."
+          />
+          <RoadmapCard
+            icon={<Trophy />}
+            title="Tournaments"
+            description="Bracket builder, online registration, and live results. From friendly round-robins to weekend opens."
+          />
+        </ul>
+
+        <div className="mx-auto mt-10 max-w-md text-left">
+          <p className="mb-3 text-center text-sm font-medium text-[var(--color-fg)]">
+            Be first to know when these launch.
+          </p>
           <OpenPlayTeaserForm />
         </div>
       </Container>
     </section>
+  );
+}
+
+function RoadmapCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <li className="relative flex flex-col rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-bg)] p-5 shadow-[var(--shadow-sm)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="inline-flex size-10 items-center justify-center rounded-xl bg-[var(--color-brand-50)] text-[var(--color-brand-600)]">
+          <span className="[&>svg]:size-5" aria-hidden="true">{icon}</span>
+        </div>
+        <Badge variant="info">Coming soon</Badge>
+      </div>
+      <h3 className="mt-4 text-base font-semibold text-[var(--color-fg)]">{title}</h3>
+      <p className="mt-1 text-sm text-[var(--color-fg-muted)]">{description}</p>
+    </li>
   );
 }
 
