@@ -299,19 +299,19 @@ function HowItWorks() {
       n: 1,
       icon: <Search />,
       title: "Pick your court",
-      body: "Browse verified venues. See exactly which 30-minute slots are open today, this week, or next month.",
+      body: "Browse verified venues and see exactly which 30-minute slots are open. Grab a time that works for you.",
     },
     {
       n: 2,
       icon: <CreditCard />,
       title: "Pay via GCash",
-      body: "One transfer to the venue. Upload the receipt. No platform fees, no surprises.",
+      body: "One transfer to the venue. Upload the receipt. No platform fees, no hidden charges.",
     },
     {
       n: 3,
       icon: <CheckCircle2 />,
       title: "Show up & play",
-      body: "Get instant confirmation by email. Your slot is locked in the moment the venue verifies.",
+      body: "Confirmation hits your inbox once the venue accepts. Slot held. Just bring your paddle.",
     },
   ];
   return (
