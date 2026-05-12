@@ -119,7 +119,7 @@ function Hero() {
         </div>
 
         <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
-          No booking fees for players — ever. No account needed to browse.
+          One GCash payment. Court fee + small booking fee. No hidden charges.
         </p>
       </Container>
     </section>
@@ -142,7 +142,7 @@ function StatsBar({
       label: "Bookings this week",
       value: stats.bookingsLast7d.toLocaleString("en-PH"),
     },
-    { label: "Platform fee for players", value: "Free" },
+    { label: "GCash payments accepted", value: "✓" },
   ];
   return (
     <section
