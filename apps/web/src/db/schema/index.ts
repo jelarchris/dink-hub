@@ -388,6 +388,18 @@ export const reviews = pgTable("reviews", {
 });
 
 // ----------------------------------------------------------------------------
+// open_play_interest — homepage email capture for "Coming soon: Open Play"
+// ----------------------------------------------------------------------------
+export const openPlayInterest = pgTable("open_play_interest", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  market: text("market").notNull().default("agusan_del_sur"),
+  source: text("source").notNull().default("home_teaser"),
+  ipHash: text("ip_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ----------------------------------------------------------------------------
 // Inferred types — single source of truth for app code
 // ----------------------------------------------------------------------------
 export type Profile = typeof profiles.$inferSelect;
@@ -418,3 +430,5 @@ export type CourtClosure = typeof courtClosures.$inferSelect;
 export type NewCourtClosure = typeof courtClosures.$inferInsert;
 export type Review = typeof reviews.$inferSelect;
 export type NewReview = typeof reviews.$inferInsert;
+export type OpenPlayInterest = typeof openPlayInterest.$inferSelect;
+export type NewOpenPlayInterest = typeof openPlayInterest.$inferInsert;

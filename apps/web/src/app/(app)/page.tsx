@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandWordmark } from "@/components/brand-wordmark";
+import { OpenPlayTeaserForm } from "@/features/open-play-interest/components/open-play-teaser-form";
 import { redirect } from "next/navigation";
 import {
   ArrowRight,
@@ -46,6 +47,7 @@ export default async function HomePage() {
       <HowItWorks />
       <ForOwnersBand />
       <Features />
+      <OpenPlayTeaser />
       <FaqSection />
       <Footer />
     </main>
@@ -415,6 +417,39 @@ function ForOwnersBand() {
               ))}
             </ul>
           </div>
+        </div>
+      </Container>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Open Play teaser — demand validation for Phase 2.5
+// ---------------------------------------------------------------------------
+
+function OpenPlayTeaser() {
+  return (
+    <section
+      className="border-t border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-4 py-12 sm:px-6 lg:px-8 lg:py-16"
+      aria-labelledby="open-play-heading"
+    >
+      <Container className="mx-auto max-w-2xl text-center">
+        <Badge variant="info" className="mb-4">
+          Coming soon
+        </Badge>
+        <h2
+          id="open-play-heading"
+          className="text-balance text-2xl font-bold tracking-tight sm:text-3xl"
+        >
+          Open Play sessions, near you.
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-pretty text-sm text-[var(--color-fg-muted)] sm:text-base">
+          No group? No problem. Drop in to scheduled sessions at your local court,
+          pay one small fee, and meet other players. We&apos;ll let you know the
+          moment Open Play opens in your area.
+        </p>
+        <div className="mx-auto mt-6 max-w-md text-left">
+          <OpenPlayTeaserForm />
         </div>
       </Container>
     </section>

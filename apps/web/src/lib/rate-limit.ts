@@ -52,6 +52,8 @@ export const limiters = {
   bookingCreate: makeLimiter("booking", 10, "1 m"),
   /** Receipt upload by an authenticated player. Keyed by user id. */
   receiptUpload: makeLimiter("receipt", 5, "1 m"),
+  /** Public marketing email captures (e.g. open-play interest). Keyed by IP. */
+  publicSignup: makeLimiter("public-signup", 5, "10 m"),
 };
 
 export interface RateLimitOutcome {
