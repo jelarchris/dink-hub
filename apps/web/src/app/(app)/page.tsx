@@ -299,7 +299,7 @@ function HowItWorks() {
       n: 1,
       icon: <Search />,
       title: "Pick your court",
-      body: "Browse verified venues and see exactly which 30-minute slots are open. Grab a time that works for you.",
+      body: "Browse verified venues and see which times are open. Pick a date, choose your hours, and book in seconds.",
     },
     {
       n: 2,
