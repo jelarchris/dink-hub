@@ -98,7 +98,7 @@ function Hero() {
 
         <p className="mx-auto mt-3 max-w-xl text-pretty text-base text-[var(--color-fg-muted)]">
           Find courts near you, see real availability, and pay through GCash.
-          Confirmation lands in your inbox before you finish your warm-up.
+          Confirmation lands in your inbox — usually within minutes.
         </p>
 
         <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
@@ -119,7 +119,7 @@ function Hero() {
         </div>
 
         <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
-          Free for players · Venue owners pay only when you book
+          Free for players · Venue owners pay only when players book
         </p>
       </Container>
     </section>
@@ -137,7 +137,7 @@ function StatsBar({
 }) {
   const items: ReadonlyArray<{ label: string; value: string }> = [
     { label: "Venues live", value: stats.venueCount.toLocaleString("en-PH") },
-    { label: "Courts bookable", value: stats.courtCount.toLocaleString("en-PH") },
+    { label: "Courts available", value: stats.courtCount.toLocaleString("en-PH") },
     {
       label: "Bookings this week",
       value: stats.bookingsLast7d.toLocaleString("en-PH"),
