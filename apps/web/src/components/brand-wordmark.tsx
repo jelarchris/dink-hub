@@ -38,10 +38,11 @@ function PickleballDot() {
       viewBox="0 0 20 20"
       className="pointer-events-none absolute left-1/2 -translate-x-1/2"
       style={{
-        width: "0.55em",
-        height: "0.55em",
-        // Sits where the dot of an "i" would be, just above the stem.
-        top: "-0.4em",
+        width: "0.45em",
+        height: "0.45em",
+        // Sits where the dot of an "i" would be — just above the stem,
+        // close enough that it reads as the dot, not a floating ball.
+        top: "-0.18em",
       }}
     >
       <circle cx="10" cy="10" r="9" fill="#d4ff3a" stroke="#a3cf1a" strokeWidth="1" />

@@ -12,7 +12,7 @@ export default function AuthRecoveryLayout({ children }: { children: ReactNode }
     <div className="flex min-h-svh flex-col bg-[var(--color-bg-subtle)]">
       <header className="px-4 py-6 sm:px-6 lg:px-8">
         <Link href="/" className="inline-flex items-center">
-          <BrandWordmark className="text-lg" />
+          <BrandWordmark className="text-2xl" />
         </Link>
       </header>
       <main className="flex flex-1 items-center justify-center px-4 pb-16 pt-4 sm:px-6 lg:px-8">
