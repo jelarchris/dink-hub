@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandWordmark } from "@/components/brand-wordmark";
 import { redirect } from "next/navigation";
 import {
   ArrowRight,
@@ -551,9 +552,7 @@ function Footer() {
     <footer className="mt-auto border-t border-[var(--color-border-default)] bg-[var(--color-bg)] px-4 py-6 sm:px-6 lg:px-8">
       <Container className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <div className="flex items-center font-bold tracking-tight">
-            <span className="text-base text-[var(--color-brand-600)]">Dink</span><span className="text-base text-[var(--color-accent-600)]">Hub</span>
-          </div>
+          <BrandWordmark className="text-base" />
           <p className="mt-3 text-sm text-[var(--color-fg-muted)]">
             Pickleball court bookings for the Philippines. Built in Agusan del
             Sur 🇵🇭

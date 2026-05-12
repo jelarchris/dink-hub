@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BrandWordmark } from "@/components/brand-wordmark";
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type SVGProps } from "react";
 import { createPortal } from "react-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -321,8 +322,8 @@ export function Navbar({ user }: NavbarProps) {
       <Container>
         {/* ── Top bar ── */}
         <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center font-bold tracking-tight">
-            <span className="text-lg text-[var(--color-brand-600)]">Dink</span><span className="text-lg text-[var(--color-accent-600)]">Hub</span>
+          <Link href="/" className="flex items-center">
+            <BrandWordmark className="text-lg" />
           </Link>
 
           {/* Desktop nav */}
