@@ -12,7 +12,13 @@ import {
   type VenueAvailability,
   type VenueSort,
 } from "@/features/venues";
-import { formatManilaDate } from "@/features/venues/availability";
+import {
+  formatManilaDate,
+  todToRange,
+  TIME_SLIDER_MIN,
+  TIME_SLIDER_MAX,
+  type TimeOfDay,
+} from "@/features/venues/availability";
 import { formatPHP } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import { AvailabilityFilterBar } from "./availability-filter";
@@ -41,7 +47,8 @@ interface FilterState {
   sort?: VenueSort | undefined;
   // Availability filter params (preserved across city/sort navigation)
   date?: string | undefined;
-  tod?: string | undefined;
+  sh?: string | undefined;
+  eh?: string | undefined;
   dur?: string | undefined;
 }
 
@@ -52,26 +59,51 @@ function buildQuery(current: FilterState, patch: FilterState): string {
   if (next.city) params.set("city", next.city);
   if (next.sort && next.sort !== "name") params.set("sort", next.sort);
   if (next.date) params.set("date", next.date);
-  if (next.tod) params.set("tod", next.tod);
+  if (next.sh) params.set("sh", next.sh);
+  if (next.eh) params.set("eh", next.eh);
   if (next.dur) params.set("dur", next.dur);
   const qs = params.toString();
   return qs ? `/venues?${qs}` : "/venues";
 }
 
-/** Validates and parses availability URL params. Returns null if absent or invalid. */
+/** Validates and parses availability URL params. Returns null if absent or invalid.
+ *  Accepts new `?sh=&eh=` params; falls back to legacy `?tod=` for backward compat. */
 function resolveAvailabilityFilter(
   sp: Record<string, string | string[] | undefined>,
 ): AvailabilityFilter | null {
   const date = pickString(sp.date);
-  const tod = pickString(sp.tod);
   const durStr = pickString(sp.dur);
-  if (!date || !tod || !durStr) return null;
+  if (!date || !durStr) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const VALID_TODS = ["morning", "afternoon", "evening", "late_night"] as const;
-  if (!VALID_TODS.includes(tod as (typeof VALID_TODS)[number])) return null;
   const dur = parseInt(durStr, 10);
   if (dur !== 30 && dur !== 60 && dur !== 90 && dur !== 120) return null;
-  return { date, tod: tod as AvailabilityFilter["tod"], durationMin: dur };
+
+  // Prefer new sh/eh params; fall back to legacy tod param.
+  const shStr = pickString(sp.sh);
+  const ehStr = pickString(sp.eh);
+  const tod = pickString(sp.tod);
+
+  let startH: number;
+  let endH: number;
+
+  if (shStr !== undefined && ehStr !== undefined) {
+    startH = parseInt(shStr, 10);
+    endH = parseInt(ehStr, 10);
+    if (
+      !Number.isInteger(startH) || !Number.isInteger(endH) ||
+      startH < TIME_SLIDER_MIN || endH > TIME_SLIDER_MAX ||
+      endH <= startH
+    ) return null;
+  } else if (tod) {
+    const VALID_TODS = ["morning", "afternoon", "evening", "late_night"] as const;
+    if (!VALID_TODS.includes(tod as (typeof VALID_TODS)[number])) return null;
+    ({ startH, endH } = todToRange(tod as TimeOfDay));
+  } else {
+    // No time params — not an active filter
+    return null;
+  }
+
+  return { date, startH, endH, durationMin: dur };
 }
 
 export default async function VenuesPage({ searchParams }: PageProps) {
@@ -113,7 +145,8 @@ export default async function VenuesPage({ searchParams }: PageProps) {
     ...(availability
       ? {
           date: availability.date,
-          tod: availability.tod,
+          sh: String(availability.startH),
+          eh: String(availability.endH),
           dur: String(availability.durationMin),
         }
       : {}),

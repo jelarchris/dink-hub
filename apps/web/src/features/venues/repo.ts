@@ -3,7 +3,7 @@ import { and, asc, desc, eq, ilike, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { courts, reviews, venues, type Court, type Venue } from "@/db/schema";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
-import { TOD_OPTIONS, type AvailabilityFilter } from "./availability";
+import { type AvailabilityFilter } from "./availability";
 
 export type VenueSort = "name" | "price_asc" | "rating_desc";
 
@@ -334,9 +334,6 @@ export async function getVenueAvailabilityMap(
 ): Promise<Map<string, VenueAvailability>> {
   if (venueIds.length === 0) return new Map();
 
-  const todOption = TOD_OPTIONS.find((o) => o.value === filter.tod);
-  if (!todOption) return new Map();
-
   // Convert Manila local hours to UTC timestamps.
   // Manila is always UTC+8 (no DST). Date.UTC handles negative/overflow hours.
   const toUtc = (manilaHour: number): Date => {
@@ -344,8 +341,8 @@ export async function getVenueAvailabilityMap(
     return new Date(Date.UTC(y!, m! - 1, d!, manilaHour - 8, 0, 0, 0));
   };
 
-  const windowStart = toUtc(todOption.startH);
-  const windowEnd = toUtc(todOption.endH);
+  const windowStart = toUtc(filter.startH);
+  const windowEnd = toUtc(filter.endH);
 
   // Guard: window must fit at least one slot of the requested duration.
   const windowMinutes = (windowEnd.getTime() - windowStart.getTime()) / 60_000;

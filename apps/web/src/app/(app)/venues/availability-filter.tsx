@@ -7,11 +7,13 @@ import { cn } from "@/lib/cn";
 import {
   buildDateChips,
   DEFAULT_DURATION,
-  DEFAULT_TOD,
+  DEFAULT_END_H,
+  DEFAULT_START_H,
   DURATION_OPTIONS,
-  TOD_OPTIONS,
+  TIME_SLIDER_MAX,
+  TIME_SLIDER_MIN,
+  formatHour,
   type AvailabilityFilter,
-  type TimeOfDay,
 } from "@/features/venues/availability";
 
 // ---------------------------------------------------------------------------
@@ -38,7 +40,8 @@ function buildVenuesUrl(params: {
   city?: string;
   sort?: string;
   date?: string;
-  tod?: string;
+  sh?: string;
+  eh?: string;
   dur?: string;
 }): string {
   const p = new URLSearchParams();
@@ -46,14 +49,15 @@ function buildVenuesUrl(params: {
   if (params.city) p.set("city", params.city);
   if (params.sort && params.sort !== "name") p.set("sort", params.sort);
   if (params.date) p.set("date", params.date);
-  if (params.tod) p.set("tod", params.tod);
+  if (params.sh) p.set("sh", params.sh);
+  if (params.eh) p.set("eh", params.eh);
   if (params.dur) p.set("dur", params.dur);
   const qs = p.toString();
   return qs ? `/venues?${qs}` : "/venues";
 }
 
 function formatActiveLabel(filter: AvailabilityFilter, today: string): string {
-  const todLabel = TOD_OPTIONS.find((o) => o.value === filter.tod)?.label ?? filter.tod;
+  const timeLabel = `${formatHour(filter.startH)}–${formatHour(filter.endH)}`;
   const durLabel =
     DURATION_OPTIONS.find((o) => o.value === filter.durationMin)?.label ??
     `${filter.durationMin} min`;
@@ -64,7 +68,6 @@ function formatActiveLabel(filter: AvailabilityFilter, today: string): string {
   if (filter.date === today) {
     dateLabel = "Today";
   } else {
-    // e.g. "Sat 17"
     const [y, m, d] = filter.date.split("-").map(Number);
     const dt = new Date(Date.UTC(y!, m! - 1, d!, 4));
     const wd = new Intl.DateTimeFormat("en-US", {
@@ -74,7 +77,7 @@ function formatActiveLabel(filter: AvailabilityFilter, today: string): string {
     dateLabel = `${wd} ${day}`;
   }
 
-  return `${todLabel} · ${dateLabel} · ${durLabel}`;
+  return `${timeLabel} · ${dateLabel} · ${durLabel}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +121,104 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Dual-handle time range slider built from two overlapping <input type="range">
+ * elements — no extra dependency. The left thumb controls startH, right thumb
+ * controls endH. The filled track segment is drawn via a CSS linear-gradient on
+ * the wrapper div; the individual inputs have transparent tracks.
+ */
+function TimeRangeSlider({
+  startH,
+  endH,
+  onChangeStart,
+  onChangeEnd,
+}: {
+  startH: number;
+  endH: number;
+  onChangeStart: (h: number) => void;
+  onChangeEnd: (h: number) => void;
+}) {
+  const range = TIME_SLIDER_MAX - TIME_SLIDER_MIN;
+  const startPct = ((startH - TIME_SLIDER_MIN) / range) * 100;
+  const endPct = ((endH - TIME_SLIDER_MIN) / range) * 100;
+
+  const trackStyle: React.CSSProperties = {
+    background: `linear-gradient(
+      to right,
+      var(--color-bg-muted) ${startPct}%,
+      var(--color-brand-500) ${startPct}%,
+      var(--color-brand-500) ${endPct}%,
+      var(--color-bg-muted) ${endPct}%
+    )`,
+  };
+
+  // Shared Tailwind classes for each range input. Track is transparent so
+  // only the custom gradient above shows. Only the thumb gets pointer-events
+  // so both inputs can receive clicks even though they overlap.
+  const inputCls =
+    "pointer-events-none absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent " +
+    // Webkit thumb
+    "[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 " +
+    "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full " +
+    "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--color-brand-600)] " +
+    "[&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-sm " +
+    // Firefox thumb
+    "[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 " +
+    "[&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full " +
+    "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[var(--color-brand-600)] " +
+    "[&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-sm " +
+    // Hide tracks; the gradient div is the visual track
+    "[&::-webkit-slider-runnable-track]:bg-transparent " +
+    "[&::-moz-range-track]:bg-transparent " +
+    "focus-visible:outline-none focus-visible:ring-0";
+
+  return (
+    <div className="space-y-3">
+      {/* Track + thumbs */}
+      <div
+        className="relative h-1.5 w-full rounded-full"
+        style={trackStyle}
+      >
+        {/* Start handle */}
+        <input
+          type="range"
+          min={TIME_SLIDER_MIN}
+          max={TIME_SLIDER_MAX - 1}
+          value={startH}
+          aria-label={`Start time: ${formatHour(startH)}`}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (v < endH) onChangeStart(v);
+          }}
+          className={inputCls}
+        />
+        {/* End handle */}
+        <input
+          type="range"
+          min={TIME_SLIDER_MIN + 1}
+          max={TIME_SLIDER_MAX}
+          value={endH}
+          aria-label={`End time: ${formatHour(endH)}`}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (v > startH) onChangeEnd(v);
+          }}
+          className={inputCls}
+        />
+      </div>
+
+      {/* Min / selected range / max labels */}
+      <div className="flex items-center justify-between text-[10px] text-[var(--color-fg-muted)]">
+        <span>{formatHour(TIME_SLIDER_MIN)}</span>
+        <span className="rounded-full bg-[var(--color-brand-50,#eff6ff)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand-700)]">
+          {formatHour(startH)} – {formatHour(endH)}
+        </span>
+        <span>{formatHour(TIME_SLIDER_MAX)}</span>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -137,8 +238,11 @@ export function AvailabilityFilterBar({
   const [selectedDate, setSelectedDate] = useState<string>(
     activeFilter?.date ?? today,
   );
-  const [selectedTod, setSelectedTod] = useState<TimeOfDay>(
-    activeFilter?.tod ?? DEFAULT_TOD,
+  const [selectedStartH, setSelectedStartH] = useState<number>(
+    activeFilter?.startH ?? DEFAULT_START_H,
+  );
+  const [selectedEndH, setSelectedEndH] = useState<number>(
+    activeFilter?.endH ?? DEFAULT_END_H,
   );
   const [selectedDuration, setSelectedDuration] = useState<30 | 60 | 90 | 120>(
     activeFilter?.durationMin ?? DEFAULT_DURATION,
@@ -149,7 +253,8 @@ export function AvailabilityFilterBar({
   const handleOpen = useCallback(() => {
     // Re-sync selections to active filter (or defaults) each time panel opens.
     setSelectedDate(activeFilter?.date ?? today);
-    setSelectedTod(activeFilter?.tod ?? DEFAULT_TOD);
+    setSelectedStartH(activeFilter?.startH ?? DEFAULT_START_H);
+    setSelectedEndH(activeFilter?.endH ?? DEFAULT_END_H);
     setSelectedDuration(activeFilter?.durationMin ?? DEFAULT_DURATION);
     setIsOpen(true);
   }, [activeFilter, today]);
@@ -163,12 +268,13 @@ export function AvailabilityFilterBar({
         ...(currentCity ? { city: currentCity } : {}),
         ...(currentSort && currentSort !== "name" ? { sort: currentSort } : {}),
         date: selectedDate,
-        tod: selectedTod,
+        sh: String(selectedStartH),
+        eh: String(selectedEndH),
         dur: String(selectedDuration),
       }),
     );
     setIsOpen(false);
-  }, [currentQ, currentCity, currentSort, selectedDate, selectedTod, selectedDuration, router]);
+  }, [currentQ, currentCity, currentSort, selectedDate, selectedStartH, selectedEndH, selectedDuration, router]);
 
   const handleClear = useCallback(() => {
     router.push(
@@ -280,30 +386,15 @@ export function AvailabilityFilterBar({
             </div>
           </div>
 
-          {/* WHAT TIME */}
+          {/* WHAT TIME — dual-handle slider */}
           <div className="mt-4">
             <SectionLabel>What time</SectionLabel>
-            <div className="flex flex-wrap gap-2">
-              {TOD_OPTIONS.map((opt) => (
-                <ChipButton
-                  key={opt.value}
-                  active={selectedTod === opt.value}
-                  onClick={() => setSelectedTod(opt.value)}
-                >
-                  {opt.label}
-                  <span
-                    className={cn(
-                      "text-[10px]",
-                      selectedTod === opt.value
-                        ? "text-white/75"
-                        : "text-[var(--color-fg-muted)]",
-                    )}
-                  >
-                    {opt.timeLabel}
-                  </span>
-                </ChipButton>
-              ))}
-            </div>
+            <TimeRangeSlider
+              startH={selectedStartH}
+              endH={selectedEndH}
+              onChangeStart={setSelectedStartH}
+              onChangeEnd={setSelectedEndH}
+            />
           </div>
 
           {/* HOW LONG */}
@@ -347,3 +438,5 @@ export function AvailabilityFilterBar({
     </div>
   );
 }
+
+

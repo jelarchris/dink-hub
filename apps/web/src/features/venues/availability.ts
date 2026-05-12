@@ -14,13 +14,41 @@ export type TimeOfDay = "morning" | "afternoon" | "evening" | "late_night";
 export interface AvailabilityFilter {
   /** YYYY-MM-DD in Asia/Manila timezone. */
   date: string;
-  tod: TimeOfDay;
+  /** Start hour in Manila local time (6–22). */
+  startH: number;
+  /** End hour in Manila local time (7–23, must be > startH). */
+  endH: number;
   /** Duration in minutes the player wants to play. One of 30|60|90|120. */
   durationMin: 30 | 60 | 90 | 120;
 }
 
-/** Manila local-time hour ranges [startH, endH) for each time-of-day preset.
- *  Values > 23 overflow into the next calendar day (25 = 01:00 next day). */
+/** Slider bounds (Manila local hours). */
+export const TIME_SLIDER_MIN = 6;  // 6am
+export const TIME_SLIDER_MAX = 23; // 11pm
+
+/** Default filter hours (5pm–10pm, a.k.a. "evening"). */
+export const DEFAULT_START_H = 17;
+export const DEFAULT_END_H = 22;
+export const DEFAULT_DURATION = 60 as const;
+
+/** Format a Manila local hour as a display label ("6am", "12pm", "5pm"). */
+export function formatHour(h: number): string {
+  const normalized = ((h % 24) + 24) % 24;
+  if (normalized === 0) return "12am";
+  if (normalized === 12) return "12pm";
+  return normalized < 12 ? `${normalized}am` : `${normalized - 12}pm`;
+}
+
+/** Legacy: map a `tod` URL param to startH/endH for backward compat. */
+export function todToRange(tod: TimeOfDay): { startH: number; endH: number } {
+  const opt = TOD_OPTIONS.find((o) => o.value === tod);
+  // late_night endH=25 overflows; cap at 23 for the new slider.
+  return opt
+    ? { startH: opt.startH, endH: Math.min(opt.endH, TIME_SLIDER_MAX) }
+    : { startH: DEFAULT_START_H, endH: DEFAULT_END_H };
+}
+
+/** Time-of-day preset options (kept for the slider's hour-grid labels). */
 export const TOD_OPTIONS = [
   {
     value: "morning" as const,
@@ -64,9 +92,6 @@ export const DURATION_OPTIONS = [
   { value: 90 as const, label: "1.5 hr" },
   { value: 120 as const, label: "2 hr" },
 ] as const;
-
-export const DEFAULT_TOD: TimeOfDay = "evening";
-export const DEFAULT_DURATION = 60 as const;
 
 // ---------------------------------------------------------------------------
 // Date helpers (pure, no server dependencies)
