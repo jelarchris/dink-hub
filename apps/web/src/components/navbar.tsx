@@ -323,7 +323,7 @@ export function Navbar({ user }: NavbarProps) {
         {/* ── Top bar ── */}
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center">
-            <BrandWordmark className="text-xl sm:text-2xl" />
+            <BrandWordmark className="text-2xl sm:text-3xl" />
           </Link>
 
           {/* Desktop nav */}
