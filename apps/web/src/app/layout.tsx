@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { RecoveryHashRedirect } from "@/components/recovery-hash-redirect";
+import { PostHogProvider } from "@/components/posthog-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,7 +48,7 @@ export default function RootLayout({
           }}
         />
         <RecoveryHashRedirect />
-        {children}
+        <PostHogProvider>{children}</PostHogProvider>
       </body>
     </html>
   );
