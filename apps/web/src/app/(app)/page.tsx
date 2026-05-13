@@ -379,10 +379,10 @@ function ForOwnersBand() {
                   List your venue
                 </Link>
                 <Link
-                  href="/venues"
+                  href="/host"
                   className={`${buttonVariants({ size: "lg", variant: "ghost" })} text-white hover:bg-white/10`}
                 >
-                  See live venues <ArrowRight className="size-4" />
+                  Learn more <ArrowRight className="size-4" />
                 </Link>
               </div>
             </div>

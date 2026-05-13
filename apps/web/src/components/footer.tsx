@@ -32,6 +32,14 @@ export function Footer() {
               </li>
               <li>
                 <Link
+                  href="/host"
+                  className="text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
+                >
+                  List your venue
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/about"
                   className="text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
                 >
