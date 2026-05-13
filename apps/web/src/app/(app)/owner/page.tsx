@@ -123,6 +123,7 @@ export default async function OwnerDashboard({
   const firstName = profile.displayName.split(" ")[0] ?? profile.displayName;
   const grossDelta = weekOverWeekPct(stats.grossThisWeekCentavos, stats.grossLastWeekCentavos);
   const bookingsDelta = weekOverWeekPct(stats.bookingsThisWeek, stats.bookingsLastWeek);
+  const monthDelta = weekOverWeekPct(stats.grossThisMonthCentavos, stats.grossLastMonthCentavos);
 
   const now = new Date();
   const todayKey = toManilaDayKey(now);
@@ -202,9 +203,10 @@ export default async function OwnerDashboard({
           icon={<CalendarClock className="size-4 text-[var(--color-brand-700)]" />}
         />
         <StatCard
-          title="Gross today"
-          value={formatPHP(stats.grossTodayCentavos)}
-          subtitle="Confirmed payments"
+          title="This month"
+          value={formatPHP(stats.grossThisMonthCentavos)}
+          subtitle="Court fees confirmed"
+          delta={monthDelta}
           icon={<Wallet className="size-4 text-[var(--color-brand-700)]" />}
         />
         <StatCard

@@ -21,6 +21,8 @@ function getManilaTimeBoundaries(upcomingDays = 7): {
   todayEndUTC: Date;
   thisWeekStartUTC: Date;
   lastWeekStartUTC: Date;
+  thisMonthStartUTC: Date;
+  lastMonthStartUTC: Date;
   upcomingEndUTC: Date;
 } {
   const nowMs = Date.now();
@@ -40,12 +42,23 @@ function getManilaTimeBoundaries(upcomingDays = 7): {
   // Last week: the 7-day window immediately preceding this week.
   const lastWeekStartUTC = new Date(thisWeekStartManilaMs - 7 * MS_PER_DAY - MANILA_OFFSET_MS);
 
+  // Manila this-month 1st 00:00 as UTC.
+  const nowManilaDate = new Date(nowManilaMs);
+  const thisMonthStartManilaMs =
+    Date.UTC(nowManilaDate.getUTCFullYear(), nowManilaDate.getUTCMonth(), 1);
+  const thisMonthStartUTC = new Date(thisMonthStartManilaMs - MANILA_OFFSET_MS);
+
+  // Last month: 1st of the prior calendar month (Manila) as UTC.
+  const lastMonthDate = new Date(thisMonthStartManilaMs);
+  lastMonthDate.setUTCMonth(lastMonthDate.getUTCMonth() - 1);
+  const lastMonthStartUTC = new Date(lastMonthDate.getTime() - MANILA_OFFSET_MS);
+
   // Upcoming window: today 00:00 Manila → N days later (exclusive).
   const upcomingEndUTC = new Date(
     todayManilaFloorMs + upcomingDays * MS_PER_DAY - MANILA_OFFSET_MS,
   );
 
-  return { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC, upcomingEndUTC };
+  return { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC, thisMonthStartUTC, lastMonthStartUTC, upcomingEndUTC };
 }
 
 /** Format a UTC Date as a Manila-wall-clock date string "YYYY-MM-DD". */
@@ -68,6 +81,10 @@ export interface OwnerDashboardStats {
   grossLastWeekCentavos: bigint;
   /** No-show count this week (Mon 00:00 Manila → now). */
   noShowsThisWeek: number;
+  /** Gross court-fee revenue for the current Manila calendar month. */
+  grossThisMonthCentavos: bigint;
+  /** Gross court-fee revenue for the prior Manila calendar month (MoM delta). */
+  grossLastMonthCentavos: bigint;
 }
 
 /**
@@ -83,13 +100,13 @@ export async function getOwnerDashboardStats(
   ownerId: string,
   venueId?: string | undefined,
 ): Promise<OwnerDashboardStats> {
-  const { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC } =
+  const { todayStartUTC, todayEndUTC, thisWeekStartUTC, lastWeekStartUTC, thisMonthStartUTC, lastMonthStartUTC } =
     getManilaTimeBoundaries();
 
   // Optional single-venue filter — shared across all four sub-queries.
   const venueFilter = venueId ? eq(bookings.venueId, venueId) : undefined;
 
-  const [todayRow, thisWeekRow, lastWeekRow, noShowRow] = await Promise.all([
+  const [todayRow, thisWeekRow, lastWeekRow, noShowRow, thisMonthRow, lastMonthRow] = await Promise.all([
     db
       .select({
         n: sql<number>`count(*)::int`,
@@ -153,6 +170,39 @@ export async function getOwnerDashboardStats(
           venueFilter,
         ),
       ),
+    // This calendar month (Manila 1st 00:00 → now)
+    db
+      .select({
+        gross: sql<string>`coalesce(sum(${bookings.courtFeeCentavos}), 0)`.mapWith(String),
+      })
+      .from(bookings)
+      .innerJoin(venues, eq(venues.id, bookings.venueId))
+      .where(
+        and(
+          eq(venues.ownerId, ownerId),
+          eq(bookings.status, "confirmed"),
+          gte(bookings.startAt, thisMonthStartUTC),
+          isNull(venues.deletedAt),
+          venueFilter,
+        ),
+      ),
+    // Last calendar month (Manila)
+    db
+      .select({
+        gross: sql<string>`coalesce(sum(${bookings.courtFeeCentavos}), 0)`.mapWith(String),
+      })
+      .from(bookings)
+      .innerJoin(venues, eq(venues.id, bookings.venueId))
+      .where(
+        and(
+          eq(venues.ownerId, ownerId),
+          eq(bookings.status, "confirmed"),
+          gte(bookings.startAt, lastMonthStartUTC),
+          lt(bookings.startAt, thisMonthStartUTC),
+          isNull(venues.deletedAt),
+          venueFilter,
+        ),
+      ),
   ]);
 
   return {
@@ -163,6 +213,8 @@ export async function getOwnerDashboardStats(
     bookingsLastWeek: lastWeekRow[0]?.n ?? 0,
     grossLastWeekCentavos: BigInt(lastWeekRow[0]?.gross ?? "0"),
     noShowsThisWeek: noShowRow[0]?.n ?? 0,
+    grossThisMonthCentavos: BigInt(thisMonthRow[0]?.gross ?? "0"),
+    grossLastMonthCentavos: BigInt(lastMonthRow[0]?.gross ?? "0"),
   };
 }
 
