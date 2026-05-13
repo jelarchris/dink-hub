@@ -51,9 +51,9 @@ const TIME_FMT = new Intl.DateTimeFormat("en-PH", {
 });
 
 const COMPACT_TIME_FMT = new Intl.DateTimeFormat("en-PH", {
-  hour: "2-digit",
+  hour: "numeric",
   minute: "2-digit",
-  hour12: false,
+  hour12: true,
   timeZone: "Asia/Manila",
 });
 
