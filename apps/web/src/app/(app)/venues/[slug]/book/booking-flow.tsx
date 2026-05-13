@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { getRateForHour } from "@/lib/court-rate";
 import { useRouter } from "next/navigation";
 import {
@@ -37,6 +37,8 @@ const TIMER_START = 15 * 60; // 15 minutes
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// UTC offset for Manila (UTC+8, no DST) — used for wall-clock hour lookups.
+const MANILA_OFFSET_MS = 8 * 3_600_000;
 
 type FlowStep = "picker" | "step1" | "step2";
 
@@ -182,19 +184,36 @@ export function BookingFlow({
   // ---------------------------------------------------------------------------
   const selectedCourt = courts.find((c) => c.id === selectedCourtId) ?? courts[0]!;
   const baseHourlyRate = BigInt(selectedCourt.hourlyRateCentavos);
-  const [nowMs] = useState(() => Date.now());
-  // Rate bands are sorted by fromHour; fallback to base rate when none match.
-  const MANILA_OFFSET_MS = 8 * 3_600_000;
-  const firstSlotHour = pickedStartIso
-    ? new Date(new Date(pickedStartIso).getTime() + MANILA_OFFSET_MS).getUTCHours()
-    : new Date(nowMs + MANILA_OFFSET_MS).getUTCHours();
-  const hourlyRate = getRateForHour(
-    selectedCourt.rateBands.map((b) => ({ fromHour: b.fromHour, toHour: b.toHour, rateCentavos: BigInt(b.rateCentavos) })),
-    firstSlotHour,
-    baseHourlyRate,
+  // Rate bands as bigint — memoised so useCallback deps are stable.
+  const courtRateBands = useMemo(
+    () =>
+      selectedCourt.rateBands.map((b) => ({
+        fromHour: b.fromHour,
+        toHour: b.toHour,
+        rateCentavos: BigInt(b.rateCentavos),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedCourtId],
   );
-  const slotPriceCentavos = (BigInt(SLOT_MINUTES) * hourlyRate) / 60n;
-  const totalPriceCentavos = slotPriceCentavos * BigInt(pickedCount);
+  // Each slot may fall in a different rate band — compute per slot.
+  const getPriceForSlot = useCallback(
+    (slotMs: number): bigint => {
+      const hour = new Date(slotMs + MANILA_OFFSET_MS).getUTCHours();
+      const hourly = getRateForHour(courtRateBands, hour, baseHourlyRate);
+      return (BigInt(SLOT_MINUTES) * hourly) / 60n;
+    },
+    [courtRateBands, baseHourlyRate],
+  );
+  // Total = sum of each individual picked slot's rate (handles band crossings).
+  const totalPriceCentavos = useMemo(() => {
+    if (!pickedStartIso || pickedCount === 0) return 0n;
+    const startMs = new Date(pickedStartIso).getTime();
+    let total = 0n;
+    for (let i = 0; i < pickedCount; i++) {
+      total += getPriceForSlot(startMs + i * SLOT_MINUTES * 60_000);
+    }
+    return total;
+  }, [pickedStartIso, pickedCount, getPriceForSlot]);
   const estimatedSystemFee = BigInt(systemFeeEstimateCentavos);
   const estimatedTotal = totalPriceCentavos + estimatedSystemFee;
 
@@ -490,7 +509,7 @@ export function BookingFlow({
                         : "text-[var(--color-fg-subtle)]",
                     )}
                   >
-                    {available || isPicked ? formatPHP(slotPriceCentavos) : isClosed ? "Closed" : "Booked"}
+                    {available || isPicked ? formatPHP(getPriceForSlot(s.getTime())) : isClosed ? "Closed" : "Booked"}
                   </span>
                 </button>
               );
