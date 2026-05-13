@@ -4,8 +4,10 @@ import { ArrowLeft } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { PromoBanner } from "@/components/promo-banner";
 import { findActiveVenueBySlug, getCourtsOccupancy } from "@/features/venues";
+import { findCurrentSystemFeeCentavos } from "@/features/booking/repo";
 import { fromManilaWallClock, manilaUpcomingDays } from "@/lib/date";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
+import { getSessionUser } from "@/server/session";
 import { BookingFlow } from "./booking-flow";
 
 export const dynamic = "force-dynamic";
@@ -38,11 +40,15 @@ export default async function BookCourtPage({
   const [ly, lm, ld] = lastDay.isoDate.split("-").map(Number);
   const fromUtc = fromManilaWallClock(fy!, fm!, fd!, 0, 0);
   const toUtc = fromManilaWallClock(ly!, lm!, ld!, 24, 0);
-  const occupancy = await getCourtsOccupancy({
-    courtIds: courts.map((c) => c.id),
-    fromUtc,
-    toUtc,
-  });
+  const [occupancy, player, systemFee] = await Promise.all([
+    getCourtsOccupancy({
+      courtIds: courts.map((c) => c.id),
+      fromUtc,
+      toUtc,
+    }),
+    getSessionUser(),
+    findCurrentSystemFeeCentavos(),
+  ]);
 
   return (
     <Container className="py-2 sm:py-3">
@@ -62,6 +68,13 @@ export default async function BookCourtPage({
 
       <BookingFlow
         venueSlug={venue.slug}
+        venueName={venue.name}
+        gcashAccountName={venue.gcashAccountName}
+        gcashAccountNumber={venue.gcashAccountNumber}
+        systemFeeEstimateCentavos={(systemFee ?? 0n).toString()}
+        playerName={player?.displayName ?? ""}
+        playerEmail={player?.email ?? ""}
+        playerPhone={player?.phoneE164 ?? ""}
         days={days.map((d) => ({ isoDate: d.isoDate, label: d.label, isToday: d.isToday }))}
         courts={courts.map((c) => ({
           id: c.id,

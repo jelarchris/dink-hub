@@ -1,9 +1,28 @@
 "use client";
 
-import { Loader2, Trophy, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useFormStatus } from "react-dom";
-import { startBookingFormAction } from "@/features/booking/actions";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  Loader2,
+  Trophy,
+  Upload,
+  X,
+  Zap,
+} from "lucide-react";
+import {
+  cancelBookingAction,
+  startBookingReturningIdAction,
+} from "@/features/booking/actions";
+import { submitReceiptAction } from "@/features/booking/payment-actions";
+import type { ActionResult } from "@/features/auth";
+import { Alert } from "@/components/ui/alert";
+import { CopyButton } from "@/components/ui/copy-button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { TurnstileWidget } from "@/components/turnstile-widget";
 import { cn } from "@/lib/cn";
 import { addMinutes, formatTimeManila, generateDaySlotsManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
@@ -12,9 +31,24 @@ const OPEN_HOUR = 6;
 const CLOSE_HOUR = 22;
 const SLOT_MINUTES = 60;
 const MAX_SLOTS = 4; // server enforces 4-hour max
+const TIMER_START = 15 * 60; // 15 minutes
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+const MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+type FlowStep = "picker" | "step1" | "step2";
 
 export interface BookingFlowProps {
   venueSlug: string;
+  venueName: string;
+  gcashAccountName: string | null;
+  gcashAccountNumber: string | null;
+  /** bigint serialised — convert with BigInt() for arithmetic. */
+  systemFeeEstimateCentavos: string;
+  playerName: string;
+  playerEmail: string;
+  playerPhone: string;
   days: ReadonlyArray<{ isoDate: string; label: string; isToday: boolean }>;
   courts: ReadonlyArray<{
     id: string;
@@ -37,20 +71,120 @@ interface OccupiedRange {
 
 export function BookingFlow({
   venueSlug,
+  venueName,
+  gcashAccountName,
+  gcashAccountNumber,
+  systemFeeEstimateCentavos,
+  playerName,
+  playerEmail,
+  playerPhone,
   days,
   courts,
   occupancy,
 }: BookingFlowProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
+  // ---------------------------------------------------------------------------
+  // Slot picker state
+  // ---------------------------------------------------------------------------
   const [selectedCourtId, setSelectedCourtId] = useState<string>(courts[0]!.id);
   const [selectedDateIso, setSelectedDateIso] = useState<string>(days[0]!.isoDate);
   const [pickedStartIso, setPickedStartIso] = useState<string | null>(null);
   const [pickedCount, setPickedCount] = useState<number>(0);
 
+  // ---------------------------------------------------------------------------
+  // Modal flow state
+  // ---------------------------------------------------------------------------
+  const [step, setStep] = useState<FlowStep>("picker");
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [createdTotalCentavos, setCreatedTotalCentavos] = useState<bigint | null>(null);
+  const [createdCourtFeeCentavos, setCreatedCourtFeeCentavos] = useState<bigint | null>(null);
+  const [createdSystemFeeCentavos, setCreatedSystemFeeCentavos] = useState<bigint | null>(null);
+
+  // Player detail fields (editable in step 1)
+  const [editName, setEditName] = useState(playerName);
+  const [editEmail, setEditEmail] = useState(playerEmail);
+  const [editPhone, setEditPhone] = useState(playerPhone);
+
+  // Step 1 → Step 2 transition
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Timer
+  // ---------------------------------------------------------------------------
+  const [timerSeconds, setTimerSeconds] = useState(TIMER_START);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (step === "picker") {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+    if (timerRef.current) return; // already ticking
+    timerRef.current = setInterval(() => {
+      setTimerSeconds((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [step]);
+
+  const timerMins = Math.floor(timerSeconds / 60);
+  const timerSecs = String(timerSeconds % 60).padStart(2, "0");
+  const timerLabel = `${String(timerMins)}:${timerSecs}`;
+  const timerUrgent = timerSeconds <= 120;
+
+  // ---------------------------------------------------------------------------
+  // Receipt upload state (step 2) — hooks must be unconditional
+  // ---------------------------------------------------------------------------
+  const [receiptState, receiptFormAction] = useActionState<ActionResult | null, FormData>(
+    submitReceiptAction,
+    null,
+  );
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [captchaSolved, setCaptchaSolved] = useState(!TURNSTILE_SITE_KEY);
+  const [confirmDetail, setConfirmDetail] = useState(false);
+  const [confirmTerms, setConfirmTerms] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const receiptFieldErrors =
+    receiptState && !receiptState.ok ? receiptState.fieldErrors : undefined;
+  const receiptFormError =
+    receiptState && !receiptState.ok && receiptState.code !== "validation_failed"
+      ? receiptState.message
+      : undefined;
+
+  useEffect(() => {
+    if (!receiptState?.ok || !bookingId) return;
+    startTransition(() => {
+      router.push("/me/bookings");
+    });
+  }, [receiptState, bookingId, router, startTransition]);
+
+  // ---------------------------------------------------------------------------
+  // Derived slot picker values
+  // ---------------------------------------------------------------------------
   const selectedCourt = courts.find((c) => c.id === selectedCourtId) ?? courts[0]!;
   const hourlyRate = BigInt(selectedCourt.hourlyRateCentavos);
   const slotPriceCentavos = (BigInt(SLOT_MINUTES) * hourlyRate) / 60n;
-  // Total scales with selection; rendered only when pickedCount > 0.
   const totalPriceCentavos = slotPriceCentavos * BigInt(pickedCount);
+  const estimatedSystemFee = BigInt(systemFeeEstimateCentavos);
+  const estimatedTotal = totalPriceCentavos + estimatedSystemFee;
 
   // Index occupancy once: courtId -> sorted ranges (millis).
   const occupancyByCourt = useMemo(() => {
@@ -196,123 +330,304 @@ export function BookingFlow({
       : `${startCore} ${startPeriod} – ${endCore} ${endPeriod}`;
   }
 
+  // ---------------------------------------------------------------------------
+  // Modal handlers
+  // ---------------------------------------------------------------------------
+  function openModal(): void {
+    setStep("step1");
+    setTimerSeconds(TIMER_START);
+  }
+
+  function closeModal(): void {
+    if (step === "step2" && bookingId) {
+      // Best-effort cancel — fire and forget; the booking will auto-expire anyway
+      const form = new FormData();
+      form.set("bookingId", bookingId);
+      void cancelBookingAction(null, form);
+    }
+    setStep("picker");
+    setBookingId(null);
+    setCreatedTotalCentavos(null);
+    setCreatedCourtFeeCentavos(null);
+    setCreatedSystemFeeCentavos(null);
+    setCreateError(null);
+    setFileName(null);
+    setFileError(null);
+    setConfirmDetail(false);
+    setConfirmTerms(false);
+    setCaptchaSolved(!TURNSTILE_SITE_KEY);
+  }
+
+  async function proceedToPayment(): Promise<void> {
+    if (!pickedStartIso || !pickedEndDate) return;
+    setIsCreating(true);
+    setCreateError(null);
+    const form = new FormData();
+    form.set("venueSlug", venueSlug);
+    form.set("courtId", selectedCourtId);
+    form.set("startAt", pickedStartIso);
+    form.set("endAt", pickedEndDate.toISOString());
+    const result = await startBookingReturningIdAction(form);
+    setIsCreating(false);
+    if (!result.ok) {
+      setCreateError(result.message);
+      return;
+    }
+    setBookingId(result.data.bookingId);
+    setCreatedTotalCentavos(BigInt(result.data.totalCentavos));
+    setCreatedCourtFeeCentavos(BigInt(result.data.courtFeeCentavos));
+    setCreatedSystemFeeCentavos(BigInt(result.data.systemFeeCentavos));
+    setStep("step2");
+  }
+
+  function onFilePick(): void {
+    const f = fileRef.current?.files?.[0];
+    if (!f) { setFileName(null); setFileError(null); return; }
+    if (!ALLOWED_TYPES.includes(f.type)) { setFileError("Use a JPEG, PNG or WebP image"); setFileName(f.name); return; }
+    if (f.size > MAX_BYTES) { setFileError("File must be 5 MB or smaller"); setFileName(f.name); return; }
+    setFileError(null);
+    setFileName(f.name);
+  }
+
+  const canSubmitReceipt =
+    captchaSolved && confirmDetail && confirmTerms && fileName !== null && fileError === null;
+
+  // Amounts shown in modal — use snapshotted values once booking is created (step 2)
+  const displayCourtFee = createdCourtFeeCentavos ?? totalPriceCentavos;
+  const displaySystemFee = createdSystemFeeCentavos ?? estimatedSystemFee;
+  const displayTotal = createdTotalCentavos ?? estimatedTotal;
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
-    <div className="pb-24">
-      <Section label="Select court">
-        <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-          {courts.map((c) => (
-            <CourtCard
-              key={c.id}
-              court={c}
-              selected={c.id === selectedCourtId}
-              onSelect={() => pickCourt(c.id)}
-            />
-          ))}
-        </div>
-      </Section>
+    <>
+      {/* Slot picker */}
+      <div className="pb-24">
+        <Section label="Select court">
+          <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+            {courts.map((c) => (
+              <CourtCard
+                key={c.id}
+                court={c}
+                selected={c.id === selectedCourtId}
+                onSelect={() => pickCourt(c.id)}
+              />
+            ))}
+          </div>
+        </Section>
 
-      <Section label="Select date">
-        <div className="-mx-4 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-          {days.map((d) => (
-            <DateChip
-              key={d.isoDate}
-              isoDate={d.isoDate}
-              label={d.label}
-              selected={d.isoDate === selectedDateIso}
-              onSelect={() => pickDate(d.isoDate)}
-            />
-          ))}
-        </div>
-      </Section>
+        <Section label="Select date">
+          <div className="-mx-4 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+            {days.map((d) => (
+              <DateChip
+                key={d.isoDate}
+                isoDate={d.isoDate}
+                label={d.label}
+                selected={d.isoDate === selectedDateIso}
+                onSelect={() => pickDate(d.isoDate)}
+              />
+            ))}
+          </div>
+        </Section>
 
-      <Section
-        label={`Select time · ${pickedDateLabel}`}
-        hint="Tap adjacent slots to book multiple hours (max 4)"
-      >
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
-          {slots.map((s) => {
-            const iso = s.toISOString();
-            const available = isAvailable(s);
-            const slotStartMs = s.getTime();
-            const slotEndMs = slotStartMs + SLOT_MINUTES * 60_000;
-            // pickedStartMs / pickedEndMs are hoisted outside this map — no
-            // redundant Date construction per iteration.
-            const isPicked =
-              pickedStartMs !== null &&
-              pickedEndMs !== null &&
-              slotStartMs >= pickedStartMs &&
-              slotStartMs < pickedEndMs;
-            const isClosed = !available && courtRanges.some(
-              (r) => r.kind === "closure" && r.start < slotEndMs && r.end > slotStartMs,
-            );
-            return (
-              <button
-                key={iso}
-                type="button"
-                disabled={!available && !isPicked}
-                onClick={() => pickSlot(s)}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-2 py-2 text-center transition-colors",
-                  isPicked &&
-                    "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] ring-2 ring-[var(--color-brand-500)]",
-                  !isPicked && available &&
-                    "border-[var(--color-border-default)] bg-[var(--color-bg)] hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)]",
-                  !available && !isPicked &&
-                    "cursor-not-allowed border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] text-[var(--color-fg-subtle)] opacity-60",
-                )}
-              >
-                <span className="text-sm font-bold leading-tight tracking-tight">
-                  {slotRangeLabel(s)}
-                </span>
-                <span
+        <Section
+          label={`Select time · ${pickedDateLabel}`}
+          hint="Tap adjacent slots to book multiple hours (max 4)"
+        >
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+            {slots.map((s) => {
+              const iso = s.toISOString();
+              const available = isAvailable(s);
+              const slotStartMs = s.getTime();
+              const slotEndMs = slotStartMs + SLOT_MINUTES * 60_000;
+              const isPicked =
+                pickedStartMs !== null &&
+                pickedEndMs !== null &&
+                slotStartMs >= pickedStartMs &&
+                slotStartMs < pickedEndMs;
+              const isClosed = !available && courtRanges.some(
+                (r) => r.kind === "closure" && r.start < slotEndMs && r.end > slotStartMs,
+              );
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  disabled={!available && !isPicked}
+                  onClick={() => pickSlot(s)}
                   className={cn(
-                    "text-[10px] font-bold uppercase tracking-wide leading-none",
-                    available || isPicked
-                      ? "text-[var(--color-success)]"
-                      : "text-[var(--color-fg-subtle)]",
+                    "flex flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-2 py-2 text-center transition-colors",
+                    isPicked &&
+                      "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] ring-2 ring-[var(--color-brand-500)]",
+                    !isPicked && available &&
+                      "border-[var(--color-border-default)] bg-[var(--color-bg)] hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)]",
+                    !available && !isPicked &&
+                      "cursor-not-allowed border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] text-[var(--color-fg-subtle)] opacity-60",
                   )}
                 >
-                  {available || isPicked ? formatPHP(slotPriceCentavos) : isClosed ? "Closed" : "Booked"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </Section>
-
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border-default)] bg-[var(--color-bg)]/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgb(0_0_0/_0.15)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-          <div className="min-w-0 text-xs sm:text-sm">
-            {canContinue && pickedStartDate && pickedEndDate ? (
-              <>
-                <div className="truncate font-semibold">
-                  {selectedCourt.name} · {pickedDateLabel} ·{" "}
-                  {formatTimeManila(pickedStartDate)}–{formatTimeManila(pickedEndDate)}
-                  <span className="ml-1 text-[var(--color-fg-muted)]">
-                    ({pickedCount}h)
+                  <span className="text-sm font-bold leading-tight tracking-tight">
+                    {slotRangeLabel(s)}
                   </span>
-                </div>
-                <div className="text-[var(--color-fg-muted)]">
-                  <span className="font-semibold text-[var(--color-brand-700)]">
-                    {formatPHP(totalPriceCentavos)}
-                  </span>{" "}
-                  + booking fee
-                </div>
-              </>
-            ) : (
-              <div className="text-[var(--color-fg-muted)]">Pick a time to continue</div>
-            )}
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold uppercase tracking-wide leading-none",
+                      available || isPicked
+                        ? "text-[var(--color-success)]"
+                        : "text-[var(--color-fg-subtle)]",
+                    )}
+                  >
+                    {available || isPicked ? formatPHP(slotPriceCentavos) : isClosed ? "Closed" : "Booked"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <form action={startBookingFormAction}>
-            <input type="hidden" name="venueSlug" value={venueSlug} />
-            <input type="hidden" name="courtId" value={selectedCourtId} />
-            <input type="hidden" name="startAt" value={pickedStartIso ?? ""} />
-            <input type="hidden" name="endAt" value={pickedEndDate?.toISOString() ?? ""} />
-            <ContinueButton disabled={!canContinue} />
-          </form>
+        </Section>
+
+        {/* Sticky footer */}
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border-default)] bg-[var(--color-bg)]/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgb(0_0_0/_0.15)] backdrop-blur sm:px-6">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+            <div className="min-w-0 text-xs sm:text-sm">
+              {canContinue && pickedStartDate && pickedEndDate ? (
+                <>
+                  <div className="truncate font-semibold">
+                    {selectedCourt.name} · {pickedDateLabel} ·{" "}
+                    {formatTimeManila(pickedStartDate)}–{formatTimeManila(pickedEndDate)}
+                    <span className="ml-1 text-[var(--color-fg-muted)]">
+                      ({pickedCount}h)
+                    </span>
+                  </div>
+                  <div className="text-[var(--color-fg-muted)]">
+                    <span className="font-semibold text-[var(--color-brand-700)]">
+                      {formatPHP(estimatedTotal)}
+                    </span>{" "}
+                    est. total
+                  </div>
+                </>
+              ) : (
+                <div className="text-[var(--color-fg-muted)]">Pick a time to continue</div>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={!canContinue}
+              onClick={openModal}
+              className={cn(
+                "inline-flex h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-5 text-sm font-semibold transition-colors",
+                canContinue
+                  ? "bg-[var(--color-brand-500)] text-white shadow-[var(--shadow-md)] hover:bg-[var(--color-brand-600)]"
+                  : "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
+              )}
+            >
+              Continue
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* 2-step booking modal */}
+      {step !== "picker" && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={step === "step1" ? "Booking Details" : "Payment & Confirmation"}
+          className="fixed inset-0 z-50 overflow-y-auto"
+        >
+          {/* Backdrop */}
+          <div className="fixed inset-0 bg-black/50" onClick={closeModal} />
+
+          {/* Card */}
+          <div className="relative mx-auto my-0 flex min-h-screen max-w-lg flex-col bg-[var(--color-bg)] sm:my-8 sm:min-h-0 sm:rounded-[var(--radius-lg)] sm:shadow-[var(--shadow-xl)]">
+            {/* Header */}
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[var(--color-border-default)] bg-[var(--color-bg)] px-4 py-3 sm:rounded-t-[var(--radius-lg)]">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-brand-600)]">
+                  Step {step === "step1" ? "1" : "2"} of 2
+                </p>
+                <h2 className="text-base font-bold leading-tight">
+                  {step === "step1" ? "Booking Details" : "Payment & Confirmation"}
+                </h2>
+                <p className="text-xs text-[var(--color-fg-muted)]">
+                  {step === "step1"
+                    ? "Review your booking and enter your details"
+                    : "Complete payment and upload proof"}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  aria-label="Close"
+                  className="rounded-full p-1 text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+                >
+                  <X className="size-5" />
+                </button>
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
+                    timerUrgent
+                      ? "bg-[var(--color-danger-50)] text-[var(--color-danger-600)]"
+                      : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)]",
+                  )}
+                >
+                  <Clock className="size-3" />
+                  {timerLabel}
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {step === "step1" ? (
+                <Step1Body
+                  venueName={venueName}
+                  courtName={selectedCourt.name}
+                  pickedDateLabel={pickedDateLabel}
+                  pickedStartDate={pickedStartDate}
+                  pickedEndDate={pickedEndDate}
+                  courtFeeCentavos={displayCourtFee}
+                  systemFeeCentavos={displaySystemFee}
+                  totalCentavos={displayTotal}
+                  editName={editName}
+                  editEmail={editEmail}
+                  editPhone={editPhone}
+                  onNameChange={setEditName}
+                  onEmailChange={setEditEmail}
+                  onPhoneChange={setEditPhone}
+                  createError={createError}
+                  isCreating={isCreating}
+                  onCancel={closeModal}
+                  onNext={() => void proceedToPayment()}
+                />
+              ) : (
+                <Step2Body
+                  bookingId={bookingId!}
+                  totalCentavos={displayTotal}
+                  courtFeeCentavos={displayCourtFee}
+                  systemFeeCentavos={displaySystemFee}
+                  gcashAccountName={gcashAccountName}
+                  gcashAccountNumber={gcashAccountNumber}
+                  receiptFormAction={receiptFormAction}
+                  receiptFormError={receiptFormError}
+                  receiptFieldErrors={receiptFieldErrors}
+                  fileRef={fileRef}
+                  fileName={fileName}
+                  fileError={fileError}
+                  onFilePick={onFilePick}
+                  onCaptchaSolve={setCaptchaSolved}
+                  confirmDetail={confirmDetail}
+                  confirmTerms={confirmTerms}
+                  onConfirmDetailChange={setConfirmDetail}
+                  onConfirmTermsChange={setConfirmTerms}
+                  canSubmit={canSubmitReceipt}
+                  onBack={closeModal}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -340,34 +655,388 @@ function Section({
   );
 }
 
-function ContinueButton({ disabled }: { disabled: boolean }) {
-  // useFormStatus reads the parent <form>'s submission state, so the button
-  // flips to a loading state the instant React fires the action — no waiting
-  // for the server round-trip + redirect to feel responsive.
-  const { pending } = useFormStatus();
-  const isDisabled = disabled || pending;
+// ---------------------------------------------------------------------------
+// Step 1 — Booking Details + Your Details
+// ---------------------------------------------------------------------------
+function Step1Body({
+  venueName,
+  courtName,
+  pickedDateLabel,
+  pickedStartDate,
+  pickedEndDate,
+  courtFeeCentavos,
+  systemFeeCentavos,
+  totalCentavos,
+  editName,
+  editEmail,
+  editPhone,
+  onNameChange,
+  onEmailChange,
+  onPhoneChange,
+  createError,
+  isCreating,
+  onCancel,
+  onNext,
+}: {
+  venueName: string;
+  courtName: string;
+  pickedDateLabel: string;
+  pickedStartDate: Date | null;
+  pickedEndDate: Date | null;
+  courtFeeCentavos: bigint;
+  systemFeeCentavos: bigint;
+  totalCentavos: bigint;
+  editName: string;
+  editEmail: string;
+  editPhone: string;
+  onNameChange: (v: string) => void;
+  onEmailChange: (v: string) => void;
+  onPhoneChange: (v: string) => void;
+  createError: string | null;
+  isCreating: boolean;
+  onCancel: () => void;
+  onNext: () => void;
+}) {
+  const timeRange =
+    pickedStartDate && pickedEndDate
+      ? `${formatTimeManila(pickedStartDate)} – ${formatTimeManila(pickedEndDate)}`
+      : "–";
+  const canProceed = editName.trim().length > 0 && editEmail.trim().length > 0;
+
   return (
-    <button
-      type="submit"
-      disabled={isDisabled}
-      aria-busy={pending}
-      className={cn(
-        "inline-flex h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-5 text-sm font-semibold transition-colors",
-        !isDisabled &&
-          "bg-[var(--color-brand-500)] text-white shadow-[var(--shadow-md)] hover:bg-[var(--color-brand-600)]",
-        pending && "bg-[var(--color-brand-600)] text-white",
-        disabled && !pending &&
-          "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
-      )}
-    >
-      {pending ? (
-        <>
-          <Loader2 className="size-4 animate-spin" aria-hidden /> Loading…
-        </>
+    <div className="flex flex-col gap-4">
+      {/* Warning */}
+      <div className="flex items-start gap-2 rounded-[var(--radius-md)] border border-[var(--color-warning-300)] bg-[var(--color-warning-50)] px-3 py-2.5">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-warning-600)]" />
+        <p className="text-xs text-[var(--color-warning-700)]">
+          Please review carefully. Bookings cannot be modified once submitted.
+        </p>
+      </div>
+
+      {/* Booking Summary */}
+      <div className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] p-3">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+          Booking Summary
+        </p>
+        <div className="flex flex-col gap-1.5">
+          <SummaryRow label="Club" value={venueName} />
+          <SummaryRow label="Date" value={pickedDateLabel} />
+          <div className="my-1 border-t border-[var(--color-border-default)]" />
+          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--color-fg-subtle)]">Booking</p>
+          <div className="rounded-[var(--radius-sm)] bg-[var(--color-brand-50)] px-2 py-1.5 text-sm font-semibold text-[var(--color-brand-700)]">
+            {courtName} · {timeRange}
+          </div>
+          <div className="my-1 border-t border-[var(--color-border-default)]" />
+          <SummaryRow label="Subtotal" value={formatPHP(courtFeeCentavos)} />
+          <SummaryRow label="System Usage Fee" value={formatPHP(systemFeeCentavos)} />
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-sm font-bold">Total Amount</span>
+            <span className="text-base font-bold text-[var(--color-brand-700)]">
+              {formatPHP(totalCentavos)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Your Details */}
+      <div>
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+          Your Details
+        </p>
+        <div className="flex flex-col gap-3">
+          <FormField id="modal-name" label="Full Name">
+            {({ id }) => (
+              <Input
+                id={id}
+                value={editName}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder="Your full name"
+                required
+              />
+            )}
+          </FormField>
+          <FormField
+            id="modal-email"
+            label="Email Address"
+            hint="We'll send your booking confirmation to this email"
+          >
+            {({ id }) => (
+              <Input
+                id={id}
+                type="email"
+                value={editEmail}
+                onChange={(e) => onEmailChange(e.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            )}
+          </FormField>
+          <FormField id="modal-phone" label="Mobile Number" hint="Required for booking updates">
+            {({ id }) => (
+              <Input
+                id={id}
+                type="tel"
+                value={editPhone}
+                onChange={(e) => onPhoneChange(e.target.value)}
+                placeholder="+63 9XX XXX XXXX"
+              />
+            )}
+          </FormField>
+        </div>
+      </div>
+
+      {createError && <Alert variant="danger">{createError}</Alert>}
+
+      {/* Footer */}
+      <div className="flex gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border-default)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!canProceed || isCreating}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold transition-colors",
+            canProceed && !isCreating
+              ? "bg-[var(--color-brand-500)] text-white hover:bg-[var(--color-brand-600)]"
+              : "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
+          )}
+        >
+          {isCreating ? (
+            <>
+              <Loader2 className="size-4 animate-spin" aria-hidden /> Creating…
+            </>
+          ) : (
+            "Next →"
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-[var(--color-fg-muted)]">{label}</span>
+      <span className="text-xs font-medium">{value}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 — Payment & Confirmation
+// ---------------------------------------------------------------------------
+function Step2Body({
+  bookingId,
+  totalCentavos,
+  gcashAccountName,
+  gcashAccountNumber,
+  receiptFormAction,
+  receiptFormError,
+  receiptFieldErrors,
+  fileRef,
+  fileName,
+  fileError,
+  onFilePick,
+  onCaptchaSolve,
+  confirmDetail,
+  confirmTerms,
+  onConfirmDetailChange,
+  onConfirmTermsChange,
+  canSubmit,
+  onBack,
+}: {
+  bookingId: string;
+  totalCentavos: bigint;
+  courtFeeCentavos: bigint;
+  systemFeeCentavos: bigint;
+  gcashAccountName: string | null;
+  gcashAccountNumber: string | null;
+  receiptFormAction: (payload: FormData) => void;
+  receiptFormError: string | undefined;
+  receiptFieldErrors: Record<string, string[] | undefined> | undefined;
+  fileRef: React.RefObject<HTMLInputElement | null>;
+  fileName: string | null;
+  fileError: string | null;
+  onFilePick: () => void;
+  onCaptchaSolve: (v: boolean) => void;
+  confirmDetail: boolean;
+  confirmTerms: boolean;
+  onConfirmDetailChange: (v: boolean) => void;
+  onConfirmTermsChange: (v: boolean) => void;
+  canSubmit: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <form action={receiptFormAction} className="flex flex-col gap-4" noValidate>
+      <input type="hidden" name="bookingId" value={bookingId} />
+
+      {/* Pay exactly banner */}
+      <div className="rounded-[var(--radius-md)] bg-[var(--color-brand-700)] px-4 py-4 text-center text-white">
+        <p className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">
+          PAY EXACTLY
+        </p>
+        <p className="text-3xl font-extrabold tabular-nums tracking-tight">
+          {formatPHP(totalCentavos)}
+        </p>
+        <p className="mt-1 text-xs opacity-70">
+          Incorrect payment amounts may delay your booking confirmation
+        </p>
+      </div>
+
+      {/* Send payment to */}
+      {gcashAccountNumber ? (
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] p-3">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+            Send Payment To
+          </p>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-base font-bold tabular-nums">{gcashAccountNumber}</p>
+              {gcashAccountName && (
+                <p className="text-xs text-[var(--color-fg-muted)]">{gcashAccountName}</p>
+              )}
+            </div>
+            <CopyButton value={gcashAccountNumber} label="GCash number" />
+          </div>
+        </div>
       ) : (
-        "Continue"
+        <Alert variant="warning">
+          GCash number not set up yet. Contact the venue directly for payment instructions.
+        </Alert>
       )}
-    </button>
+
+      {receiptFormError && <Alert variant="danger">{receiptFormError}</Alert>}
+
+      {/* Payment proof */}
+      <FormField
+        id="receipt"
+        label="Payment Proof"
+        hint="JPEG, PNG or WebP · max 5 MB"
+        error={fileError ?? receiptFieldErrors?.["receipt"]?.[0]}
+      >
+        {({ id, describedBy, invalid }) => (
+          <label
+            htmlFor={id}
+            className={cn(
+              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border-2 border-dashed px-4 py-6 text-sm transition-colors",
+              invalid
+                ? "border-[var(--color-danger-500)] bg-[var(--color-danger-50)]"
+                : "border-[var(--color-border-strong)] bg-[var(--color-bg-subtle)] hover:bg-[var(--color-bg-muted)]",
+            )}
+          >
+            <Upload className="size-6 text-[var(--color-fg-muted)]" />
+            <span className="font-medium">{fileName ?? "Tap to upload GCash receipt"}</span>
+            <span className="text-xs text-[var(--color-fg-muted)]">
+              {fileName ? "Tap again to choose a different file" : "Screenshot or photo of payment"}
+            </span>
+            <input
+              id={id}
+              ref={fileRef}
+              type="file"
+              name="receipt"
+              accept={ALLOWED_TYPES.join(",")}
+              required
+              onChange={onFilePick}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              className="sr-only"
+            />
+          </label>
+        )}
+      </FormField>
+
+      {/* Optional GCash reference */}
+      <FormField
+        id="gcashReferenceNumber"
+        label="GCash Reference Number"
+        hint="Optional, but speeds up verification"
+        error={receiptFieldErrors?.["gcashReferenceNumber"]?.[0]}
+      >
+        {({ id, describedBy, invalid }) => (
+          <Input
+            id={id}
+            name="gcashReferenceNumber"
+            type="text"
+            inputMode="numeric"
+            placeholder="e.g. 1234567890"
+            aria-describedby={describedBy}
+            invalid={invalid}
+          />
+        )}
+      </FormField>
+
+      {/* Confirmation checkboxes */}
+      <div className="flex flex-col gap-3">
+        <label className="flex items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={confirmDetail}
+            onChange={(e) => onConfirmDetailChange(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-[var(--color-brand-500)]"
+          />
+          <span className="text-xs text-[var(--color-fg)]">
+            I have reviewed my booking details and confirm they are correct. I understand this
+            booking is <strong>final and cannot be modified.</strong>
+          </span>
+        </label>
+        <label className="flex items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={confirmTerms}
+            onChange={(e) => onConfirmTermsChange(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-[var(--color-brand-500)]"
+          />
+          <span className="text-xs text-[var(--color-fg)]">
+            I understand this booking is <strong>non-refundable.</strong> I have sent the exact
+            amount to the GCash number shown above and will only upload a valid receipt for this
+            transaction.
+          </span>
+        </label>
+      </div>
+
+      {/* Turnstile */}
+      {TURNSTILE_SITE_KEY && (
+        <>
+          <TurnstileWidget
+            siteKey={TURNSTILE_SITE_KEY}
+            action="receipt-upload"
+            onVerify={() => onCaptchaSolve(true)}
+            onExpire={() => onCaptchaSolve(false)}
+          />
+        </>
+      )}
+
+      {/* Footer */}
+      <div className="flex gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border-default)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
+        >
+          ← Back
+        </button>
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold transition-colors",
+            canSubmit
+              ? "bg-[var(--color-brand-500)] text-white hover:bg-[var(--color-brand-600)]"
+              : "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
+          )}
+        >
+          <Check className="size-4" aria-hidden />
+          Submit Booking
+        </button>
+      </div>
+    </form>
   );
 }
 

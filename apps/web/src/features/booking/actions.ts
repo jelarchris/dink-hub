@@ -118,6 +118,49 @@ export async function startBookingFormAction(form: FormData): Promise<void> {
   await startBookingAction(form);
 }
 
+/**
+ * Like startBookingAction but returns the created booking data instead of
+ * redirecting. Used by the multi-step booking modal so the UI can transition
+ * from step 1 to step 2 without a page navigation.
+ */
+export async function startBookingReturningIdAction(
+  form: FormData,
+): Promise<ActionResult<{ bookingId: string; totalCentavos: string; courtFeeCentavos: string; systemFeeCentavos: string }>> {
+  const user = await getCurrentUser();
+  if (!user) return fail("Please sign in to continue", "not_authorized");
+
+  const rl = await checkRateLimit(limiters.bookingCreate, `booking:${user.id}`);
+  if (!rl.allowed) return { ok: false, code: "rate_limited", message: rateLimitMessage(rl.resetMs) };
+
+  const parsed = startBookingSchema.safeParse({
+    courtId: form.get("courtId"),
+    startAt: form.get("startAt"),
+    endAt: form.get("endAt"),
+    venueSlug: form.get("venueSlug"),
+  });
+  if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
+
+  try {
+    const booking = await createBooking({
+      playerId: user.id,
+      courtId: parsed.data.courtId,
+      startAt: parsed.data.startAt,
+      endAt: parsed.data.endAt,
+    });
+    return {
+      ok: true,
+      data: {
+        bookingId: booking.id,
+        totalCentavos: booking.totalCentavos.toString(),
+        courtFeeCentavos: booking.courtFeeCentavos.toString(),
+        systemFeeCentavos: booking.systemFeeCentavos.toString(),
+      },
+    };
+  } catch (err) {
+    return unwrap(err);
+  }
+}
+
 export async function releaseHoldAction(form: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) return;
