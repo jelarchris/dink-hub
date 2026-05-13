@@ -117,7 +117,7 @@ function Hero() {
         </div>
 
         <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
-          One GCash payment. No booking fee during the launch promo. No hidden charges.
+          Pay only what you see — no surprises, no hidden charges.
         </p>
       </Container>
     </section>
@@ -367,9 +367,9 @@ function ForOwnersBand() {
                 Run a court? Fill it.
               </h2>
               <p className="mt-2 max-w-md text-sm text-white/85">
-                List your venue in 5 minutes. Take real bookings. Players pay
-                you directly via GCash. A small booking fee is added to
-                their total — listing your venue is always free.
+                List your venue in 5 minutes. Take real bookings. Players find
+                you, book a slot, and pay you directly via GCash. Free to list
+                — no setup required.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
@@ -389,7 +389,7 @@ function ForOwnersBand() {
             <ul className="grid gap-3 text-sm">
               {[
                 "Free to list — no setup cost, no subscription",
-                "Booking fee paid by players, not you",
+                "GCash direct to you — no middleman",
                 "Verified players, verified receipts",
                 "Calendar-aware double-booking protection",
               ].map((item) => (
@@ -560,8 +560,8 @@ function FaqSection() {
       a: "You'll see the venue's GCash details after picking a slot. Send one transfer for the full amount, upload the receipt, and the venue confirms within minutes.",
     },
     {
-      q: "Are there extra fees?",
-      a: "During the launch promo, players pay only the court fee directly to the venue. Any future booking fee will be shown clearly before you confirm.",
+      q: "What does booking cost?",
+      a: "You pay only the court rate set by the venue. The exact amount is always shown before you confirm — no surprises.",
     },
     {
       q: "Can I cancel?",
