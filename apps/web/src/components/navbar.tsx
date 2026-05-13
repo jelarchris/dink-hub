@@ -128,7 +128,7 @@ export interface NavbarProps {
 /**
  * Scroll-aware nav: visible at the top, hides on scroll-down, reveals on scroll-up.
  * On mobile the horizontal nav links are replaced by a hamburger menu that
- * opens a full-screen navigation panel inside the viewport.
+ * opens a slide-in drawer inside the viewport.
  *
  * rAF-throttled scroll listener coalesces updates to one per frame so React
  * state never updates at 60+ Hz. SHOW/HIDE thresholds prevent jitter from iOS
@@ -143,6 +143,7 @@ export function Navbar({ user }: NavbarProps) {
   const [hidden, setHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const lastYRef = useRef(0);
+  const lockedScrollYRef = useRef<number | null>(null);
   const tickingRef = useRef(false);
 
   // SSR-safe "is on client" flag for portal rendering. Server snapshot is
@@ -159,7 +160,12 @@ export function Navbar({ user }: NavbarProps) {
   // so a stale lock can never persist after navigation, errors, or fast-refresh.
   useEffect(() => {
     return () => {
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.overscrollBehavior = "";
       document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
     };
   }, []);
 
@@ -168,11 +174,36 @@ export function Navbar({ user }: NavbarProps) {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setMenuOpen(false);
     }
+    function onTouchMove(e: TouchEvent) {
+      const menu = document.getElementById("mobile-menu");
+      const target = e.target;
+      if (target instanceof Node && menu?.contains(target)) return;
+      e.preventDefault();
+    }
+
+    const scrollY = lockedScrollYRef.current ?? window.scrollY;
+    lockedScrollYRef.current = scrollY;
     document.addEventListener("keydown", onKey);
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
     document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
     return () => {
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.overscrollBehavior = "";
       document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      if (lockedScrollYRef.current !== null) {
+        window.scrollTo(0, lockedScrollYRef.current);
+        lockedScrollYRef.current = null;
+      }
     };
   }, [menuOpen]);
 
@@ -206,6 +237,15 @@ export function Navbar({ user }: NavbarProps) {
   const navLinkClass =
     "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors";
 
+  function openMobileMenu() {
+    lockedScrollYRef.current = window.scrollY;
+    setMenuOpen(true);
+  }
+
+  function closeMobileMenu() {
+    setMenuOpen(false);
+  }
+
   // The drawer must be rendered OUTSIDE the <header> via a portal: the header
   // uses `backdrop-blur`, which per CSS spec creates a containing block for
   // `position: fixed` descendants — making the drawer scoped to the header
@@ -216,13 +256,21 @@ export function Navbar({ user }: NavbarProps) {
   // where users could see the page but couldn't tap inputs / scroll until reload.
   const drawer = user && mounted && menuOpen
     ? createPortal(
-        <aside
-          id="mobile-menu"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Mobile navigation"
-          className="fixed inset-0 z-50 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-[var(--color-bg)] shadow-2xl sm:hidden"
-        >
+        <div className="fixed inset-0 z-50 sm:hidden">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={closeMobileMenu}
+            className="absolute inset-0 touch-none bg-black/45 backdrop-blur-[2px] animate-[mobile-drawer-backdrop-in_160ms_ease-out]"
+          />
+
+          <aside
+            id="mobile-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mobile navigation"
+            className="absolute inset-y-0 right-0 flex h-[100dvh] w-[min(84vw,22rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden overscroll-contain bg-[var(--color-bg)] shadow-2xl animate-[mobile-drawer-panel-in_190ms_ease-out]"
+          >
             {/* Drawer header: identity + close */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border-default)] px-4 pb-4 pt-4">
               <div className="flex min-w-0 items-center gap-3">
@@ -245,7 +293,7 @@ export function Navbar({ user }: NavbarProps) {
               <button
                 type="button"
                 aria-label="Close menu"
-                onClick={() => setMenuOpen(false)}
+                onClick={closeMobileMenu}
                 className="inline-flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
               >
                 <X size={20} />
@@ -253,7 +301,7 @@ export function Navbar({ user }: NavbarProps) {
             </div>
 
             {/* Sections (scrollable) */}
-            <div className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
+            <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-3">
               {sectionsFor(user.role).map((section) => (
                 <div key={section.heading}>
                   <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-fg-subtle)]">
@@ -264,7 +312,7 @@ export function Navbar({ user }: NavbarProps) {
                       <Link
                         key={href}
                         href={href}
-                        onClick={() => setMenuOpen(false)}
+                        onClick={closeMobileMenu}
                         className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)]"
                       >
                         <Icon size={18} className="text-[var(--color-fg-muted)]" />
@@ -293,7 +341,8 @@ export function Navbar({ user }: NavbarProps) {
                 </button>
               </form>
             </div>
-          </aside>,
+          </aside>
+        </div>,
         document.body,
       )
     : null;
@@ -379,7 +428,13 @@ export function Navbar({ user }: NavbarProps) {
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
                 aria-expanded={menuOpen}
                 aria-controls="mobile-menu"
-                onClick={() => setMenuOpen((o) => !o)}
+                onClick={() => {
+                  if (menuOpen) {
+                    closeMobileMenu();
+                  } else {
+                    openMobileMenu();
+                  }
+                }}
                 className="inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
               >
                 {menuOpen ? <X size={22} /> : <Menu size={22} />}

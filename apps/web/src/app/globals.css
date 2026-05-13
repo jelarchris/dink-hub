@@ -153,3 +153,21 @@ label {
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
+
+@keyframes mobile-drawer-panel-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes mobile-drawer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
