@@ -175,6 +175,9 @@ export const bookings = pgTable("bookings", {
   rescheduledCount: integer("rescheduled_count").notNull().default(0),
   lastRescheduledAt: timestamp("last_rescheduled_at", { withTimezone: true }),
   lastRescheduledBy: uuid("last_rescheduled_by").references(() => profiles.id),
+  // Set by the T-2h session-reminder cron after dispatching the email.
+  // NULL = reminder not yet sent. Prevents duplicate sends on cron retries.
+  reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
 });
 
 // ----------------------------------------------------------------------------

@@ -1,0 +1,49 @@
+name: cron-session-reminder
+
+# Sends T-2h "your game is in 2 hours" emails to players with confirmed
+# bookings starting in the next 1h45m–2h15m window.
+#
+# Fires every 30 minutes so the 30-min detection window catches every booking
+# in exactly one run. reminder_sent_at idempotency prevents duplicates on
+# retry or overlap.
+#
+# Required repo secret: CRON_SECRET (must match the value set in Vercel env).
+# Optional repo secret: CRON_TARGET_URL (defaults to https://dinkhub.ph).
+
+on:
+  schedule:
+    # Every 30 minutes, around the clock.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: cron-session-reminder
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: POST /api/cron/session-reminder
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_TARGET_URL: ${{ secrets.CRON_TARGET_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set"
+            exit 1
+          fi
+          base="${CRON_TARGET_URL:-https://dinkhub.ph}"
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "$base/api/cron/session-reminder" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json" \
+            --max-time 120 --retry 2 --retry-delay 5)
+          echo "status=$status"
+          cat /tmp/body.json || true
+          if [ "$status" != "200" ]; then
+            echo "::error::cron-session-reminder returned non-200 status"
+            exit 1
+          fi

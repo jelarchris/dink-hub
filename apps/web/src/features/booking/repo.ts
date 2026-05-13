@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lt, lte, sql, gte } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
@@ -229,6 +229,46 @@ export async function findExpiredPendingBookings(
     .from(bookings)
     .where(and(eq(bookings.status, "pending_payment"), lt(bookings.paymentDueAt, sql`now()`)))
     .limit(limit);
+}
+
+/**
+ * Returns confirmed bookings whose session starts in [windowStart, windowEnd]
+ * and that haven't had a reminder sent yet. The caller constrains the window
+ * to ~30 min around the T-2h mark so each cron run covers exactly one firing
+ * per booking. `reminder_sent_at IS NULL` is the idempotency guard.
+ */
+export async function findBookingsNeedingReminder(
+  windowStart: Date,
+  windowEnd: Date,
+  limit = 200,
+  exec: Executor = db,
+): Promise<Pick<Booking, "id">[]> {
+  return exec
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.status, "confirmed"),
+        isNull(bookings.reminderSentAt),
+        gte(bookings.startAt, windowStart),
+        lt(bookings.startAt, windowEnd),
+      ),
+    )
+    .limit(limit);
+}
+
+/**
+ * Stamps reminder_sent_at = now() on a single booking. Fire-and-forget safe:
+ * a second call is a no-op because the cron skips rows where it's already set.
+ */
+export async function markReminderSent(
+  bookingId: string,
+  exec: Executor = db,
+): Promise<void> {
+  await exec
+    .update(bookings)
+    .set({ reminderSentAt: sql`now()` })
+    .where(eq(bookings.id, bookingId));
 }
 
 /**

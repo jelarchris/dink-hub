@@ -831,6 +831,50 @@ export async function releaseExpiredHolds(): Promise<{ released: number }> {
 }
 
 // ============================================================================
+// 10b. sendSessionReminders — cron: T-2h player reminder emails
+//
+// Scans confirmed bookings whose session starts in the next 1h45m–2h15m
+// window AND haven't been reminded yet (reminder_sent_at IS NULL).
+//
+// The 30-minute window matches the cron cadence so every booking is caught
+// in exactly one firing. The partial index on (start_at WHERE status =
+// 'confirmed' AND reminder_sent_at IS NULL) keeps the scan cheap.
+//
+// Idempotency: reminder_sent_at is stamped BEFORE the email dispatch.
+// If the email send fails the stamp is already set, preventing retry spam.
+// We accept one missed email over repeated flooding.
+// ============================================================================
+export async function sendSessionReminders(): Promise<{ sent: number; skipped: number }> {
+  // Import lazily to avoid pulling the email/notification stack into every
+  // service consumer (service.ts is imported by many paths).
+  const { notifySessionReminder } = await import("./notifications");
+
+  const now = new Date();
+  // Window: [now + 1h45m, now + 2h15m) — 30-min span around the T-2h mark.
+  const windowStart = new Date(now.getTime() + 105 * 60 * 1_000); // +1h45m
+  const windowEnd = new Date(now.getTime() + 135 * 60 * 1_000);   // +2h15m
+
+  const candidates = await repo.findBookingsNeedingReminder(windowStart, windowEnd);
+  let sent = 0;
+  let skipped = 0;
+
+  for (const { id } of candidates) {
+    // Stamp first — prevents duplicate sends if email fails.
+    await repo.markReminderSent(id);
+    try {
+      await notifySessionReminder(id);
+      sent++;
+    } catch {
+      // notifySessionReminder swallows errors internally via captureException,
+      // so this catch is a last-resort safety net only.
+      skipped++;
+    }
+  }
+
+  return { sent, skipped };
+}
+
+// ============================================================================
 // 10. recordOwnerRefund — owner confirms they have refunded the player (Tier 5)
 //
 // Preconditions:

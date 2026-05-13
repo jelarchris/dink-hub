@@ -692,3 +692,38 @@ export function buildRescheduleIcs(ctx: {
 
   return Buffer.from(ics, "utf8").toString("base64");
 }
+
+// ---------------------------------------------------------------------------
+// session_reminder → player (T-2h)
+// ---------------------------------------------------------------------------
+export function sessionReminderEmail(ctx: BookingEmailContext & {
+  playerDisplayName: string;
+}) {
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
+
+  return {
+    subject: `Heads up — your game starts in 2 hours at ${ctx.venueName}`,
+    html: shell({
+      heading: `Your court is in 2 hours 🏸`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, just a quick reminder that your pickleball session is coming up soon.</p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0;"><strong>Total paid:</strong> ${escapeHtml(total)}</p>
+        </div>
+        <p style="margin:0;">Bring water, warm up, and enjoy your game!</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "View booking",
+    }),
+    text:
+      `Your court is in 2 hours\n\n` +
+      `Hi ${ctx.playerDisplayName}, your pickleball session is coming up soon.\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal paid: ${total}\n\n` +
+      `View booking: ${link}\n`,
+  };
+}

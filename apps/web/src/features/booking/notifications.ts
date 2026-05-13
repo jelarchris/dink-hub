@@ -13,6 +13,7 @@ import {
   paymentRejectedEmail,
   paymentSubmittedEmail,
   paymentVerifiedEmail,
+  sessionReminderEmail,
 } from "@/lib/email/templates";
 import { captureException } from "@/lib/observability";
 
@@ -337,5 +338,29 @@ export async function notifyDisputeResolved(
     await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "dispute_resolved" });
   } catch (err) {
     captureException(err, { scope: "notify.dispute_resolved", extra: { paymentId } });
+  }
+}
+
+/**
+ * Sends the T-2h session reminder to the player for a confirmed booking.
+ * Called by the session-reminder cron; failures are swallowed so the cron
+ * can mark reminder_sent_at and move on without retrying the email.
+ */
+export async function notifySessionReminder(bookingId: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const tpl = sessionReminderEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      playerDisplayName: ctx.playerDisplayName,
+    });
+    await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "session_reminder" });
+  } catch (err) {
+    captureException(err, { scope: "notify.session_reminder", extra: { bookingId } });
   }
 }
