@@ -88,15 +88,15 @@ function Hero() {
           id="hero-heading"
           className="mx-auto mt-4 max-w-3xl text-balance text-3xl font-extrabold leading-[1.05] tracking-tight sm:text-4xl lg:text-5xl"
         >
-          Pickleball, booked in seconds.{" "}
+          Your court is{" "}
           <span className="bg-gradient-to-r from-[var(--color-brand-500)] to-[var(--color-accent-500)] bg-clip-text text-transparent">
-            No phone calls.
+            waiting.
           </span>
         </h1>
 
         <p className="mx-auto mt-3 max-w-xl text-pretty text-base text-[var(--color-fg-muted)]">
-          Find courts near you, see real availability, and pay through GCash.
-          Confirmation lands in your inbox — usually within minutes.
+          Find pickleball courts near you, see real availability, and pay
+          through GCash. No calls, no chats — confirmation in your inbox.
         </p>
 
         <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
