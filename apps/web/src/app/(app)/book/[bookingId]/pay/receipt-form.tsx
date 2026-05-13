@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Upload } from "lucide-react";
 import { submitReceiptAction } from "@/features/booking/payment-actions";
 import type { ActionResult } from "@/features/auth";
@@ -16,6 +17,8 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 
 export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [state, formAction] = useActionState<ActionResult | null, FormData>(
     submitReceiptAction,
     null,
@@ -32,6 +35,13 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
   const formError =
     state && !state.ok && state.code !== "validation_failed" ? state.message : undefined;
   const success = state?.ok === true;
+
+  useEffect(() => {
+    if (!success) return;
+    startTransition(() => {
+      router.refresh();
+    });
+  }, [router, startTransition, success]);
 
   function onPick() {
     const f = fileRef.current?.files?.[0];
@@ -63,7 +73,7 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4" encType="multipart/form-data" noValidate>
+    <form action={formAction} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="bookingId" value={bookingId} />
 
       {formError && <Alert variant="danger">{formError}</Alert>}

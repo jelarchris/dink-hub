@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { Check, Clock, CreditCard } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -31,6 +32,7 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
 
   return (
     <Container className="max-w-4xl py-3 sm:py-4">
+      {booking.status === "payment_submitted" && <AutoRefresh intervalMs={8_000} />}
       <PageHeader
         back={{ href: "/me/bookings", label: "My bookings" }}
         kicker="Pay"
@@ -75,7 +77,7 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
             <Alert variant="info" icon={<Clock />} title="Waiting for venue verification">
               Your receipt was uploaded {formatDateTimeManila(payment.submittedAt)}. The venue
               owner will confirm your payment shortly. You&apos;ll see your booking move to{" "}
-              <strong>Confirmed</strong> here once approved.
+              <strong>Confirmed</strong> here once approved. This page updates automatically.
             </Alert>
           )}
 

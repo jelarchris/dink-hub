@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CalendarDays } from "lucide-react";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -36,9 +37,11 @@ export default async function MyBookingsPage() {
   const reviewedBookingIds = new Set(
     reviewResults.filter((r) => r.reviewed).map((r) => r.id),
   );
+  const hasWaitingBooking = items.some((item) => item.booking.status === "payment_submitted");
 
   return (
     <Container className="py-3 sm:py-4">
+      {hasWaitingBooking && <AutoRefresh intervalMs={10_000} />}
       <PageHeader
         kicker="My bookings"
         title={`${items.length} booking${items.length === 1 ? "" : "s"}`}

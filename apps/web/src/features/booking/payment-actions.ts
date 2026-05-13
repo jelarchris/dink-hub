@@ -102,12 +102,12 @@ export async function submitReceiptAction(
   const file = form.get("receipt");
   if (!(file instanceof File)) return fail("Receipt image is required", "validation_failed");
 
-  const upload = await uploadReceipt({ bookingId: parsed.data.bookingId, file });
-  if (!upload.ok) {
-    return { ok: false, code: upload.error.code, message: upload.error.message };
-  }
-
   try {
+    const upload = await uploadReceipt({ bookingId: parsed.data.bookingId, file });
+    if (!upload.ok) {
+      return { ok: false, code: upload.error.code, message: upload.error.message };
+    }
+
     await submitPayment({
       bookingId: parsed.data.bookingId,
       playerId: user.id,

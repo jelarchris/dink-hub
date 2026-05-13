@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Inbox } from "lucide-react";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -28,6 +29,7 @@ export default async function OwnerPaymentsPage() {
 
   return (
     <Container className="max-w-3xl py-3 sm:py-4">
+      <AutoRefresh intervalMs={10_000} />
       <PageHeader
         back={{ href: "/owner", label: "Owner" }}
         kicker="Verify payments"

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { buttonVariants } from "@/components/ui/button";
 import { PageHeader, SectionLabel } from "@/components/ui/page-header";
 import { Alert } from "@/components/ui/alert";
@@ -145,6 +146,7 @@ export default async function OwnerDashboard({
 
   return (
     <Container className="py-3 sm:py-4">
+      <AutoRefresh intervalMs={15_000} />
       <PageHeader
         kicker="Owner"
         title={`Hi, ${firstName}`}

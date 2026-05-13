@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Check, X } from "lucide-react";
 import { rejectPaymentAction, verifyPaymentAction } from "@/features/booking/payment-actions";
 import type { ActionResult } from "@/features/auth";
@@ -28,6 +29,8 @@ export interface PaymentReviewCardProps {
 }
 
 export function PaymentReviewCard(props: PaymentReviewCardProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [mode, setMode] = useState<"idle" | "rejecting">("idle");
   const [verifyState, verifyAction, verifyPending] = useActionState<ActionResult | null, FormData>(
     verifyPaymentAction,
@@ -41,8 +44,16 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
   const expected = BigInt(props.expectedTotalCentavosStr);
   const submitted = BigInt(props.amountCentavosStr);
   const amountMismatch = expected !== submitted;
+  const actionSucceeded = verifyState?.ok === true || rejectState?.ok === true;
 
-  if (verifyState?.ok || rejectState?.ok) {
+  useEffect(() => {
+    if (!actionSucceeded) return;
+    startTransition(() => {
+      router.refresh();
+    });
+  }, [actionSucceeded, router, startTransition]);
+
+  if (actionSucceeded) {
     return (
       <Alert variant="success" icon={<Check />}>
         {verifyState?.ok ? "Payment verified" : "Payment rejected"}.
