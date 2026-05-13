@@ -71,7 +71,7 @@ describe("booking service", () => {
   // --------------------------------------------------------------------------
   // createBooking — happy path with hold
   // --------------------------------------------------------------------------
-  it("createBooking computes fees, snapshots system fee, and creates pending_payment", async () => {
+  it("createBooking computes fees, snapshots launch promo fee, and creates pending_payment", async () => {
     const hold = await holdSlot({ playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end });
     const booking = await createBooking({
       playerId: fx.playerId,
@@ -82,8 +82,8 @@ describe("booking service", () => {
     });
     expect(booking.status).toBe("pending_payment");
     expect(booking.courtFeeCentavos).toBe(20000n); // ₱200/hr * 1hr
-    expect(booking.systemFeeCentavos).toBe(2000n); // seeded ₱20
-    expect(booking.totalCentavos).toBe(22000n);
+    expect(booking.systemFeeCentavos).toBe(0n); // launch promo waives booking fees
+    expect(booking.totalCentavos).toBe(20000n);
     expect(booking.cancellableUntil.getTime()).toBeGreaterThan(Date.now());
   });
 

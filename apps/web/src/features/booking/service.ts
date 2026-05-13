@@ -59,6 +59,14 @@ function durationMinutes(start: Date, end: Date): number {
   return (end.getTime() - start.getTime()) / 60_000;
 }
 
+function addMilliseconds(date: Date, milliseconds: number): Date {
+  return new Date(date.getTime() + milliseconds);
+}
+
+function isAtOrBefore(left: Date, right: Date): boolean {
+  return left.getTime() <= right.getTime();
+}
+
 /**
  * Compute court fee in centavos for a slot. Duration is always a multiple of 30
  * minutes (DB-enforced), and hourly_rate is centavos/hour, so:
@@ -81,7 +89,9 @@ export async function holdSlot(input: HoldSlotInput): Promise<SlotHold> {
   }
   const { playerId, courtId, startAt, endAt } = parsed.data;
 
-  if (startAt.getTime() <= Date.now()) {
+  const now = await repo.getDatabaseNow();
+
+  if (isAtOrBefore(startAt, now)) {
     throw new BookingError("validation_failed", "startAt must be in the future");
   }
 
@@ -104,7 +114,7 @@ export async function holdSlot(input: HoldSlotInput): Promise<SlotHold> {
       courtId,
       startAt,
       endAt,
-      expiresAt: new Date(Date.now() + HOLD_TTL_MS),
+      expiresAt: addMilliseconds(now, HOLD_TTL_MS),
     });
   } catch (err) {
     if (isPgError(err, PG_EXCLUSION_VIOLATION)) {
@@ -144,7 +154,9 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
   }
   const { playerId, courtId, startAt, endAt, holdId, notes } = parsed.data;
 
-  if (startAt.getTime() <= Date.now()) {
+  const initialNow = await repo.getDatabaseNow();
+
+  if (isAtOrBefore(startAt, initialNow)) {
     throw new BookingError("validation_failed", "startAt must be in the future");
   }
 
@@ -182,11 +194,14 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
     courtRow.court.hourlyRateCentavos,
   );
 
-  const now = new Date();
-  const cancellableUntil = new Date(now.getTime() + CANCEL_WINDOW_MS);
-  const paymentDueAt = new Date(now.getTime() + PAYMENT_DUE_TTL_MS);
-
   return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
+    if (isAtOrBefore(startAt, now)) {
+      throw new BookingError("validation_failed", "startAt must be in the future");
+    }
+    const cancellableUntil = addMilliseconds(now, CANCEL_WINDOW_MS);
+    const paymentDueAt = addMilliseconds(now, PAYMENT_DUE_TTL_MS);
+
     // If holdId given, validate ownership + slot match, then consume it.
     if (holdId) {
       const hold = await repo.findHoldById(holdId, tx);
@@ -194,7 +209,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       if (hold.playerId !== playerId) {
         throw new BookingError("hold_not_owned", "Hold belongs to another player");
       }
-      if (hold.expiresAt.getTime() <= Date.now()) {
+      if (isAtOrBefore(hold.expiresAt, now)) {
         throw new BookingError("hold_expired", "Hold has expired — please re-select the slot");
       }
       if (
@@ -249,6 +264,7 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<Payment>
     parsed.data;
 
   return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
     const booking = await repo.findBookingById(bookingId, tx);
     if (!booking) throw new BookingError("booking_not_found", "Booking not found");
     if (booking.playerId !== playerId) {
@@ -260,7 +276,7 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<Payment>
         `Cannot submit payment — booking status is ${booking.status}`,
       );
     }
-    if (booking.paymentDueAt.getTime() <= Date.now()) {
+    if (isAtOrBefore(booking.paymentDueAt, now)) {
       throw new BookingError("booking_wrong_status", "Payment window has expired");
     }
     if (amountCentavos !== booking.totalCentavos) {
@@ -315,6 +331,7 @@ export async function verifyPayment(input: VerifyPaymentInput): Promise<Payment>
   const { paymentId, verifierId } = parsed.data;
 
   return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
     const payment = await repo.findPaymentById(paymentId, tx);
     if (!payment) throw new BookingError("payment_not_found", "Payment not found");
     if (payment.status === "verified") {
@@ -342,7 +359,7 @@ export async function verifyPayment(input: VerifyPaymentInput): Promise<Payment>
       {
         status: "verified",
         verifiedBy: verifierId,
-        verifiedAt: new Date(),
+        verifiedAt: now,
       },
       tx,
     );
@@ -411,6 +428,7 @@ export async function rejectPayment(input: RejectPaymentInput): Promise<Payment>
   const { paymentId, verifierId, reason } = parsed.data;
 
   return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
     const payment = await repo.findPaymentById(paymentId, tx);
     if (!payment) throw new BookingError("payment_not_found", "Payment not found");
     if (payment.status !== "submitted") {
@@ -431,7 +449,7 @@ export async function rejectPayment(input: RejectPaymentInput): Promise<Payment>
       {
         status: "rejected",
         verifiedBy: verifierId,
-        verifiedAt: new Date(),
+        verifiedAt: now,
         rejectionReason: reason,
       },
       tx,
@@ -467,6 +485,7 @@ export async function cancelBooking(input: CancelBookingInput): Promise<Booking>
   const { bookingId, playerId } = parsed.data;
 
   return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
     const booking = await repo.findBookingById(bookingId, tx);
     if (!booking) throw new BookingError("booking_not_found", "Booking not found");
     if (booking.playerId !== playerId) {
@@ -478,7 +497,7 @@ export async function cancelBooking(input: CancelBookingInput): Promise<Booking>
         `Cannot cancel — status is ${booking.status}. Confirmed bookings require admin refund.`,
       );
     }
-    if (booking.cancellableUntil.getTime() <= Date.now()) {
+    if (isAtOrBefore(booking.cancellableUntil, now)) {
       throw new BookingError(
         "booking_not_cancellable",
         "15-minute cancellation window has elapsed",
@@ -490,7 +509,7 @@ export async function cancelBooking(input: CancelBookingInput): Promise<Booking>
       booking.version,
       {
         status: "cancelled",
-        cancelledAt: new Date(),
+        cancelledAt: now,
         cancelledBy: playerId,
         cancellationCategory: "player_request",
       },
@@ -528,6 +547,7 @@ export async function cancelBookingByOwner(
   const { bookingId, ownerId, expectedVersion, category, reason } = parsed.data;
 
   const { cancelled, oldStatus } = await db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
     const booking = await repo.findBookingById(bookingId, tx);
     if (!booking) throw new BookingError("booking_not_found", "Booking not found");
     if (booking.version !== expectedVersion) {
@@ -559,7 +579,7 @@ export async function cancelBookingByOwner(
       {
         status: "cancelled",
         notes: newNotes,
-        cancelledAt: new Date(),
+        cancelledAt: now,
         cancelledBy: ownerId,
         cancellationReason: reason,
         cancellationCategory: category,
@@ -625,11 +645,17 @@ export async function rescheduleBookingByOwner(
   }
   const { bookingId, ownerId, expectedVersion, newStartAt, newEndAt, newCourtId, reason } = parsed.data;
 
-  if (newStartAt.getTime() <= Date.now()) {
+  const initialNow = await repo.getDatabaseNow();
+  if (isAtOrBefore(newStartAt, initialNow)) {
     throw new BookingError("validation_failed", "New start time must be in the future");
   }
 
   const { updated, beforeState } = await db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
+    if (isAtOrBefore(newStartAt, now)) {
+      throw new BookingError("validation_failed", "New start time must be in the future");
+    }
+
     const booking = await repo.findBookingById(bookingId, tx);
     if (!booking) throw new BookingError("booking_not_found", "Booking not found");
     if (booking.version !== expectedVersion) {
@@ -702,7 +728,7 @@ export async function rescheduleBookingByOwner(
             ? { originalStartAt: booking.startAt, originalEndAt: booking.endAt }
             : {}),
           rescheduledCount: booking.rescheduledCount + 1,
-          lastRescheduledAt: new Date(),
+          lastRescheduledAt: now,
           lastRescheduledBy: ownerId,
         })
         .where(
@@ -829,6 +855,7 @@ export async function recordOwnerRefund(
   const { and, eq } = await import("drizzle-orm");
 
   return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
     // 1. Load and lock payment.
     const payRows = await tx
       .select()
@@ -887,7 +914,7 @@ export async function recordOwnerRefund(
       .set({
         status: "rejected",
         rejectionReason,
-        updatedAt: new Date(),
+        updatedAt: now,
       })
       .where(
         and(
@@ -1038,7 +1065,6 @@ export async function closeBookingsForRange(
     return { result: { cancelledCount: 0, skippedCount: 0 }, cancelledBookingIds: [] };
   }
 
-  const now = new Date();
   const noteText = `[Owner closure · ${input.category}] ${input.reason}`;
   let cancelledCount = 0;
   let skippedCount = 0;
@@ -1046,6 +1072,7 @@ export async function closeBookingsForRange(
 
   // Single transaction — all-or-nothing across the batch.
   await db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
     for (const candidate of candidates) {
       const wasConfirmed = candidate.status === "confirmed";
       const noteExtra = wasConfirmed

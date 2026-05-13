@@ -107,6 +107,13 @@ export async function findCurrentSystemFeeCentavos(exec: Executor = db): Promise
   return rows[0]?.fee ?? null;
 }
 
+export async function getDatabaseNow(exec: Executor = db): Promise<Date> {
+  const rows = await exec.execute<{ now: Date }>(sql`select now() as now`);
+  const row = rows[0];
+  if (!row) throw new Error("getDatabaseNow: no row returned");
+  return new Date(row.now);
+}
+
 // ----------------------------------------------------------------------------
 // Writes
 // ----------------------------------------------------------------------------

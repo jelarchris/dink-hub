@@ -61,6 +61,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       ui_host: uiHost,
       capture_pageview: false,
       capture_pageleave: true,
+      advanced_disable_flags: true,
       advanced_disable_feature_flags: true,
       disable_external_dependency_loading: true,
       person_profiles: "identified_only",
