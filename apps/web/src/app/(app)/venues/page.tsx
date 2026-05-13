@@ -297,7 +297,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
               const avail: VenueAvailability | undefined = availabilityMap?.get(v.venue.id);
               const fullyBooked = avail !== undefined && avail.availableCourts === 0;
               return (
-              <li key={v.venue.id}>
+              <li key={v.venue.id} className="min-w-0">
                 <Link
                   href={`/venues/${v.venue.slug}`}
                   className="group block overflow-hidden rounded-[var(--radius-lg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)] focus-visible:ring-offset-2"
