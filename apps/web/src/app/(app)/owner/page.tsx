@@ -462,7 +462,11 @@ function TodayPanel({
               href={`/owner/bookings/${item.bookingId}`}
               className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-3 py-2 text-sm transition-colors hover:bg-[var(--color-bg-muted)]"
             >
-              <span className="block font-mono font-semibold tabular-nums">{COMPACT_TIME_FMT.format(item.startAt)}</span>
+              <span className="block text-xs font-semibold tabular-nums">
+                {COMPACT_TIME_FMT.format(item.startAt)}
+                <span className="mx-0.5 text-[var(--color-fg-subtle)]">–</span>
+                {COMPACT_TIME_FMT.format(item.endAt)}
+              </span>
               <span className="mt-0.5 block truncate text-xs text-[var(--color-fg-muted)]">{item.courtName}</span>
             </Link>
           ))}
