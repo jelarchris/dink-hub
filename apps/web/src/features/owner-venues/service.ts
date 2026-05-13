@@ -274,6 +274,8 @@ export async function createCourt(args: {
       surface: args.input.surface,
       isIndoor: args.input.isIndoor,
       hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
+      openHour: args.input.openHour,
+      closeHour: args.input.closeHour,
       imagePath: args.input.imagePath,
       isActive: true,
     })
@@ -295,6 +297,8 @@ export async function updateCourt(args: {
       surface: args.input.surface,
       isIndoor: args.input.isIndoor,
       hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
+      openHour: args.input.openHour,
+      closeHour: args.input.closeHour,
       imagePath: args.input.imagePath,
       updatedAt: new Date(),
     })

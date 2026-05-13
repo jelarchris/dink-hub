@@ -21,7 +21,7 @@ export interface CourtFormProps {
   action: CourtAction;
   mode: "create" | "edit";
   venueId: string;
-  initial?: Pick<Court, "id" | "name" | "surface" | "isIndoor" | "hourlyRateCentavos" | "imagePath">;
+  initial?: Pick<Court, "id" | "name" | "surface" | "isIndoor" | "hourlyRateCentavos" | "openHour" | "closeHour" | "imagePath">;
 }
 
 const initialState: ActionResult<never> | null = null;
@@ -123,6 +123,54 @@ export function CourtForm({ action, mode, venueId, initial }: CourtFormProps) {
         />
         <span>Indoor court</span>
       </label>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          id="openHour"
+          label="Opens at"
+          hint="First bookable slot of the day."
+          error={err("openHour")}
+        >
+          {({ id, describedBy, invalid }) => (
+            <Select
+              id={id}
+              name="openHour"
+              defaultValue={initial?.openHour ?? 6}
+              aria-describedby={describedBy}
+              invalid={invalid}
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {h === 0 ? "12:00 AM" : h < 12 ? `${h}:00 AM` : h === 12 ? "12:00 PM" : `${h - 12}:00 PM`}
+                </option>
+              ))}
+            </Select>
+          )}
+        </FormField>
+
+        <FormField
+          id="closeHour"
+          label="Closes at"
+          hint="Last bookable slot ends at this hour."
+          error={err("closeHour")}
+        >
+          {({ id, describedBy, invalid }) => (
+            <Select
+              id={id}
+              name="closeHour"
+              defaultValue={initial?.closeHour ?? 22}
+              aria-describedby={describedBy}
+              invalid={invalid}
+            >
+              {Array.from({ length: 24 }, (_, h) => h + 1).map((h) => (
+                <option key={h} value={h}>
+                  {h === 24 ? "12:00 AM (midnight)" : h < 12 ? `${h}:00 AM` : h === 12 ? "12:00 PM" : `${h - 12}:00 PM`}
+                </option>
+              ))}
+            </Select>
+          )}
+        </FormField>
+      </div>
 
       <ImageUpload
         name="imageFile"

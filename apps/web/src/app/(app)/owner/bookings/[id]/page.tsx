@@ -258,6 +258,8 @@ export default async function OwnerBookingDetailPage({
                           isIndoor: c.isIndoor,
                           surface: c.surface,
                           hourlyRateCentavos: Number(c.hourlyRateCentavos),
+                          openHour: c.openHour,
+                          closeHour: c.closeHour,
                         }))}
                       />
                     </div>

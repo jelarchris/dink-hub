@@ -85,6 +85,8 @@ export default async function BookCourtPage({
             surface: c.surface,
             isIndoor: c.isIndoor,
             hourlyRateCentavos: c.hourlyRateCentavos.toString(),
+            openHour: c.openHour,
+            closeHour: c.closeHour,
             imageUrl: venueMediaPublicUrl(c.imagePath),
             rateBands: rateBandsForCourt.map((b) => ({
               fromHour: b.fromHour,

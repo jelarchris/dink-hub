@@ -95,6 +95,8 @@ export const courtUpsertSchema = z.object({
     .union([z.literal("on"), z.literal("true"), z.literal("false"), z.undefined()])
     .transform((v) => v === "on" || v === "true"),
   hourlyRatePhp: phpAmountSchema,
+  openHour: z.coerce.number().int().min(0).max(23).default(6),
+  closeHour: z.coerce.number().int().min(1).max(24).default(22),
   imagePath: z
     .string()
     .trim()

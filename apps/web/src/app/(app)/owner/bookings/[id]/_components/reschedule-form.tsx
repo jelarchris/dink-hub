@@ -20,6 +20,8 @@ export interface CourtOption {
   isIndoor: boolean;
   surface: string;
   hourlyRateCentavos: number;
+  openHour: number;
+  closeHour: number;
 }
 
 interface RescheduleFormProps {
@@ -38,8 +40,6 @@ interface OccupiedRange {
 }
 
 const SLOT_MINUTES = 60;
-const OPEN_HOUR = 6;
-const CLOSE_HOUR = 22;
 const DURATION_OPTIONS = [60, 120, 180, 240] as const;
 const MANILA_OFFSET_MS = 8 * 3_600_000;
 
@@ -124,14 +124,16 @@ export function RescheduleForm({
   // Slot availability
   // ---------------------------------------------------------------------------
 
+  const selectedCourt = availableCourts.find((c) => c.id === selectedCourtId);
+
   const slots = useMemo(
     () =>
       generateDaySlotsManila({
         isoDate: selectedDateIso,
-        startHour: OPEN_HOUR,
-        endHour: CLOSE_HOUR,
+        startHour: selectedCourt?.openHour ?? 6,
+        endHour: selectedCourt?.closeHour ?? 22,
       }).filter((d) => d.getMinutes() === 0),
-    [selectedDateIso],
+    [selectedDateIso, selectedCourt?.openHour, selectedCourt?.closeHour],
   );
 
   const [nowMs] = useState(() => Date.now());
@@ -165,10 +167,9 @@ export function RescheduleForm({
       : "";
 
   const isCourtChanged = selectedCourtId !== currentCourtId;
-  const newCourt = availableCourts.find((c) => c.id === selectedCourtId);
   const feePreview =
-    isCourtChanged && newCourt
-      ? Math.floor((durationMin * newCourt.hourlyRateCentavos) / 60)
+    isCourtChanged && selectedCourt
+      ? Math.floor((durationMin * selectedCourt.hourlyRateCentavos) / 60)
       : null;
 
   const showCourtPicker = availableCourts.length > 1;
@@ -223,7 +224,7 @@ export function RescheduleForm({
           {feePreview !== null && (
             <p className="mt-1 text-xs text-amber-700">
               Court fee will update to <strong>{formatPesoCents(feePreview)}</strong> based on{" "}
-              {newCourt?.name}&apos;s rate.
+              {selectedCourt?.name}&apos;s rate.
             </p>
           )}
         </div>

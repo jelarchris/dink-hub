@@ -114,6 +114,8 @@ export const courts = pgTable("courts", {
   surface: courtSurfaceEnum("surface").notNull().default("hard"),
   isIndoor: boolean("is_indoor").notNull().default(false),
   hourlyRateCentavos: bigint("hourly_rate_centavos", { mode: "bigint" }).notNull(),
+  openHour: smallint("open_hour").notNull().default(6),
+  closeHour: smallint("close_hour").notNull().default(22),
   imagePath: text("image_path"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

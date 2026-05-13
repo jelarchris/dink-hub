@@ -28,8 +28,6 @@ import { cn } from "@/lib/cn";
 import { addMinutes, formatTimeManila, generateDaySlotsManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
 
-const OPEN_HOUR = 6;
-const CLOSE_HOUR = 22;
 const SLOT_MINUTES = 60;
 const MAX_SLOTS = 4; // server enforces 4-hour max
 const TIMER_START = 15 * 60; // 15 minutes
@@ -60,6 +58,8 @@ export interface BookingFlowProps {
     isIndoor: boolean;
     /** bigint serialised — convert with BigInt() before arithmetic. */
     hourlyRateCentavos: string;
+    openHour: number;
+    closeHour: number;
     imageUrl: string | null;
     rateBands: ReadonlyArray<{ fromHour: number; toHour: number; rateCentavos: string }>;
   }>;
@@ -232,10 +232,10 @@ export function BookingFlow({
     () =>
       generateDaySlotsManila({
         isoDate: selectedDateIso,
-        startHour: OPEN_HOUR,
-        endHour: CLOSE_HOUR,
+        startHour: selectedCourt?.openHour ?? 6,
+        endHour: selectedCourt?.closeHour ?? 22,
       }).filter((d) => d.getMinutes() === 0),
-    [selectedDateIso],
+    [selectedDateIso, selectedCourt?.openHour, selectedCourt?.closeHour],
   );
 
   const [now] = useState(() => Date.now());
