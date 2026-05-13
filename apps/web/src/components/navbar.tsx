@@ -128,7 +128,7 @@ export interface NavbarProps {
 /**
  * Scroll-aware nav: visible at the top, hides on scroll-down, reveals on scroll-up.
  * On mobile the horizontal nav links are replaced by a hamburger menu that
- * slides open a full-width panel below the header.
+ * opens a full-screen navigation panel inside the viewport.
  *
  * rAF-throttled scroll listener coalesces updates to one per frame so React
  * state never updates at 60+ Hz. SHOW/HIDE thresholds prevent jitter from iOS
@@ -216,36 +216,24 @@ export function Navbar({ user }: NavbarProps) {
   // where users could see the page but couldn't tap inputs / scroll until reload.
   const drawer = user && mounted && menuOpen
     ? createPortal(
-        <div
-          className="fixed inset-0 z-50 sm:hidden"
+        <aside
+          id="mobile-menu"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile navigation"
+          className="fixed inset-0 z-50 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-[var(--color-bg)] shadow-2xl sm:hidden"
         >
-          {/* Backdrop */}
-          <button
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          />
-
-          {/* Panel */}
-          <aside
-            id="mobile-menu"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Mobile navigation"
-            className="absolute inset-y-0 right-0 flex h-full w-[88vw] max-w-sm flex-col bg-[var(--color-bg)] shadow-2xl"
-          >
             {/* Drawer header: identity + close */}
-            <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border-default)] px-5 pb-4 pt-5">
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border-default)] px-4 pb-4 pt-4">
               <div className="flex min-w-0 items-center gap-3">
                 <span
                   aria-hidden="true"
-                  className="inline-flex size-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-subtle)] text-lg font-semibold text-[var(--color-fg)]"
+                  className="inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-subtle)] text-base font-semibold text-[var(--color-fg)]"
                 >
                   {initialsOf(user.displayName)}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-[var(--color-fg)]">
+                  <p className="truncate text-sm font-semibold text-[var(--color-fg)]">
                     {user.displayName}
                   </p>
                   <p className="truncate text-xs text-[var(--color-fg-muted)]">{user.email}</p>
@@ -258,14 +246,14 @@ export function Navbar({ user }: NavbarProps) {
                 type="button"
                 aria-label="Close menu"
                 onClick={() => setMenuOpen(false)}
-                className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Sections (scrollable) */}
-            <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+            <div className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
               {sectionsFor(user.role).map((section) => (
                 <div key={section.heading}>
                   <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-widest text-[var(--color-fg-subtle)]">
@@ -277,7 +265,7 @@ export function Navbar({ user }: NavbarProps) {
                         key={href}
                         href={href}
                         onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)]"
+                        className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)]"
                       >
                         <Icon size={18} className="text-[var(--color-fg-muted)]" />
                         <span className="flex-1">{label}</span>
@@ -290,7 +278,7 @@ export function Navbar({ user }: NavbarProps) {
             </div>
 
             {/* Sign out + theme toggle pinned to bottom */}
-            <div className="border-t border-[var(--color-border-default)] p-4 space-y-2">
+            <div className="space-y-2 border-t border-[var(--color-border-default)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div className="flex items-center justify-between rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-4 py-2.5">
                 <span className="text-sm font-medium text-[var(--color-fg-muted)]">Appearance</span>
                 <ThemeToggle className="inline-flex size-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] transition-colors" />
@@ -305,8 +293,7 @@ export function Navbar({ user }: NavbarProps) {
                 </button>
               </form>
             </div>
-          </aside>
-        </div>,
+          </aside>,
         document.body,
       )
     : null;

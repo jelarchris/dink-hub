@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, MapPin, Trophy } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, MapPin, Navigation, Trophy } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { StarRating } from "@/components/ui/star-rating";
@@ -9,6 +9,14 @@ import { getVenueRating, listReviewsForVenue } from "@/features/reviews/service"
 import { venueMediaPublicUrl } from "@/lib/venue-media";
 import { formatPHP } from "@/lib/money";
 import { formatDateManila } from "@/lib/date";
+import {
+  formatMapAddress,
+  googleMapsAddressSearchUrl,
+  googleMapsDirectionsUrl,
+  googleMapsEmbedUrl,
+  googleMapsSearchUrl,
+  normalizeCoordinatePair,
+} from "@/lib/maps";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +51,16 @@ export default async function VenuePage({
 
   const hasCourts = courts.length > 0;
   const bookHref = `/venues/${venue.slug}/book`;
+  const coordinates = normalizeCoordinatePair({
+    latitude: venue.latitude,
+    longitude: venue.longitude,
+  });
+  const fullAddress = formatMapAddress([
+    venue.addressLine,
+    venue.city,
+    venue.province,
+    venue.postalCode,
+  ]);
 
   return (
     <Container className="py-3 pb-28 sm:py-5 lg:pb-8">
@@ -124,8 +142,55 @@ export default async function VenuePage({
         <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--color-fg-muted)] sm:pt-0.5">
           Address
         </dt>
-        <dd className="text-[var(--color-fg)]">{venue.addressLine}</dd>
+        <dd className="text-[var(--color-fg)]">{fullAddress}</dd>
       </dl>
+
+      <section className="mt-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-fg-muted)]">
+          Location
+        </h2>
+        {coordinates ? (
+          <div className="mt-2 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)]">
+            <iframe
+              title={`${venue.name} map`}
+              src={googleMapsEmbedUrl(coordinates)}
+              className="h-56 w-full sm:h-72"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+            <div className="flex flex-col gap-2 border-t border-[var(--color-border-default)] p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-[var(--color-fg-muted)]">{fullAddress}</p>
+              <div className="grid gap-2 sm:flex sm:items-center">
+                <a
+                  href={googleMapsDirectionsUrl(coordinates)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={buttonVariants({ size: "sm" })}
+                >
+                  Directions <Navigation className="size-4" />
+                </a>
+                <a
+                  href={googleMapsSearchUrl(coordinates)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={buttonVariants({ variant: "secondary", size: "sm" })}
+                >
+                  Open map <ExternalLink className="size-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <a
+            href={googleMapsAddressSearchUrl(fullAddress)}
+            target="_blank"
+            rel="noreferrer"
+            className={`${buttonVariants({ variant: "secondary", size: "sm" })} mt-2 w-full sm:w-fit`}
+          >
+            Open in Google Maps <ExternalLink className="size-4" />
+          </a>
+        )}
+      </section>
 
       {venue.description && (
         <section className="mt-5">

@@ -10,6 +10,7 @@ import { ImageUpload } from "@/components/image-upload";
 import type { ActionResult } from "@/features/auth";
 import type { Venue } from "@/db/schema";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
+import { VenueLocationPicker } from "./venue-location-picker";
 
 type VenueAction = (
   prev: ActionResult<never> | null,
@@ -54,7 +55,7 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
   }
 
   return (
-    <form action={formAction} className="space-y-6" encType="multipart/form-data">
+    <form action={formAction} className="space-y-6">
       {initial && (
         <>
           <input type="hidden" name="venueId" value={initial.id} />
@@ -180,41 +181,16 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
               />
             )}
           </FormField>
-          <FormField
-            id="latitude"
-            label="Latitude (optional)"
-            hint="-90 to 90"
-            error={err("latitude")}
-          >
-            {({ id, describedBy, invalid }) => (
-              <Input
-                id={id}
-                name="latitude"
-                inputMode="decimal"
-                defaultValue={initial?.latitude ?? ""}
-                aria-describedby={describedBy}
-                invalid={invalid}
-              />
-            )}
-          </FormField>
-          <FormField
-            id="longitude"
-            label="Longitude (optional)"
-            hint="-180 to 180"
-            error={err("longitude")}
-          >
-            {({ id, describedBy, invalid }) => (
-              <Input
-                id={id}
-                name="longitude"
-                inputMode="decimal"
-                defaultValue={initial?.longitude ?? ""}
-                aria-describedby={describedBy}
-                invalid={invalid}
-              />
-            )}
-          </FormField>
         </div>
+        <VenueLocationPicker
+          initialLatitude={initial?.latitude ?? null}
+          initialLongitude={initial?.longitude ?? null}
+          addressLine={initial?.addressLine ?? null}
+          city={initial?.city ?? "Bayugan"}
+          province={initial?.province ?? "Agusan del Sur"}
+          latitudeError={err("latitude")}
+          longitudeError={err("longitude")}
+        />
       </section>
 
       <section className="space-y-4">

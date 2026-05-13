@@ -192,7 +192,7 @@ export default async function OwnerDashboard({
         />
       </section>
 
-      <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="mt-4 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Bookings today"
           value={stats.bookingsToday.toString()}
@@ -539,18 +539,18 @@ function ActionItem({
   return (
     <Link
       href={href}
-      className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-3 py-2.5 transition-colors hover:bg-[var(--color-bg-muted)]"
+      className="flex items-start justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-3 py-2.5 transition-colors hover:bg-[var(--color-bg-muted)]"
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-start gap-3">
         <span className={`flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] ${urgent ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-700"}`}>
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{title}</p>
-          <p className="truncate text-xs text-[var(--color-fg-muted)]">{subtitle}</p>
+          <p className="text-sm font-semibold leading-snug">{title}</p>
+          <p className="mt-0.5 text-xs leading-snug text-[var(--color-fg-muted)]">{subtitle}</p>
         </div>
       </div>
-      <ArrowRight className="size-4 shrink-0 text-[var(--color-fg-subtle)]" />
+      <ArrowRight className="mt-2 size-4 shrink-0 text-[var(--color-fg-subtle)]" />
     </Link>
   );
 }
@@ -580,7 +580,7 @@ function StatCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-[8.25rem] flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4 shadow-[var(--shadow-sm)]">
+    <div className="flex min-h-[7.5rem] min-w-0 flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3 shadow-[var(--shadow-sm)] sm:min-h-[8.25rem] sm:p-4">
       <div className="flex items-start justify-between gap-2">
         <span className="flex size-9 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)]">
           {icon}
@@ -588,7 +588,7 @@ function StatCard({
         {delta != null && <WoWBadge delta={delta} />}
       </div>
       <div>
-        <p className="text-xl font-bold leading-tight tabular-nums">{value}</p>
+        <p className="break-words text-lg font-bold leading-tight tabular-nums sm:text-xl">{value}</p>
         <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-fg-muted)]">{title}</p>
         {subtitle && <p className="mt-0.5 text-[10px] text-[var(--color-fg-subtle)]">{subtitle}</p>}
       </div>
@@ -638,13 +638,13 @@ function VenueHealthPanel({
   totalCourts: number;
 }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4 shadow-[var(--shadow-sm)]">
-      <div className="grid grid-cols-3 gap-2 text-center">
+    <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3 shadow-[var(--shadow-sm)] sm:p-4">
+      <div className="grid grid-cols-3 gap-1.5 text-center sm:gap-2">
         <MiniMetric label="Active" value={activeVenueCount.toString()} />
         <MiniMetric label="Courts" value={totalCourts.toString()} />
         <MiniMetric label="Ready" value={venueHealth.complete.toString()} />
       </div>
-      <div className="mt-4 space-y-2 text-sm">
+      <div className="mt-4 space-y-2 text-sm leading-snug">
         <HealthLine label="Complete profiles" value={`${venueHealth.complete}/${totalVenueCount}`} healthy={venueHealth.needsWork === 0} />
         <HealthLine label="Waiting review" value={venueHealth.review.toString()} healthy={venueHealth.review === 0} />
         <HealthLine label="Draft or rejected" value={venueHealth.draft.toString()} healthy={venueHealth.draft === 0} />
@@ -656,7 +656,7 @@ function VenueHealthPanel({
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-2 py-2">
+    <div className="min-w-0 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-1.5 py-2 sm:px-2">
       <p className="text-lg font-bold tabular-nums">{value}</p>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-fg-muted)]">{label}</p>
     </div>
@@ -730,15 +730,15 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="flex min-h-[5.5rem] items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4 shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-bg-subtle)]"
+      className="flex min-h-[5.5rem] items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3 shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-bg-subtle)] sm:items-center sm:p-4"
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-start gap-3 sm:items-center">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)]">
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="font-semibold">{title}</p>
-          <p className="truncate text-xs text-[var(--color-fg-muted)]">{subtitle}</p>
+          <p className="font-semibold leading-snug">{title}</p>
+          <p className="text-xs leading-snug text-[var(--color-fg-muted)]">{subtitle}</p>
           {badge && <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-orange-700">{badge}</p>}
         </div>
       </div>
