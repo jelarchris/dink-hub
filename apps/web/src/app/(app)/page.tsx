@@ -511,12 +511,12 @@ function Features() {
           <FeatureCard
             icon={<Calendar />}
             title="Real-time slots"
-            description="See exactly which 30-minute slots are open today, this week, or next month."
+            description="See exactly which times are open today, this week, or next month — and grab one instantly."
           />
           <FeatureCard
             icon={<ShieldCheck />}
             title="Verified venues"
-            description="Every venue is reviewed before listing. Receipts are cross-checked by venue owners."
+            description="Every venue is reviewed before listing. Bookings are confirmed by venue owners — usually within minutes."
           />
           <FeatureCard
             icon={<Users />}
