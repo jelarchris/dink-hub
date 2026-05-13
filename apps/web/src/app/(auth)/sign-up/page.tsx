@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { signUpAction, type ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,8 @@ type Role = "player" | "venue_owner";
 
 export default function SignUpPage() {
   const params = useSearchParams();
-  const initialRole: Role = params.get("role") === "venue_owner" ? "venue_owner" : "player";
-  const [role, setRole] = useState<Role>(initialRole);
+  const role: Role = params.get("role") === "venue_owner" ? "venue_owner" : "player";
+  const isOwner = role === "venue_owner";
   const [state, formAction] = useActionState<ActionResult | null, FormData>(
     signUpAction,
     null,
@@ -55,25 +55,26 @@ export default function SignUpPage() {
   return (
     <div className="space-y-5">
       <header className="space-y-1">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">Get started</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+          {isOwner ? "Venue owners" : "Get started"}
+        </p>
         <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
-        <p className="text-sm text-[var(--color-fg-muted)]">Free for players. Owners pay only on bookings.</p>
+        <p className="text-sm text-[var(--color-fg-muted)]">
+          {isOwner
+            ? "List your courts and start taking bookings. Free to sign up."
+            : "Find and book pickleball courts near you. Always free."}
+        </p>
       </header>
 
       <form action={formAction} className="flex flex-col gap-4" noValidate>
         {formError && <Alert variant="danger">{formError}</Alert>}
 
-        <fieldset className="grid grid-cols-2 gap-2">
-          <legend className="sr-only">I am a</legend>
-          <RoleOption value="player" current={role} onSelect={setRole} label="Player" hint="Book courts" />
-          <RoleOption value="venue_owner" current={role} onSelect={setRole} label="Venue owner" hint="List my courts" />
-        </fieldset>
         <input type="hidden" name="role" value={role} />
 
         <FormField
           id="displayName"
           label="Name"
-          hint="Shown to venue owners on bookings"
+          hint="Shown to venues on your bookings"
           error={fieldErrors?.displayName?.[0]}
         >
           {({ id, describedBy, invalid }) => (
@@ -152,37 +153,5 @@ export default function SignUpPage() {
         </p>
       </form>
     </div>
-  );
-}
-
-function RoleOption({
-  value,
-  current,
-  onSelect,
-  label,
-  hint,
-}: {
-  value: Role;
-  current: Role;
-  onSelect: (v: Role) => void;
-  label: string;
-  hint: string;
-}) {
-  const selected = current === value;
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(value)}
-      aria-pressed={selected}
-      className={
-        "flex flex-col items-start gap-0.5 rounded-[var(--radius-md)] border px-3 py-2.5 text-left transition-colors " +
-        (selected
-          ? "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] text-[var(--color-brand-900)]"
-          : "border-[var(--color-border-strong)] bg-[var(--color-bg)] hover:bg-[var(--color-bg-muted)]")
-      }
-    >
-      <span className="text-sm font-medium">{label}</span>
-      <span className="text-xs text-[var(--color-fg-muted)]">{hint}</span>
-    </button>
   );
 }

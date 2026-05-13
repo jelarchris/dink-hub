@@ -132,7 +132,7 @@ export default function PrivacyPage() {
               <li>Process, confirm, and manage court bookings.</li>
               <li>Facilitate GCash payment verification between players and venue owners.</li>
               <li>
-                Calculate and deduct the DinkHub platform fee from venue owners&apos; weekly payouts.
+                Generate and track weekly booking-fee invoices for venue owners.
               </li>
               <li>Send transactional emails (booking confirmations, payment status, cancellations).</li>
               <li>Send optional SMS notifications (only if you opt in and provide a phone number).</li>
