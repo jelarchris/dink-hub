@@ -117,7 +117,7 @@ function Hero() {
         </div>
 
         <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
-          One GCash payment. Court fee only during launch promo. No hidden charges.
+          One GCash payment. No booking fee during the launch promo. No hidden charges.
         </p>
       </Container>
     </section>
@@ -303,7 +303,7 @@ function HowItWorks() {
       n: 2,
       icon: <CreditCard />,
       title: "Pay via GCash",
-      body: "One transfer to the venue. Upload the receipt. No platform fees, no hidden charges.",
+      body: "One GCash transfer to the venue. Upload the screenshot. The venue confirms — usually within minutes.",
     },
     {
       n: 3,
