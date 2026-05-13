@@ -283,7 +283,9 @@ export function RescheduleForm({
                       "cursor-not-allowed border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] text-[var(--color-fg-subtle)] opacity-60",
                   )}
                 >
-                  <span className="block leading-tight">{formatTimeManila(slot)}</span>
+                  <span className="block leading-tight">
+                    {formatTimeManila(slot)} – {formatTimeManila(new Date(slot.getTime() + SLOT_MINUTES * 60_000))}
+                  </span>
                   <span
                     className={cn(
                       "mt-0.5 block text-[10px] font-bold uppercase tracking-wide leading-none",
