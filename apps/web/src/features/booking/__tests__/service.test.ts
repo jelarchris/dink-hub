@@ -252,6 +252,30 @@ describe("booking service", () => {
     expect(cancelled.status).toBe("cancelled");
   });
 
+  it("cancelBooking succeeds for confirmed bookings inside the 15-minute window", async () => {
+    const booking = await createBooking({
+      playerId: fx.playerId,
+      courtId: fx.courtId,
+      startAt: start,
+      endAt: end,
+    });
+    const payment = await submitPayment({
+      bookingId: booking.id,
+      playerId: fx.playerId,
+      receiptImagePath: "receipts/confirmed-cancel.jpg",
+      receiptHash: sha256Hex(`confirmed-cancel-${booking.id}`),
+      amountCentavos: booking.totalCentavos,
+    });
+    await verifyPayment({ paymentId: payment.id, verifierId: fx.ownerId });
+
+    const cancelled = await cancelBooking({ bookingId: booking.id, playerId: fx.playerId });
+
+    expect(cancelled.status).toBe("cancelled");
+    expect(cancelled.cancelledBy).toBe(fx.playerId);
+    expect(cancelled.notes).toContain("[Player cancel]");
+    expect(cancelled.notes).toContain("[Refund pending");
+  });
+
   it("cancelBooking rejects after window elapses", async () => {
     const booking = await createBooking({
       playerId: fx.playerId,

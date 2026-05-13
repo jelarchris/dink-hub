@@ -62,6 +62,14 @@ export default async function OwnerBookingDetailPage({
       : null;
 
   const isConfirmed = booking.status === "confirmed";
+  const cancellationActor =
+    booking.cancelledBy === player.id
+      ? "player"
+      : booking.cancelledBy === venue.ownerId
+        ? "owner"
+        : booking.cancelledBy
+          ? "admin"
+          : "unknown";
   const durationMin =
     (booking.endAt.getTime() - booking.startAt.getTime()) / 60_000;
   // Server-side request timestamp — RSC renders once per request so this is stable.
@@ -90,7 +98,13 @@ export default async function OwnerBookingDetailPage({
           )}
           {booking.status === "cancelled" && (
             <Alert variant="info" title="Booking cancelled">
-              The player cancelled this booking.
+              {cancellationActor === "player"
+                ? "The player cancelled this booking."
+                : cancellationActor === "owner"
+                  ? "You cancelled this booking."
+                  : cancellationActor === "admin"
+                    ? "DinkHub admin cancelled this booking."
+                    : "This booking was cancelled."}
             </Alert>
           )}
           {booking.status === "pending_payment" && (

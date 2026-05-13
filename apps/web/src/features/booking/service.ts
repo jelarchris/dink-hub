@@ -474,8 +474,9 @@ export async function rejectPayment(input: RejectPaymentInput): Promise<Payment>
 }
 
 // ============================================================================
-// 7. cancelBooking — player cancels within the 15-min window
-//    Post-confirmation cancellations require admin (refund flow).
+// 7. cancelBooking — player cancels within the 15-min window.
+//    Confirmed bookings may already have a paid receipt, so we preserve a
+//    refund marker for the admin dispute/manual refund flow.
 // ============================================================================
 export async function cancelBooking(input: CancelBookingInput): Promise<Booking> {
   const parsed = cancelBookingInputSchema.safeParse(input);
@@ -491,10 +492,10 @@ export async function cancelBooking(input: CancelBookingInput): Promise<Booking>
     if (booking.playerId !== playerId) {
       throw new BookingError("booking_not_owned", "Booking belongs to another player");
     }
-    if (!["pending_payment", "payment_submitted"].includes(booking.status)) {
+    if (!["pending_payment", "payment_submitted", "confirmed"].includes(booking.status)) {
       throw new BookingError(
         "booking_not_cancellable",
-        `Cannot cancel — status is ${booking.status}. Confirmed bookings require admin refund.`,
+        `Cannot cancel — status is ${booking.status}.`,
       );
     }
     if (isAtOrBefore(booking.cancellableUntil, now)) {
@@ -504,11 +505,24 @@ export async function cancelBooking(input: CancelBookingInput): Promise<Booking>
       );
     }
 
+    const noteSuffix =
+      booking.status === "confirmed"
+        ? booking.totalCentavos > 0n
+          ? "[Player cancel]\n[Refund pending — admin dispute flow]"
+          : "[Player cancel]"
+        : null;
+    const newNotes = noteSuffix
+      ? booking.notes
+        ? `${booking.notes}\n\n${noteSuffix}`
+        : noteSuffix
+      : booking.notes;
+
     const cancelled = await repo.updateBookingStatus(
       bookingId,
       booking.version,
       {
         status: "cancelled",
+        notes: newNotes,
         cancelledAt: now,
         cancelledBy: playerId,
         cancellationCategory: "player_request",

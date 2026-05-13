@@ -125,7 +125,9 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
               <CardContent className="space-y-3 pt-6">
                 <h2 className="font-semibold">Open dispute</h2>
                 <p className="text-xs text-[var(--color-fg-muted)]">
-                  Flags this payment for review. Booking stays confirmed until resolution.
+                  {booking.status === "confirmed"
+                    ? "Flags this payment for review. Booking stays confirmed until resolution."
+                    : "Flags this verified payment for review so an admin can resolve the refund or reject the dispute."}
                 </p>
                 <OpenDisputeForm
                   paymentId={payment.id}

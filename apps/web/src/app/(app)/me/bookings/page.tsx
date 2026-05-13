@@ -64,7 +64,7 @@ export default async function MyBookingsPage() {
         <ul className="divide-y divide-[var(--color-border-default)]">
           {items.map((it) => {
             const cancellable =
-              (it.booking.status === "pending_payment" || it.booking.status === "payment_submitted") &&
+              ["pending_payment", "payment_submitted", "confirmed"].includes(it.booking.status) &&
               it.booking.cancellableUntil.getTime() > now;
             const needsPayment = it.booking.status === "pending_payment";
             const isReviewable =
