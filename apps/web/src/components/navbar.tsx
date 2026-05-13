@@ -81,6 +81,7 @@ function sectionsFor(role: Role): DrawerSection[] {
         heading: "Manage venues",
         links: [
           { href: "/owner/venues", label: "My venues", icon: Building2 },
+          { href: "/owner/bookings", label: "Bookings", icon: CalendarDays },
           { href: "/owner/payments", label: "Payments", icon: Wallet },
           { href: "/owner/invoices", label: "Invoices", icon: FileText },
           { href: "/owner/reviews", label: "Reviews", icon: Star },

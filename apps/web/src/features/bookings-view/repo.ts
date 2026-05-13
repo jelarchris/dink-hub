@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
@@ -434,5 +434,139 @@ export async function getPlayerDashboardData(playerId: string): Promise<PlayerDa
       favoriteVenueName: favRow?.venueName ?? null,
     },
     pendingReviewBookingIds: pendingReviewRows.map((r) => r.id),
+  };
+}
+
+// ============================================================================
+// Owner — booking history list
+// ============================================================================
+
+/**
+ * UI-level filter categories for the owner bookings list.
+ * "all" and "upcoming" are not real DB statuses — they map to multi-value queries.
+ */
+export type OwnerBookingStatusFilter =
+  | "all"
+  | "upcoming"
+  | "confirmed"
+  | "cancelled"
+  | "no_show"
+  | "expired"
+  | "refunded";
+
+export interface OwnerBookingListItem {
+  booking: {
+    id: string;
+    status: Booking["status"];
+    startAt: Date;
+    endAt: Date;
+    totalCentavos: bigint;
+    createdAt: Date;
+  };
+  venue: { id: string; name: string; slug: string };
+  court: { name: string };
+  playerDisplayName: string;
+}
+
+const OWNER_BOOKINGS_PAGE_SIZE = 25;
+
+/**
+ * Paginated booking history for an owner across all their venues.
+ *
+ * Cursor is base64url-encoded JSON { startAt: ISO string, id: UUID }.
+ * Results are ordered by startAt DESC, id DESC (newest first).
+ * Fetches PAGE_SIZE + 1 rows to determine if a next page exists.
+ */
+export async function listBookingsForOwner(args: {
+  ownerId: string;
+  statusFilter?: OwnerBookingStatusFilter;
+  venueId?: string;
+  cursor?: string;
+}): Promise<{ items: OwnerBookingListItem[]; nextCursor: string | null }> {
+  const statusFilter = args.statusFilter ?? "all";
+  const now = new Date();
+
+  // Build the cursor condition from an opaque base64url token.
+  let cursorCondition: ReturnType<typeof or> | undefined;
+  if (args.cursor) {
+    try {
+      const { startAt, id } = JSON.parse(
+        Buffer.from(args.cursor, "base64url").toString("utf8"),
+      ) as { startAt: string; id: string };
+      const cursorDate = new Date(startAt);
+      cursorCondition = or(
+        lt(bookings.startAt, cursorDate),
+        and(eq(bookings.startAt, cursorDate), lt(bookings.id, id)),
+      );
+    } catch {
+      // Malformed cursor — ignore and serve from the beginning.
+    }
+  }
+
+  // Status condition.
+  let statusCondition: ReturnType<typeof inArray> | ReturnType<typeof eq> | undefined;
+  if (statusFilter === "upcoming") {
+    statusCondition = inArray(bookings.status, [
+      "pending_payment",
+      "payment_submitted",
+      "confirmed",
+    ]);
+  } else if (statusFilter !== "all") {
+    statusCondition = eq(bookings.status, statusFilter as Booking["status"]);
+  }
+
+  const rows = await db
+    .select({
+      booking: {
+        id: bookings.id,
+        status: bookings.status,
+        startAt: bookings.startAt,
+        endAt: bookings.endAt,
+        totalCentavos: bookings.totalCentavos,
+        createdAt: bookings.createdAt,
+      },
+      venue: { id: venues.id, name: venues.name, slug: venues.slug },
+      court: { name: courts.name },
+      playerDisplayName: profiles.displayName,
+    })
+    .from(bookings)
+    .innerJoin(venues, and(eq(venues.id, bookings.venueId), isNull(venues.deletedAt)))
+    .innerJoin(courts, eq(courts.id, bookings.courtId))
+    .innerJoin(profiles, eq(profiles.id, bookings.playerId))
+    .where(
+      and(
+        eq(venues.ownerId, args.ownerId),
+        args.venueId ? eq(venues.id, args.venueId) : undefined,
+        statusCondition,
+        // "upcoming" also requires startAt in the future.
+        statusFilter === "upcoming" ? gte(bookings.startAt, now) : undefined,
+        cursorCondition,
+      ),
+    )
+    .orderBy(desc(bookings.startAt), desc(bookings.id))
+    .limit(OWNER_BOOKINGS_PAGE_SIZE + 1);
+
+  const hasMore = rows.length > OWNER_BOOKINGS_PAGE_SIZE;
+  const items = hasMore ? rows.slice(0, OWNER_BOOKINGS_PAGE_SIZE) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore) {
+    const last = items[items.length - 1];
+    if (last) {
+      nextCursor = Buffer.from(
+        JSON.stringify({ startAt: last.booking.startAt.toISOString(), id: last.booking.id }),
+        "utf8",
+      ).toString("base64url");
+    }
+  }
+
+  return {
+    items: items.map((r) => ({
+      booking: r.booking,
+      venue: r.venue,
+      court: r.court,
+      playerDisplayName: r.playerDisplayName,
+    })),
+    nextCursor,
   };
 }

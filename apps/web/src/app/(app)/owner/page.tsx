@@ -260,6 +260,14 @@ export default async function OwnerDashboard({
               ))}
             </div>
           )}
+          <div className="mt-3 text-right">
+            <Link
+              href="/owner/bookings"
+              className="text-xs font-semibold text-[var(--color-brand-700)] underline-offset-4 hover:underline"
+            >
+              View all bookings →
+            </Link>
+          </div>
         </div>
 
         <div className="space-y-4">
