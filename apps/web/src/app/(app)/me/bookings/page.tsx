@@ -104,9 +104,15 @@ export default async function MyBookingsPage() {
                         href={`/book/${it.booking.id}/pay`}
                         className={buttonVariants({ size: "sm", variant: "outline" })}
                       >
-                        View
+                        View receipt
                       </Link>
                     )}
+                    <Link
+                      href={`/me/bookings/${it.booking.id}`}
+                      className={buttonVariants({ size: "sm", variant: "outline" })}
+                    >
+                      Details
+                    </Link>
                     {cancellable && <CancelBookingButton bookingId={it.booking.id} />}
                     {isReviewable && alreadyReviewed && (
                       <span className="text-xs font-semibold text-[var(--color-success)]">✓ Reviewed</span>
