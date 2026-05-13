@@ -108,7 +108,7 @@ function Hero() {
             Find a court
           </Link>
           <Link
-            href="/sign-up?role=venue_owner"
+            href="/host"
             className={`${buttonVariants({ size: "xl", variant: "outline" })} w-full sm:w-auto`}
           >
             List your venue
