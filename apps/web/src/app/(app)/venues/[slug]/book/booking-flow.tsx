@@ -157,7 +157,6 @@ export function BookingFlow({
   );
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [captchaSolved, setCaptchaSolved] = useState(!TURNSTILE_SITE_KEY);
   const [confirmDetail, setConfirmDetail] = useState(false);
   const [confirmTerms, setConfirmTerms] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -355,7 +354,6 @@ export function BookingFlow({
     setFileError(null);
     setConfirmDetail(false);
     setConfirmTerms(false);
-    setCaptchaSolved(!TURNSTILE_SITE_KEY);
   }
 
   async function proceedToPayment(): Promise<void> {
@@ -389,8 +387,11 @@ export function BookingFlow({
     setFileName(f.name);
   }
 
+  // captchaSolved intentionally omitted: the invisible Turnstile widget injects
+  // cf-turnstile-response into the form; the server validates it and returns a
+  // visible error if missing/invalid, preventing the "nothing happens" UX trap.
   const canSubmitReceipt =
-    captchaSolved && confirmDetail && confirmTerms && fileName !== null && fileError === null;
+    confirmDetail && confirmTerms && fileName !== null && fileError === null;
 
   // Amounts shown in modal — use snapshotted values once booking is created (step 2)
   const displayCourtFee = createdCourtFeeCentavos ?? totalPriceCentavos;
@@ -614,7 +615,6 @@ export function BookingFlow({
                   fileName={fileName}
                   fileError={fileError}
                   onFilePick={onFilePick}
-                  onCaptchaSolve={setCaptchaSolved}
                   confirmDetail={confirmDetail}
                   confirmTerms={confirmTerms}
                   onConfirmDetailChange={setConfirmDetail}
@@ -844,7 +844,6 @@ function Step2Body({
   fileName,
   fileError,
   onFilePick,
-  onCaptchaSolve,
   confirmDetail,
   confirmTerms,
   onConfirmDetailChange,
@@ -865,7 +864,6 @@ function Step2Body({
   fileName: string | null;
   fileError: string | null;
   onFilePick: () => void;
-  onCaptchaSolve: (v: boolean) => void;
   confirmDetail: boolean;
   confirmTerms: boolean;
   onConfirmDetailChange: (v: boolean) => void;
@@ -1001,16 +999,12 @@ function Step2Body({
         </label>
       </div>
 
-      {/* Turnstile */}
+      {/* Turnstile — renders invisibly and injects cf-turnstile-response into the form */}
       {TURNSTILE_SITE_KEY && (
-        <>
-          <TurnstileWidget
-            siteKey={TURNSTILE_SITE_KEY}
-            action="receipt-upload"
-            onVerify={() => onCaptchaSolve(true)}
-            onExpire={() => onCaptchaSolve(false)}
-          />
-        </>
+        <TurnstileWidget
+          siteKey={TURNSTILE_SITE_KEY}
+          action="receipt-upload"
+        />
       )}
 
       {/* Footer */}
