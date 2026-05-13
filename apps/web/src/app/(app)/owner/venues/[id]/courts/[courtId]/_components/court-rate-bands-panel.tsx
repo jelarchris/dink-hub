@@ -19,7 +19,7 @@ function formatHour(h: number): string {
   return h < 12 ? `${String(h)}:00 AM` : `${String(h - 12)}:00 PM`;
 }
 
-function centavosToPhp(centavos: bigint): string {
+function centavosToPhp(centavos: string): string {
   return (Number(centavos) / 100).toFixed(2);
 }
 
@@ -33,7 +33,8 @@ export interface RateBandRow {
   id: string;
   fromHour: number;
   toHour: number;
-  rateCentavos: bigint;
+  /** Serialised bigint string (bigint cannot cross the RSC boundary). */
+  rateCentavos: string;
 }
 
 interface Props {

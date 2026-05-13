@@ -83,7 +83,7 @@ export default async function EditCourtPage({
             id: b.id,
             fromHour: b.fromHour,
             toHour: b.toHour,
-            rateCentavos: b.rateCentavos,
+            rateCentavos: b.rateCentavos.toString(),
           }))}
         />
       </div>
