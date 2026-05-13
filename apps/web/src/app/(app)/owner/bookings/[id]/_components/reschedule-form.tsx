@@ -1,67 +1,67 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, useTransition } from "react";
 import { Alert } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { cn } from "@/lib/cn";
+import { formatTimeManila, generateDaySlotsManila } from "@/lib/date";
 // Direct import — never import from the feature barrel in a client component.
-import { rescheduleBookingByOwnerAction } from "@/features/owner-venues/actions";
+import {
+  getCourtOccupancyForRescheduleAction,
+  rescheduleBookingByOwnerAction,
+} from "@/features/owner-venues/actions";
 
 export interface CourtOption {
   id: string;
   name: string;
   isIndoor: boolean;
   surface: string;
-  /** PHP hourly rate as a regular number — safe for JS since court rates are well within safe-integer range. */
   hourlyRateCentavos: number;
 }
 
 interface RescheduleFormProps {
   bookingId: string;
   version: number;
-  /** Current start time, used as the default to nudge into the picker. */
   currentStartAt: Date;
-  /** Current duration in minutes — preserved by default for one-tap reschedule. */
   currentDurationMin: number;
-  /** The court this booking is currently on — pre-selected in the court picker. */
   currentCourtId: string;
-  /** All active courts in this venue. Pass an array with a single entry to hide the selector. */
   availableCourts: CourtOption[];
 }
 
-/**
- * Manila has no DST → fixed UTC+08:00. We render the input in Manila wall-clock
- * and round-trip the value as an ISO string with an explicit `+08:00` offset.
- *
- * Slot rules (mirrored on server via Zod): 30-min grain, 30 min ≤ duration ≤ 4 h.
- */
-const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
-const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180, 210, 240] as const;
+interface OccupiedRange {
+  start: number;
+  end: number;
+  kind: "booking" | "hold" | "closure";
+}
 
-function toManilaInputValue(d: Date): string {
-  // Convert UTC instant → Manila wall-clock string in `YYYY-MM-DDTHH:mm` form
-  // (the format <input type="datetime-local"> expects).
+const SLOT_MINUTES = 60;
+const OPEN_HOUR = 6;
+const CLOSE_HOUR = 22;
+const DURATION_OPTIONS = [60, 120, 180, 240] as const;
+const MANILA_OFFSET_MS = 8 * 3_600_000;
+
+function toManilaDateIso(d: Date): string {
   const manila = new Date(d.getTime() + MANILA_OFFSET_MS);
-  const pad = (n: number) => n.toString().padStart(2, "0");
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${String(manila.getUTCFullYear())}-${pad(manila.getUTCMonth() + 1)}-${pad(manila.getUTCDate())}`;
+}
+
+function toManilaOffsetIso(d: Date): string {
+  const manila = new Date(d.getTime() + MANILA_OFFSET_MS);
+  const pad = (n: number) => String(n).padStart(2, "0");
   return (
-    `${manila.getUTCFullYear()}-${pad(manila.getUTCMonth() + 1)}-${pad(manila.getUTCDate())}` +
-    `T${pad(manila.getUTCHours())}:${pad(manila.getUTCMinutes())}`
+    `${String(manila.getUTCFullYear())}-${pad(manila.getUTCMonth() + 1)}-${pad(manila.getUTCDate())}` +
+    `T${pad(manila.getUTCHours())}:${pad(manila.getUTCMinutes())}:00+08:00`
   );
 }
 
-function manilaInputToIso(local: string): string {
-  // Treat the wall-clock value as Manila time; emit ISO with +08:00 offset.
-  return `${local}:00+08:00`;
-}
-
 function formatPesoCents(centavos: number): string {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  }).format(centavos / 100);
+  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(
+    centavos / 100,
+  );
 }
 
 export function RescheduleForm({
@@ -73,39 +73,117 @@ export function RescheduleForm({
   availableCourts,
 }: RescheduleFormProps) {
   const [state, formAction] = useActionState(rescheduleBookingByOwnerAction, null);
+  const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
 
-  const defaultStart = useMemo(() => toManilaInputValue(currentStartAt), [currentStartAt]);
-  const [startLocal, setStartLocal] = useState(defaultStart);
-  const [durationMin, setDurationMin] = useState<number>(
-    DURATION_OPTIONS.find((d) => d === currentDurationMin) ?? 60,
-  );
   const [selectedCourtId, setSelectedCourtId] = useState(currentCourtId);
+  const [selectedDateIso, setSelectedDateIso] = useState(() => toManilaDateIso(currentStartAt));
+  const [selectedStartIso, setSelectedStartIso] = useState<string | null>(null);
+  const [durationMin, setDurationMin] = useState<number>(
+    (DURATION_OPTIONS as readonly number[]).includes(currentDurationMin)
+      ? currentDurationMin
+      : 60,
+  );
+  const [occupancy, setOccupancy] = useState<OccupiedRange[]>([]);
 
-  // Compute end time on the fly so it stays in sync with start + duration.
-  const newStartIso = manilaInputToIso(startLocal);
-  const newEndIso = useMemo(() => {
-    const startMs = new Date(newStartIso).getTime();
-    if (Number.isNaN(startMs)) return "";
-    const end = new Date(startMs + durationMin * 60_000);
-    return end.toISOString();
-  }, [newStartIso, durationMin]);
+  // ---------------------------------------------------------------------------
+  // Slot loading — triggered by user actions, no useEffect
+  // ---------------------------------------------------------------------------
 
-  // Only show the court picker when there are multiple courts.
-  const showCourtPicker = availableCourts.length > 1;
+  function loadOccupancy(courtId: string, dateIso: string) {
+    startTransition(async () => {
+      const rows = await getCourtOccupancyForRescheduleAction(courtId, dateIso);
+      setOccupancy(
+        rows.map((r) => ({
+          start: new Date(r.startAtIso).getTime(),
+          end: new Date(r.endAtIso).getTime(),
+          kind: r.kind,
+        })),
+      );
+    });
+  }
+
+  function handleOpen() {
+    setOpen(true);
+    loadOccupancy(selectedCourtId, selectedDateIso);
+  }
+
+  function handleCourtChange(courtId: string) {
+    setSelectedCourtId(courtId);
+    setSelectedStartIso(null);
+    loadOccupancy(courtId, selectedDateIso);
+  }
+
+  function handleDateChange(dateIso: string) {
+    setSelectedDateIso(dateIso);
+    setSelectedStartIso(null);
+    loadOccupancy(selectedCourtId, dateIso);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Slot availability
+  // ---------------------------------------------------------------------------
+
+  const slots = useMemo(
+    () =>
+      generateDaySlotsManila({
+        isoDate: selectedDateIso,
+        startHour: OPEN_HOUR,
+        endHour: CLOSE_HOUR,
+      }).filter((d) => d.getMinutes() === 0),
+    [selectedDateIso],
+  );
+
+  const [nowMs] = useState(() => Date.now());
+
+  function isSlotFree(slotStart: Date): boolean {
+    const s = slotStart.getTime();
+    if (s <= nowMs) return false;
+    const e = s + SLOT_MINUTES * 60_000;
+    return !occupancy.some((r) => r.start < e && r.end > s);
+  }
+
+  // Warn if the chosen duration extends into a taken slot beyond the start hour.
+  const selectedStartMs = selectedStartIso ? new Date(selectedStartIso).getTime() : null;
+  const durationConflict =
+    selectedStartMs !== null &&
+    durationMin > SLOT_MINUTES &&
+    occupancy.some(
+      (r) =>
+        r.start < selectedStartMs + durationMin * 60_000 &&
+        r.end > selectedStartMs + SLOT_MINUTES * 60_000,
+    );
+
+  // ---------------------------------------------------------------------------
+  // Derived form values
+  // ---------------------------------------------------------------------------
+
+  const newStartIso = selectedStartIso ? toManilaOffsetIso(new Date(selectedStartIso)) : "";
+  const newEndIso =
+    selectedStartMs !== null
+      ? toManilaOffsetIso(new Date(selectedStartMs + durationMin * 60_000))
+      : "";
+
   const isCourtChanged = selectedCourtId !== currentCourtId;
   const newCourt = availableCourts.find((c) => c.id === selectedCourtId);
+  const feePreview =
+    isCourtChanged && newCourt
+      ? Math.floor((durationMin * newCourt.hourlyRateCentavos) / 60)
+      : null;
 
-  // Preview the fee change when the court changes (exact same formula as server).
-  const feePreview = isCourtChanged && newCourt
-    ? Math.floor((durationMin * newCourt.hourlyRateCentavos) / 60)
-    : null;
+  const showCourtPicker = availableCourts.length > 1;
+  const todayIso = toManilaDateIso(new Date());
+  const canSubmit = selectedStartIso !== null && !durationConflict;
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   if (!open) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="text-sm font-semibold text-[var(--color-brand-700)] hover:underline"
       >
         Reschedule…
@@ -114,15 +192,12 @@ export function RescheduleForm({
   }
 
   return (
-    <form action={formAction} className="space-y-3">
+    <form action={formAction} className="space-y-4">
       <input type="hidden" name="bookingId" value={bookingId} />
       <input type="hidden" name="expectedVersion" value={version} />
       <input type="hidden" name="newStartAt" value={newStartIso} />
       <input type="hidden" name="newEndAt" value={newEndIso} />
-      {/* Only send newCourtId when the court has actually changed. */}
-      {isCourtChanged && (
-        <input type="hidden" name="newCourtId" value={selectedCourtId} />
-      )}
+      {isCourtChanged && <input type="hidden" name="newCourtId" value={selectedCourtId} />}
 
       {state && !state.ok && (
         <Alert variant="danger" title="Could not reschedule">
@@ -136,7 +211,7 @@ export function RescheduleForm({
           <Select
             id="reschedule-court"
             value={selectedCourtId}
-            onChange={(e) => setSelectedCourtId(e.target.value)}
+            onChange={(e) => handleCourtChange(e.target.value)}
             className="mt-1"
           >
             {availableCourts.map((c) => (
@@ -147,27 +222,84 @@ export function RescheduleForm({
           </Select>
           {feePreview !== null && (
             <p className="mt-1 text-xs text-amber-700">
-              Court fee will update to{" "}
-              <strong>{formatPesoCents(feePreview)}</strong> based on{" "}
+              Court fee will update to <strong>{formatPesoCents(feePreview)}</strong> based on{" "}
               {newCourt?.name}&apos;s rate.
             </p>
           )}
         </div>
       )}
 
+      {/* Date picker */}
       <div>
-        <Label htmlFor="reschedule-start">New start (Manila time)</Label>
-        <Input
-          id="reschedule-start"
-          type="datetime-local"
-          step={1800 /* 30-minute grain */}
-          required
-          value={startLocal}
-          onChange={(e) => setStartLocal(e.target.value)}
-          className="mt-1"
+        <Label htmlFor="reschedule-date">Date</Label>
+        <input
+          id="reschedule-date"
+          type="date"
+          min={todayIso}
+          value={selectedDateIso}
+          onChange={(e) => {
+            if (e.target.value) handleDateChange(e.target.value);
+          }}
+          className="mt-1 block w-full rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-500)]"
         />
       </div>
 
+      {/* 1-hour slot grid */}
+      <div>
+        <Label>Start time</Label>
+        {isPending ? (
+          <div className="mt-2 flex items-center gap-2 text-sm text-[var(--color-fg-muted)]">
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--color-brand-500)] border-t-transparent" />
+            Loading availability…
+          </div>
+        ) : (
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+            {slots.map((slot) => {
+              const slotIso = slot.toISOString();
+              const free = isSlotFree(slot);
+              const isSelected = selectedStartIso === slotIso;
+              const isClosure =
+                !free &&
+                occupancy.some(
+                  (r) =>
+                    r.kind === "closure" &&
+                    r.start < slot.getTime() + SLOT_MINUTES * 60_000 &&
+                    r.end > slot.getTime(),
+                );
+              return (
+                <button
+                  key={slotIso}
+                  type="button"
+                  disabled={!free}
+                  onClick={() => setSelectedStartIso(isSelected ? null : slotIso)}
+                  className={cn(
+                    "rounded-[var(--radius-md)] border px-2 py-2 text-center text-sm font-semibold transition-colors",
+                    isSelected &&
+                      "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] ring-2 ring-[var(--color-brand-500)] text-[var(--color-brand-700)]",
+                    !isSelected &&
+                      free &&
+                      "border-[var(--color-border-default)] bg-[var(--color-bg)] hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)]",
+                    !free &&
+                      "cursor-not-allowed border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] text-[var(--color-fg-subtle)] opacity-60",
+                  )}
+                >
+                  <span className="block leading-tight">{formatTimeManila(slot)}</span>
+                  <span
+                    className={cn(
+                      "mt-0.5 block text-[10px] font-bold uppercase tracking-wide leading-none",
+                      free ? "text-[var(--color-success)]" : "text-[var(--color-fg-subtle)]",
+                    )}
+                  >
+                    {free ? "Free" : isClosure ? "Closed" : "Booked"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Duration */}
       <div>
         <Label htmlFor="reschedule-duration">Duration</Label>
         <Select
@@ -178,15 +310,18 @@ export function RescheduleForm({
         >
           {DURATION_OPTIONS.map((min) => (
             <option key={min} value={min}>
-              {min < 60
-                ? `${min} min`
-                : min % 60 === 0
-                  ? `${min / 60} h`
-                  : `${Math.floor(min / 60)} h ${min % 60} min`}
+              {min / 60} hr
             </option>
           ))}
         </Select>
       </div>
+
+      {durationConflict && (
+        <Alert variant="warning" title="Slot not fully available">
+          Another booking overlaps the {durationMin / 60}-hour window. Choose a different start
+          time or a shorter duration.
+        </Alert>
+      )}
 
       <div>
         <Label htmlFor="reschedule-reason">Note to player (optional)</Label>
@@ -207,7 +342,7 @@ export function RescheduleForm({
       </p>
 
       <div className="flex items-center gap-2">
-        <SubmitButton size="sm" pendingLabel="Rescheduling…">
+        <SubmitButton size="sm" disabled={!canSubmit} pendingLabel="Rescheduling…">
           Confirm reschedule
         </SubmitButton>
         <button
@@ -221,5 +356,3 @@ export function RescheduleForm({
     </form>
   );
 }
-
-

@@ -588,6 +588,60 @@ export async function rescheduleBookingByOwnerAction(
 }
 
 // ============================================================================
+// Court slot occupancy for the reschedule slot picker
+//
+// Returns all occupied ranges (bookings, holds, closures) for a given court
+// on a given Manila calendar day so the RescheduleForm can render a live
+// availability grid.
+//
+// Security: verifies the caller owns the venue the court belongs to before
+// returning any data. Returns [] on any auth or validation failure.
+// ============================================================================
+export async function getCourtOccupancyForRescheduleAction(
+  courtId: string,
+  isoDate: string, // YYYY-MM-DD, Manila calendar
+): Promise<Array<{ startAtIso: string; endAtIso: string; kind: "booking" | "hold" | "closure" }>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return [];
+
+  // Validate inputs defensively (client-supplied).
+  if (!courtId || !/^[0-9a-f-]{36}$/.test(courtId)) return [];
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!dateMatch) return [];
+  const [, yStr, moStr, dStr] = dateMatch;
+  const y = Number(yStr);
+  const mo = Number(moStr);
+  const d = Number(dStr);
+
+  // Verify ownership: owner must own the venue this court belongs to.
+  const { db } = await import("@/db/client");
+  const { courts, venues } = await import("@/db/schema");
+  const { and, eq } = await import("drizzle-orm");
+  const owned = await db
+    .select({ id: courts.id })
+    .from(courts)
+    .innerJoin(venues, eq(venues.id, courts.venueId))
+    .where(and(eq(courts.id, courtId), eq(venues.ownerId, guard.userId)))
+    .limit(1);
+  if (!owned[0]) return [];
+
+  // Compute Manila-day window as UTC.
+  // Manila is fixed UTC+8; Manila 00:00 = UTC of previous day + 16h.
+  const MANILA_OFFSET_MS = 8 * 3_600_000;
+  const fromUtc = new Date(Date.UTC(y, mo - 1, d, 0, 0) - MANILA_OFFSET_MS);
+  const toUtc = new Date(fromUtc.getTime() + 24 * 3_600_000);
+
+  const { getCourtOccupancy } = await import("@/features/venues/repo");
+  const { ranges } = await getCourtOccupancy({ courtId, fromUtc, toUtc });
+
+  return ranges.map((r) => ({
+    startAtIso: r.startAt.toISOString(),
+    endAtIso: r.endAt.toISOString(),
+    kind: r.kind,
+  }));
+}
+
+// ============================================================================
 // Owner record refund (Tier 5)
 // ============================================================================
 
