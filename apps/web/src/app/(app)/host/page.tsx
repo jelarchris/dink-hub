@@ -52,9 +52,9 @@ function Hero({ promoActive }: { promoActive: boolean }) {
           Get found. Get booked. Get paid.
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-pretty text-lg text-[var(--color-fg-muted)]">
-          List your pickleball venue on DinkHub and stop losing bookings to
-          missed messages. Players pay you directly via GCash — we just
-          handle the discovery, scheduling, and receipts.
+          List your pickleball court on DinkHub for free. Players find you,
+          book a slot, and pay you directly via GCash. We handle discovery,
+          scheduling, and receipts — you just show up and play.
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
           <Link
@@ -77,8 +77,7 @@ function Hero({ promoActive }: { promoActive: boolean }) {
               className="-mt-0.5 mr-1 inline size-4"
               aria-hidden="true"
             />
-            Launch promo: <strong>0% platform fee</strong> on every booking
-            until further notice.
+            Launch promo: players pay <strong>₱0 booking fee</strong> right now — list your venue free and keep every peso.
           </p>
         ) : null}
       </Container>
@@ -101,7 +100,7 @@ function Benefits() {
     {
       icon: Wallet,
       title: "GCash direct to you",
-      body: "Players send the full court fee to your GCash number. No middleman wallet, no payout delays — the money is yours the moment they pay.",
+      body: "Players send their full payment straight to your GCash. Nothing passes through DinkHub — the money is yours immediately.",
     },
     {
       icon: TrendingUp,
@@ -115,8 +114,8 @@ function Benefits() {
     },
     {
       icon: CircleDollarSign,
-      title: "Pay only when you earn",
-      body: "Zero setup cost. Zero monthly subscription. A small platform fee is added to the player’s booking — settled weekly.",
+      title: "Free to list, always",
+      body: "No setup cost. No monthly subscription. Players pay a small booking fee on top of your court rate — you collect it and remit it to DinkHub weekly.",
     },
   ] as const;
 
@@ -171,10 +170,10 @@ function HowPaymentWorks({
             How payment works
           </Badge>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-[var(--color-fg)] sm:text-4xl">
-            Player pays you directly. We settle the platform fee weekly.
+            Player pays you. You remit the booking fee weekly.
           </h2>
           <p className="mt-3 text-lg text-[var(--color-fg-muted)]">
-            One transfer, one receipt, no waiting on a payout.
+            One GCash transfer, one receipt, one clean weekly bill. Listing is always free.
           </p>
         </div>
 
@@ -183,16 +182,16 @@ function HowPaymentWorks({
             <PaymentStep
               n={1}
               title="Player books a court"
-              body={`Court fee + a ${baseFee} platform fee is shown to them at checkout.${
+              body={`Players see your court rate + a ${baseFee} booking fee at checkout.${
                 fee.promoApplied
-                  ? ` During the launch promo the platform fee is ${liveFee} — players see "${liveFee} (promo)".`
+                  ? ` During the launch promo the booking fee is ${liveFee} — players pay only your court rate.`
                   : ""
               }`}
             />
             <PaymentStep
               n={2}
               title="Player sends ONE GCash transfer to your number"
-              body="The full amount (court fee + platform fee) goes straight to your GCash. Nothing is held by DinkHub."
+              body="The full amount (your court rate + booking fee) goes straight to your GCash number. DinkHub never holds or touches your money."
             />
             <PaymentStep
               n={3}
@@ -201,20 +200,20 @@ function HowPaymentWorks({
             />
             <PaymentStep
               n={4}
-              title="DinkHub tracks the platform fee owed"
-              body={`Each verified booking adds the ${baseFee} platform fee to your weekly invoice. You owe nothing per booking — it accumulates.`}
+              title="DinkHub tracks the booking fees you collected"
+              body={`Each verified booking adds a ${baseFee} booking fee to your weekly invoice. Nothing is due per booking — it accumulates, then you settle once a week.`}
             />
             <PaymentStep
               n={5}
               title="Weekly invoice every Monday morning"
-              body="At 6:00 AM Manila time we email you an invoice with last week's total platform fees. You pay it the same way players pay you — GCash + receipt upload. We verify, ledger settles, balance clears."
+              body="At 6:00 AM Manila time we email you an invoice for last week's accumulated booking fees. Pay it like your players pay you — GCash + receipt upload. We verify and your balance clears."
             />
           </ol>
         </div>
 
         <p className="mt-6 text-center text-sm text-[var(--color-fg-muted)]">
-          No card processing fees. No payout schedules. No 2.5% middleman cut.
-          Just GCash → you, then a clean weekly bill from us.
+          Listing is free. No card processing fees. No payout schedules.
+          Players pay the booking fee. You collect it. You remit it once a week.
         </p>
       </Container>
     </section>
@@ -379,16 +378,16 @@ function Faq({
     {
       q: "How much does DinkHub cost me?",
       a: fee.promoApplied
-        ? `Right now, ${liveFee} during our launch promo. Normally a flat ${baseFee} platform fee per confirmed booking is added to the player's checkout — you receive 100% of your court fee. There is no setup cost, no monthly subscription, and no card processing fees.`
-        : `A flat ${baseFee} platform fee per confirmed booking is added to the player's checkout — you receive 100% of your court fee. No setup cost, no monthly subscription, no card processing fees.`,
+        ? `Listing your venue is completely free — no setup cost, no monthly subscription. Right now during our launch promo, the booking fee for players is ${liveFee}. Normally a flat ${baseFee} booking fee is added to each player's checkout on top of your court rate. You collect it with their payment, then remit it to DinkHub on your weekly invoice.`
+        : `Listing your venue is completely free — no setup cost, no monthly subscription, no hidden charges. A flat ${baseFee} booking fee is added to each player's checkout on top of your court rate. You collect it with their payment, then remit it to DinkHub on your weekly invoice.`,
     },
     {
       q: "When do I get paid?",
-      a: "Immediately. The player sends the entire amount (your court fee + platform fee) directly to your GCash number. We don't hold any of your money.",
+      a: "Immediately. The player sends the full amount (your court rate + booking fee) directly to your GCash. DinkHub never holds your money — it lands in your account the moment they pay.",
     },
     {
-      q: "How do I pay DinkHub the platform fee then?",
-      a: "Every Monday morning we email you an invoice for the previous week's platform fees. You pay it via GCash and upload a receipt — same flow your players use.",
+      q: "How does DinkHub collect the booking fees?",
+      a: "Every Monday morning we email you an invoice totaling the booking fees from the previous week's confirmed bookings. You pay it via GCash and upload a receipt — the same flow your players use.",
     },
     {
       q: "What if I miss a weekly invoice?",
@@ -396,7 +395,7 @@ function Faq({
     },
     {
       q: "What if a player doesn't show up?",
-      a: "Mark the booking as a no-show in /owner/bookings. The platform fee on no-shows is waived from your weekly invoice — you only pay the fee on bookings the player actually used.",
+      a: "Mark the booking as a no-show in your dashboard. The booking fee on no-shows is waived from your weekly invoice — you only remit fees on bookings the player actually used.",
     },
     {
       q: "Can I cancel a booking?",
@@ -408,7 +407,7 @@ function Faq({
     },
     {
       q: "What about GCash refunds?",
-      a: "If you need to refund a player, do it directly via GCash, then record it in /owner/bookings. We track it in the ledger and reverse the platform fee on your next invoice.",
+      a: "If you need to refund a player, send the money back via GCash and record it in your dashboard. We reverse the booking fee on your next weekly invoice — so you only remit fees on bookings that actually happened.",
     },
   ];
 
@@ -467,9 +466,9 @@ function FinalCta() {
             </p>
             <ul className="mx-auto mt-6 grid max-w-xl gap-3 text-left text-sm sm:grid-cols-2">
               {[
-                "No setup fee",
+                "Free to list — always",
                 "No subscription",
-                "GCash direct to you",
+                "Booking fee paid by players",
                 "Cancel listing anytime",
               ].map((b) => (
                 <li key={b} className="flex items-start gap-2">

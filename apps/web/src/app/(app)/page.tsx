@@ -368,8 +368,8 @@ function ForOwnersBand() {
               </h2>
               <p className="mt-2 max-w-md text-sm text-white/85">
                 List your venue in 5 minutes. Take real bookings. Players pay
-                you directly via GCash — we deduct a small platform fee from
-                your weekly payout. No setup fees, no monthly subscription.
+                you directly via GCash. A small booking fee is added to
+                their total — listing your venue is always free.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
@@ -388,8 +388,8 @@ function ForOwnersBand() {
             </div>
             <ul className="grid gap-3 text-sm">
               {[
-                "No upfront cost — pay only on confirmed bookings",
-                "Weekly GCash payouts you can track",
+                "Free to list — no setup cost, no subscription",
+                "Booking fee paid by players, not you",
                 "Verified players, verified receipts",
                 "Calendar-aware double-booking protection",
               ].map((item) => (
