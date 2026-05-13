@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { PromoBanner } from "@/components/promo-banner";
 import { findActiveVenueBySlug, getCourtsOccupancy } from "@/features/venues";
-import { findCurrentSystemFeeCentavos } from "@/features/booking/repo";
+import { findCurrentSystemFeeCentavos, findCourtRateBands } from "@/features/booking/repo";
 import { fromManilaWallClock, manilaUpcomingDays } from "@/lib/date";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
 import { getSessionUser } from "@/server/session";
@@ -40,7 +40,7 @@ export default async function BookCourtPage({
   const [ly, lm, ld] = lastDay.isoDate.split("-").map(Number);
   const fromUtc = fromManilaWallClock(fy!, fm!, fd!, 0, 0);
   const toUtc = fromManilaWallClock(ly!, lm!, ld!, 24, 0);
-  const [occupancy, player, systemFee] = await Promise.all([
+  const [occupancy, player, systemFee, allRateBands] = await Promise.all([
     getCourtsOccupancy({
       courtIds: courts.map((c) => c.id),
       fromUtc,
@@ -48,6 +48,7 @@ export default async function BookCourtPage({
     }),
     getSessionUser(),
     findCurrentSystemFeeCentavos(),
+    Promise.all(courts.map((c) => findCourtRateBands(c.id).then((bands) => ({ courtId: c.id, bands })))),
   ]);
 
   return (
@@ -76,14 +77,22 @@ export default async function BookCourtPage({
         playerEmail={player?.email ?? ""}
         playerPhone={player?.phoneE164 ?? ""}
         days={days.map((d) => ({ isoDate: d.isoDate, label: d.label, isToday: d.isToday }))}
-        courts={courts.map((c) => ({
-          id: c.id,
-          name: c.name,
-          surface: c.surface,
-          isIndoor: c.isIndoor,
-          hourlyRateCentavos: c.hourlyRateCentavos.toString(),
-          imageUrl: venueMediaPublicUrl(c.imagePath),
-        }))}
+        courts={courts.map((c) => {
+          const rateBandsForCourt = allRateBands.find((r) => r.courtId === c.id)?.bands ?? [];
+          return {
+            id: c.id,
+            name: c.name,
+            surface: c.surface,
+            isIndoor: c.isIndoor,
+            hourlyRateCentavos: c.hourlyRateCentavos.toString(),
+            imageUrl: venueMediaPublicUrl(c.imagePath),
+            rateBands: rateBandsForCourt.map((b) => ({
+              fromHour: b.fromHour,
+              toHour: b.toHour,
+              rateCentavos: b.rateCentavos.toString(),
+            })),
+          };
+        })}
         occupancy={occupancy.map((r) => ({
           courtId: r.courtId,
           startAtIso: r.startAt.toISOString(),

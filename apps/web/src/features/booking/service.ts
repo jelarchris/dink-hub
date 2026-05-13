@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/db/client";
 import type { Booking, NewLedgerEntry, Payment, SlotHold } from "@/db/schema";
 import { getCurrentBookingFeeRule } from "@/features/system-settings/service";
+import { getRateForHour } from "@/lib/court-rate";
 import { BookingError } from "./errors";
 import * as repo from "./repo";
 import {
@@ -178,10 +179,13 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
   // the legacy `system_fee_settings` table only if the new singleton hasn't
   // been seeded yet — keeps test fixtures + older envs working.
   let systemFee: bigint;
-  try {
-    const rule = await getCurrentBookingFeeRule();
-    systemFee = rule.snapshotCentavos;
-  } catch {
+  const [rateBands, systemFeeResult] = await Promise.all([
+    repo.findCourtRateBands(courtId),
+    getCurrentBookingFeeRule().catch(() => null),
+  ]);
+  if (systemFeeResult !== null) {
+    systemFee = systemFeeResult.snapshotCentavos;
+  } else {
     const legacy = await repo.findCurrentSystemFeeCentavos();
     if (legacy === null) {
       throw new BookingError("system_fee_unavailable", "No active booking fee configured");
@@ -189,9 +193,22 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
     systemFee = legacy;
   }
 
+  // Use the rate band that covers the booking's Manila start hour; fall back to base rate.
+  const MANILA_OFFSET_MS = 8 * 3_600_000;
+  const manilaStartHour = new Date(startAt.getTime() + MANILA_OFFSET_MS).getUTCHours();
+  const applicableRate = getRateForHour(
+    rateBands.map((b) => ({
+      fromHour: b.fromHour,
+      toHour: b.toHour,
+      rateCentavos: b.rateCentavos,
+    })),
+    manilaStartHour,
+    courtRow.court.hourlyRateCentavos,
+  );
+
   const courtFee = computeCourtFeeCentavos(
     durationMinutes(startAt, endAt),
-    courtRow.court.hourlyRateCentavos,
+    applicableRate,
   );
 
   return db.transaction(async (tx) => {

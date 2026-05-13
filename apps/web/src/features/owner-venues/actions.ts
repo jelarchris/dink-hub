@@ -9,6 +9,7 @@ import { isOwnerVenueError } from "@/features/owner-venues/errors";
 import {
   createCourt,
   createVenue,
+  saveCourtRateBands,
   setCourtActive,
   setVenueStatus,
   updateCourt,
@@ -944,3 +945,66 @@ export async function removeCourtClosureAction(
   return { ok: true, data: undefined as never };
 }
 
+// ============================================================================
+// Court hourly rate bands
+// ============================================================================
+
+/**
+ * Atomically replaces all rate bands for a court.
+ * Accepts a JSON array of bands serialised as a single FormData field.
+ * Shape: [{fromHour, toHour, rateCentavos (string)}[]]
+ */
+export async function saveCourtRateBandsAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const rawBandsSchema = z.object({
+    courtId: z.string().uuid(),
+    venueId: z.string().uuid(),
+    bandsJson: z
+      .string()
+      .transform((s) => JSON.parse(s) as unknown)
+      .pipe(
+        z
+          .array(
+            z.object({
+              fromHour: z.coerce.number().int().min(0).max(23),
+              toHour: z.coerce.number().int().min(1).max(24),
+              rateCentavos: z
+                .string()
+                .regex(/^\d+$/)
+                .transform((s) => BigInt(s)),
+            }),
+          )
+          .max(12),
+      ),
+  });
+
+  const parsed = rawBandsSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Invalid rate bands.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  const { courtId, venueId, bandsJson: bands } = parsed.data;
+
+  try {
+    await saveCourtRateBands({ ownerId: guard.userId, courtId, bands });
+  } catch (err) {
+    if (isOwnerVenueError(err)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    console.error("[save-court-rate-bands]", err);
+    return fail("Could not save rate bands. Please try again.");
+  }
+
+  revalidatePath(`/owner/venues/${venueId}/courts/${courtId}`);
+  return { ok: true, data: undefined as never };
+}

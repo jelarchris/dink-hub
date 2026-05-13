@@ -122,6 +122,22 @@ export const courts = pgTable("courts", {
 });
 
 // ----------------------------------------------------------------------------
+// court_hourly_rates — per-time-of-day pricing bands (e.g. day ₱150, night ₱200)
+// Falls back to courts.hourly_rate_centavos when no band matches the booking hour.
+// ----------------------------------------------------------------------------
+export const courtHourlyRates = pgTable("court_hourly_rates", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  courtId: uuid("court_id")
+    .notNull()
+    .references(() => courts.id, { onDelete: "cascade" }),
+  fromHour: smallint("from_hour").notNull(),
+  toHour: smallint("to_hour").notNull(),
+  rateCentavos: bigint("rate_centavos", { mode: "bigint" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ----------------------------------------------------------------------------
 // system_fee_settings
 // ----------------------------------------------------------------------------
 export const systemFeeSettings = pgTable("system_fee_settings", {
@@ -431,6 +447,8 @@ export type OwnerInvoice = typeof ownerInvoices.$inferSelect;
 export type NewOwnerInvoice = typeof ownerInvoices.$inferInsert;
 export type CourtClosure = typeof courtClosures.$inferSelect;
 export type NewCourtClosure = typeof courtClosures.$inferInsert;
+export type CourtHourlyRate = typeof courtHourlyRates.$inferSelect;
+export type NewCourtHourlyRate = typeof courtHourlyRates.$inferInsert;
 export type Review = typeof reviews.$inferSelect;
 export type NewReview = typeof reviews.$inferInsert;
 export type OpenPlayInterest = typeof openPlayInterest.$inferSelect;

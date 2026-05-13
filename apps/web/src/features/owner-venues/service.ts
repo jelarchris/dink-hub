@@ -4,10 +4,12 @@ import { db } from "@/db/client";
 import {
   bookings,
   courtClosures,
+  courtHourlyRates,
   courts,
   venues,
   type Court,
   type CourtClosure,
+  type CourtHourlyRate,
   type Venue,
 } from "@/db/schema";
 import { OwnerVenueError } from "./errors";
@@ -448,4 +450,70 @@ export async function removeCourtClosure(args: {
     .update(courtClosures)
     .set({ deletedAt: new Date() })
     .where(and(eq(courtClosures.id, args.closureId), isNull(courtClosures.deletedAt)));
+}
+
+// ----------------------------------------------------------------------------
+// court hourly rate bands — set / list
+// ----------------------------------------------------------------------------
+
+export interface RateBandInput {
+  fromHour: number; // 0–23
+  toHour: number;   // 1–24, must be > fromHour
+  rateCentavos: bigint;
+}
+
+/**
+ * Replaces ALL rate bands for a court atomically.
+ * Passing an empty array clears all bands (revert to single base rate).
+ * The DB EXCLUDE constraint rejects overlapping ranges.
+ */
+export async function saveCourtRateBands(args: {
+  ownerId: string;
+  courtId: string;
+  bands: RateBandInput[];
+}): Promise<CourtHourlyRate[]> {
+  await getCourtForOwner(args.courtId, args.ownerId); // ownership guard
+
+  return db.transaction(async (tx) => {
+    // Delete all existing bands for this court.
+    await tx.delete(courtHourlyRates).where(eq(courtHourlyRates.courtId, args.courtId));
+
+    if (args.bands.length === 0) return [];
+
+    try {
+      return await tx
+        .insert(courtHourlyRates)
+        .values(
+          args.bands.map((b) => ({
+            courtId: args.courtId,
+            fromHour: b.fromHour,
+            toHour: b.toHour,
+            rateCentavos: b.rateCentavos,
+          })),
+        )
+        .returning();
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code: string }).code === "23P01"
+      ) {
+        throw new OwnerVenueError("validation", "Rate bands must not overlap.");
+      }
+      throw err;
+    }
+  });
+}
+
+export async function listCourtRateBands(args: {
+  ownerId: string;
+  courtId: string;
+}): Promise<CourtHourlyRate[]> {
+  await getCourtForOwner(args.courtId, args.ownerId); // ownership guard
+  return db
+    .select()
+    .from(courtHourlyRates)
+    .where(eq(courtHourlyRates.courtId, args.courtId))
+    .orderBy(courtHourlyRates.fromHour);
 }

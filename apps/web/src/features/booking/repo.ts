@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import {
   bookings,
   courtClosures,
+  courtHourlyRates,
   courts,
   ledgerEntries,
   payments,
@@ -12,6 +13,7 @@ import {
   venues,
   type Booking,
   type Court,
+  type CourtHourlyRate,
   type NewBooking,
   type NewLedgerEntry,
   type NewPayment,
@@ -58,6 +60,17 @@ export async function hasActiveClosureInRange(
     )
     .limit(1);
   return rows.length > 0;
+}
+
+export async function findCourtRateBands(
+  courtId: string,
+  exec: Executor = db,
+): Promise<CourtHourlyRate[]> {
+  return exec
+    .select()
+    .from(courtHourlyRates)
+    .where(eq(courtHourlyRates.courtId, courtId))
+    .orderBy(courtHourlyRates.fromHour);
 }
 
 export async function findCourtById(
