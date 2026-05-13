@@ -1,7 +1,22 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { formatPHP } from "@/lib/money";
-import { formatDateTimeManila } from "@/lib/date";
+import { formatDateTimeManila, formatTimeManila } from "@/lib/date";
+
+/**
+ * Returns a human-readable booking window including end time and duration.
+ * Example: "Thu, May 14, 3:00 PM – 4:00 PM (1 hr)"
+ */
+function formatBookingWindow(startAt: Date, endAt: Date): string {
+  const start = formatDateTimeManila(startAt);
+  const end = formatTimeManila(endAt);
+  const durationMin = (endAt.getTime() - startAt.getTime()) / 60_000;
+  const durationLabel =
+    durationMin % 60 === 0
+      ? `${String(durationMin / 60)} hr`
+      : `${String(durationMin)} min`;
+  return `${start} – ${end} (${durationLabel})`;
+}
 
 /**
  * HTML+text email templates. Plain string templates (no react-email) keep the
@@ -75,7 +90,7 @@ export function paymentSubmittedEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
   gcashReferenceNumber?: string | null;
 }) {
-  const when = formatDateTimeManila(ctx.startAt);
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const total = formatPHP(ctx.totalCentavos);
   const link = `${APP_URL}/owner/payments`;
   const refLine = ctx.gcashReferenceNumber
@@ -115,9 +130,9 @@ export function paymentSubmittedEmail(ctx: BookingEmailContext & {
 export function paymentVerifiedEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
 }) {
-  const when = formatDateTimeManila(ctx.startAt);
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const total = formatPHP(ctx.totalCentavos);
-  const link = `${APP_URL}/me/bookings`;
+  const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
 
   return {
     subject: `Booking confirmed \u2014 ${ctx.venueName} on ${when}`,
@@ -151,7 +166,7 @@ export function paymentRejectedEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
   reason: string;
 }) {
-  const when = formatDateTimeManila(ctx.startAt);
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const link = `${APP_URL}/book/${ctx.bookingId}/pay`;
 
   return {
@@ -183,7 +198,7 @@ export function bookingCancelledByPlayerEmail(ctx: BookingEmailContext & {
   ownerDisplayName: string;
   playerDisplayName: string;
 }) {
-  const when = formatDateTimeManila(ctx.startAt);
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const link = `${APP_URL}/owner/bookings`;
 
   return {
@@ -217,8 +232,8 @@ export function bookingForceCancelledEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
   reason: string;
 }) {
-  const when = formatDateTimeManila(ctx.startAt);
-  const link = `${APP_URL}/me/bookings`;
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
+  const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
 
   return {
     subject: `Your booking was cancelled \u2014 ${ctx.venueName}`,
@@ -251,8 +266,8 @@ export function disputeOpenedEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
   reason: string;
 }) {
-  const when = formatDateTimeManila(ctx.startAt);
-  const link = `${APP_URL}/me/bookings`;
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
+  const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
 
   return {
     subject: `Payment dispute opened \u2014 ${ctx.venueName}`,
@@ -286,10 +301,10 @@ export function disputeResolvedEmail(ctx: BookingEmailContext & {
   resolution: "refund_full" | "rejected";
   notes?: string | null;
 }) {
-  const when = formatDateTimeManila(ctx.startAt);
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const total = formatPHP(ctx.totalCentavos);
   const isRefund = ctx.resolution === "refund_full";
-  const link = `${APP_URL}/me/bookings`;
+  const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
   const headline = isRefund ? `Your refund has been approved` : `Dispute resolved \u2014 booking upheld`;
   const banner = isRefund
     ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
