@@ -583,8 +583,18 @@ export function bookingRescheduledByOwnerEmail(
       timeStyle: "short",
     });
 
-  const oldWhen = `${fmtDt(ctx.oldStartAt)} – ${fmtDt(ctx.oldEndAt)}`;
-  const newWhen = `${fmtDt(ctx.startAt)} – ${fmtDt(ctx.endAt)}`;
+  const fmtTime = (d: Date) =>
+    d.toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", timeStyle: "short" });
+
+  const sameDay =
+    ctx.startAt.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" }) ===
+    ctx.endAt.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" });
+  const oldSameDay =
+    ctx.oldStartAt.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" }) ===
+    ctx.oldEndAt.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" });
+
+  const oldWhen = `${fmtDt(ctx.oldStartAt)} – ${oldSameDay ? fmtTime(ctx.oldEndAt) : fmtDt(ctx.oldEndAt)}`;
+  const newWhen = `${fmtDt(ctx.startAt)} – ${sameDay ? fmtTime(ctx.endAt) : fmtDt(ctx.endAt)}`;
   const bookingLink = `${APP_URL}/me/bookings`;
 
   const reasonHtml = ctx.reason
