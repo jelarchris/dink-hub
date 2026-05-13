@@ -440,7 +440,7 @@ function OpenPlayTeaser() {
           <RoadmapCard
             icon={<Users />}
             title="Open Play"
-            description="Drop in to scheduled sessions at your local court. No group needed — just show up, pay one small fee, and meet other players."
+            description="Drop in to scheduled sessions at your local court. No group needed — just show up and meet other players."
           />
           <RoadmapCard
             icon={<Zap />}
