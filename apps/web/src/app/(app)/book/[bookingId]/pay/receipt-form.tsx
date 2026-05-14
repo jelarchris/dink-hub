@@ -9,9 +9,6 @@ import { Alert } from "@/components/ui/alert";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { TurnstileWidget } from "@/components/turnstile-widget";
-
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
@@ -138,10 +135,6 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
         Submit receipt
       </SubmitButton>
 
-      <TurnstileWidget
-        siteKey={TURNSTILE_SITE_KEY}
-        action="receipt-upload"
-      />
     </form>
   );
 }

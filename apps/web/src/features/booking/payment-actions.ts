@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/service";
@@ -20,11 +19,6 @@ import { findPaymentById } from "@/features/booking/repo";
 import { findBookingDetailForPlayer } from "@/features/bookings-view";
 import { uploadReceipt } from "@/features/storage";
 import { checkRateLimit, limiters, rateLimitMessage } from "@/lib/rate-limit";
-import {
-  TURNSTILE_FIELD_NAME,
-  getClientIp,
-  verifyTurnstileToken,
-} from "@/lib/turnstile";
 import { captureException } from "@/lib/observability";
 
 function fail(message: string, code = "unknown"): ActionResult<never> {
@@ -60,20 +54,6 @@ export async function submitReceiptAction(
   // Rate limit per user before any heavy work (file read, hash, storage put).
   const rl = await checkRateLimit(limiters.receiptUpload, `receipt:${user.id}`);
   if (!rl.allowed) return fail(rateLimitMessage(rl.resetMs), "rate_limited");
-
-  // Verify Turnstile — receipt upload is a high-value abuse target
-  // (storage cost + manual venue-owner review queue).
-  const h = await headers();
-  const ip = getClientIp(h);
-  const captcha = await verifyTurnstileToken(
-    typeof form.get(TURNSTILE_FIELD_NAME) === "string"
-      ? (form.get(TURNSTILE_FIELD_NAME) as string)
-      : "",
-    ip,
-  );
-  if (!captcha.success) {
-    return fail("Security check failed \u2014 please retry.", "captcha_failed");
-  }
 
   const ref = form.get("gcashReferenceNumber");
   const parsed = submitInputSchema.safeParse({

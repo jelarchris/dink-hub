@@ -23,7 +23,6 @@ import { Alert } from "@/components/ui/alert";
 import { CopyButton } from "@/components/ui/copy-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { TurnstileWidget } from "@/components/turnstile-widget";
 import { cn } from "@/lib/cn";
 import { addMinutes, formatTimeManila, generateDaySlotsManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
@@ -32,7 +31,6 @@ const SLOT_MINUTES = 60;
 const MAX_SLOTS = 4; // server enforces 4-hour max
 const TIMER_START = 15 * 60; // 15 minutes
 
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // UTC offset for Manila (UTC+8, no DST) — used for wall-clock hour lookups.
@@ -1035,14 +1033,6 @@ function Step2Body({
           </span>
         </label>
       </div>
-
-      {/* Turnstile — renders invisibly and injects cf-turnstile-response into the form */}
-      {TURNSTILE_SITE_KEY && (
-        <TurnstileWidget
-          siteKey={TURNSTILE_SITE_KEY}
-          action="receipt-upload"
-        />
-      )}
 
       {/* Footer */}
       <div className="flex gap-2 pt-2">
