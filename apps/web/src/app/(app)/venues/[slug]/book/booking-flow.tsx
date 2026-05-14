@@ -468,7 +468,7 @@ export function BookingFlow({
           label={`Select time · ${pickedDateLabel}`}
           hint="Tap adjacent slots to book multiple hours (max 4)"
         >
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {slots.map((s) => {
               const iso = s.toISOString();
               const available = isAvailable(s);
@@ -489,7 +489,7 @@ export function BookingFlow({
                   disabled={!available && !isPicked}
                   onClick={() => pickSlot(s)}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-2 py-2 text-center transition-colors",
+                    "flex flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] border px-2 py-3 text-center transition-colors active:scale-[0.97]",
                     isPicked &&
                       "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] ring-2 ring-[var(--color-brand-500)]",
                     !isPicked && available &&
@@ -503,7 +503,7 @@ export function BookingFlow({
                   </span>
                   <span
                     className={cn(
-                      "text-[10px] font-bold uppercase tracking-wide leading-none",
+                      "text-[11px] font-bold uppercase tracking-wide leading-none",
                       available || isPicked
                         ? "text-[var(--color-success)]"
                         : "text-[var(--color-fg-subtle)]",
@@ -515,6 +515,11 @@ export function BookingFlow({
               );
             })}
           </div>
+          {slots.length > 0 && slots.every((s) => !isAvailable(s)) && (
+            <p className="py-6 text-center text-sm text-[var(--color-fg-muted)]">
+              No available times on this date — try another day.
+            </p>
+          )}
         </Section>
 
         {/* Sticky footer */}
@@ -591,7 +596,7 @@ export function BookingFlow({
                   type="button"
                   onClick={closeModal}
                   aria-label="Close"
-                  className="rounded-full p-1 text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)]"
+                  className="rounded-full p-2.5 text-[var(--color-fg-muted)] transition-transform hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-fg)] active:scale-95"
                 >
                   <X className="size-5" />
                 </button>
@@ -599,7 +604,7 @@ export function BookingFlow({
                   className={cn(
                     "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
                     timerUrgent
-                      ? "bg-[var(--color-danger-50)] text-[var(--color-danger-600)]"
+                      ? "animate-pulse bg-[var(--color-danger-50)] text-[var(--color-danger-600)]"
                       : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)]",
                   )}
                 >
@@ -824,7 +829,7 @@ function Step1Body({
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border-default)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
+          className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border-default)] px-4 py-3 text-sm font-semibold text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
         >
           Cancel
         </button>
@@ -833,7 +838,7 @@ function Step1Body({
           onClick={onNext}
           disabled={!canProceed || isCreating}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold transition-colors",
+            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-4 py-3 text-sm font-semibold transition-colors",
             canProceed && !isCreating
               ? "bg-[var(--color-brand-500)] text-white hover:bg-[var(--color-brand-600)]"
               : "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
@@ -1044,7 +1049,7 @@ function Step2Body({
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border-default)] px-4 py-2.5 text-sm font-semibold text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
+          className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border-default)] px-4 py-3 text-sm font-semibold text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
         >
           ← Back
         </button>
@@ -1052,7 +1057,7 @@ function Step2Body({
           type="submit"
           disabled={!canSubmit}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold transition-colors",
+            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-4 py-3 text-sm font-semibold transition-colors",
             canSubmit
               ? "bg-[var(--color-brand-500)] text-white hover:bg-[var(--color-brand-600)]"
               : "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
@@ -1081,7 +1086,7 @@ function CourtCard({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        "group flex w-[120px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] text-left transition-colors sm:w-[140px]",
+        "group flex w-[130px] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-bg)] text-left transition-colors active:scale-[0.98] sm:w-[152px]",
         selected
           ? "border-[var(--color-brand-500)] ring-2 ring-[var(--color-brand-500)]"
           : "border-[var(--color-border-default)] hover:border-[var(--color-brand-500)]",
@@ -1090,7 +1095,7 @@ function CourtCard({
       <div className="relative aspect-[5/4] w-full bg-gradient-to-br from-[var(--color-brand-300)] to-[var(--color-brand-600)]">
         {court.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={court.imageUrl} alt={court.name} className="h-full w-full object-cover" />
+          <img src={court.imageUrl} alt={court.name} loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-white/85">
             <Trophy className="size-8" />
@@ -1140,7 +1145,7 @@ function DateChip({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        "flex w-[54px] shrink-0 snap-start flex-col items-center justify-center rounded-[var(--radius-md)] border px-1 py-1.5 text-center transition-colors sm:w-[60px]",
+        "flex w-[60px] shrink-0 snap-start flex-col items-center justify-center rounded-[var(--radius-md)] border px-1 py-2 text-center transition-colors active:scale-[0.97] sm:w-[64px]",
         selected
           ? "border-[var(--color-brand-500)] bg-[var(--color-brand-500)] text-white"
           : "border-[var(--color-border-default)] bg-[var(--color-bg)] text-[var(--color-fg)] hover:border-[var(--color-brand-500)]",
@@ -1167,7 +1172,7 @@ function DateChip({
         <span
           aria-hidden
           className={cn(
-            "mt-0.5 size-1 rounded-full",
+            "mt-0.5 size-1.5 rounded-full",
             selected ? "bg-white" : "bg-[var(--color-brand-500)]",
           )}
         />
