@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ChevronRight } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { PageHeader } from "@/components/ui/page-header";
@@ -102,10 +102,10 @@ export default async function OwnerBookingsPage({
           <Link
             key={tab.key}
             href={makeUrl(tab.key, venueId, undefined)}
-            className={`inline-flex h-8 shrink-0 items-center rounded-full px-3 text-xs font-semibold transition-colors ${
+            className={`inline-flex h-9 shrink-0 items-center rounded-full px-3 text-xs font-semibold transition active:scale-95 ${
               statusFilter === tab.key
                 ? "bg-[var(--color-brand-700)] text-white"
-                : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)]"
+                : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] active:bg-[var(--color-bg-muted)]"
             }`}
           >
             {tab.label}
@@ -211,30 +211,28 @@ function BookingRow({
   showVenue: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex items-center gap-2">
-          <span className="truncate font-semibold text-[var(--color-fg)]">
-            {item.playerDisplayName}
-          </span>
-          <BookingStatusBadge status={item.booking.status} />
+    <li>
+      <Link
+        href={`/owner/bookings/${item.booking.id}`}
+        className="flex items-center gap-3 px-4 py-3 transition hover:bg-[var(--color-bg-subtle)] active:bg-[var(--color-bg-muted)]"
+      >
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className="truncate font-semibold text-[var(--color-fg)]">
+              {item.playerDisplayName}
+            </span>
+            <BookingStatusBadge status={item.booking.status} />
+          </div>
+          <div className="text-xs text-[var(--color-fg-muted)]">
+            {showVenue ? `${item.venue.name} · ` : ""}
+            {item.court.name} · {formatDateTimeManila(item.booking.startAt)}
+          </div>
+          <div className="text-sm font-bold text-[var(--color-brand-700)]">
+            {formatPHP(item.booking.totalCentavos)}
+          </div>
         </div>
-        <div className="text-xs text-[var(--color-fg-muted)]">
-          {showVenue ? `${item.venue.name} · ` : ""}
-          {item.court.name} · {formatDateTimeManila(item.booking.startAt)}
-        </div>
-        <div className="text-sm font-bold text-[var(--color-brand-700)]">
-          {formatPHP(item.booking.totalCentavos)}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href={`/owner/bookings/${item.booking.id}`}
-          className={buttonVariants({ size: "sm", variant: "outline" })}
-        >
-          View
-        </Link>
-      </div>
+        <ChevronRight className="size-4 shrink-0 text-[var(--color-fg-subtle)]" />
+      </Link>
     </li>
   );
 }

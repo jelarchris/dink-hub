@@ -226,7 +226,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
                     key={opt.value}
                     href={buildQuery(current, { sort: opt.value })}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium transition active:scale-95",
                       active
                         ? "bg-[var(--color-bg)] text-[var(--color-fg)] shadow-[var(--shadow-sm)]"
                         : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]",
@@ -300,7 +300,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
               <li key={v.venue.id} className="min-w-0">
                 <Link
                   href={`/venues/${v.venue.slug}`}
-                  className="group block overflow-hidden rounded-[var(--radius-lg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)] focus-visible:ring-offset-2"
+                  className="group block overflow-hidden rounded-[var(--radius-lg)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)] focus-visible:ring-offset-2"
                 >
                   <div
                     className={cn(
@@ -405,7 +405,7 @@ function CityChip({
       href={href}
       aria-pressed={active}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium transition active:scale-95",
         active
           ? "border-[var(--color-brand-500)] bg-[var(--color-brand-500)] text-white"
           : "border-[var(--color-border-default)] bg-[var(--color-bg)] text-[var(--color-fg-muted)] hover:border-[var(--color-brand-300)] hover:text-[var(--color-fg)]",
