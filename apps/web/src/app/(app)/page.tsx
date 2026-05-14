@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { OpenPlayTeaserForm } from "@/features/open-play-interest/components/open-play-teaser-form";
 import { redirect } from "next/navigation";
+import { cn } from "@/lib/cn";
 import {
   ArrowRight,
   Calendar,
@@ -86,38 +87,44 @@ function Hero() {
 
         <h1
           id="hero-heading"
-          className="mx-auto mt-4 max-w-3xl text-balance text-3xl font-extrabold leading-[1.05] tracking-tight sm:text-4xl lg:text-5xl"
+          className="mx-auto mt-4 max-w-3xl text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
         >
-          Your court is{" "}
+          Your pickleball court is{" "}
           <span className="bg-gradient-to-r from-[var(--color-brand-500)] to-[var(--color-accent-500)] bg-clip-text text-transparent">
             waiting.
           </span>
         </h1>
 
-        <p className="mx-auto mt-3 max-w-xl text-pretty text-base text-[var(--color-fg-muted)]">
-          Find pickleball courts near you, see real availability, and pay
-          through GCash. No calls, no chats — confirmation in your inbox.
+        <p className="mx-auto mt-4 max-w-xl text-pretty text-base text-[var(--color-fg-muted)] sm:text-lg">
+          Browse verified courts in Agusan del Sur, pick an open slot, and pay
+          via GCash. No calls, no chats — confirmation lands in your inbox.
         </p>
 
-        <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+        <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Link
             href="/venues"
-            className={`${buttonVariants({ size: "xl" })} w-full shadow-[var(--shadow-md)] sm:w-auto`}
+            className={`${buttonVariants({ size: "xl" })} w-full shadow-[var(--shadow-lg)] active:scale-[0.98] sm:w-auto`}
           >
             <Search aria-hidden="true" />
             Find a court
           </Link>
           <Link
             href="/host"
-            className={`${buttonVariants({ size: "xl", variant: "outline" })} w-full sm:w-auto`}
+            className={cn(buttonVariants({ size: "xl", variant: "outline" }), "hidden sm:inline-flex")}
           >
             List your venue
             <ArrowRight aria-hidden="true" />
           </Link>
+          <Link
+            href="/host"
+            className="text-sm font-medium text-[var(--color-brand-600)] hover:underline active:opacity-70 sm:hidden"
+          >
+            Own a court? List it &rarr;
+          </Link>
         </div>
 
-        <p className="mt-3 text-xs text-[var(--color-fg-subtle)]">
-          Pay only what you see — no surprises, no hidden charges.
+        <p className="mt-4 text-xs text-[var(--color-fg-subtle)]">
+          Pay only what you see &mdash; no hidden charges, no surprises.
         </p>
       </Container>
     </section>
@@ -140,7 +147,7 @@ function StatsBar({
       label: "Bookings this week",
       value: stats.bookingsLast7d.toLocaleString("en-PH"),
     },
-    { label: "GCash payments accepted", value: "✓" },
+    { label: "Registration fee", value: "₱0" },
   ];
   return (
     <section
@@ -187,7 +194,7 @@ function FeaturedVenues({ venues }: { venues: FeaturedVenue[] }) {
         <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-end">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">Featured</p>
-            <h2 id="venues-heading" className="text-xl font-bold sm:text-2xl">
+            <h2 id="venues-heading" className="text-2xl font-bold sm:text-3xl">
               Courts you can book today
             </h2>
             <p className="mt-2 text-[var(--color-fg-muted)]">
@@ -245,10 +252,10 @@ function VenueCard({ item }: { item: FeaturedVenue }) {
   return (
     <Link
       href={`/venues/${venue.slug}`}
-      className="group block overflow-hidden rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
+      className="group block overflow-hidden rounded-[var(--radius-md)] transition-all hover:shadow-[var(--shadow-lg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
     >
       <div
-        className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-brand-300)] via-[var(--color-brand-500)] to-[var(--color-accent-500)] bg-cover bg-center"
+        className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-brand-300)] via-[var(--color-brand-500)] to-[var(--color-accent-500)] bg-cover bg-center transition-transform duration-300 group-hover:scale-[1.04]"
         style={
           venue.coverImageUrl
             ? { backgroundImage: `url(${venue.coverImageUrl})` }
@@ -319,11 +326,11 @@ function HowItWorks() {
     >
       <Container>
         <div className="text-center">
-          <Badge variant="success" className="mb-2">
+          <Badge variant="success" className="mb-3">
             How it works
           </Badge>
-          <h2 id="how-heading" className="text-xl font-bold sm:text-2xl">
-            From searching to serving — in three steps
+          <h2 id="how-heading" className="text-2xl font-bold sm:text-3xl">
+            Pick, pay, play &mdash; three simple steps
           </h2>
         </div>
         <ol className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -335,11 +342,11 @@ function HowItWorks() {
               <span className="absolute -top-2.5 left-4 inline-flex size-6 items-center justify-center rounded-full bg-[var(--color-brand-500)] text-xs font-bold text-white">
                 {s.n}
               </span>
-              <div className="mb-2 inline-flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-4">
+              <div className="mb-3 inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-5">
                 {s.icon}
               </div>
               <h3 className="text-base font-semibold">{s.title}</h3>
-              <p className="mt-1 text-xs text-[var(--color-fg-muted)]">{s.body}</p>
+              <p className="mt-1.5 text-sm text-[var(--color-fg-muted)]">{s.body}</p>
             </li>
           ))}
         </ol>
@@ -363,7 +370,7 @@ function ForOwnersBand() {
           />
           <div className="relative grid gap-6 lg:grid-cols-2 lg:items-center">
             <div>
-              <h2 id="owners-heading" className="text-xl font-bold sm:text-2xl">
+              <h2 id="owners-heading" className="text-2xl font-bold sm:text-3xl">
                 Run a court? Fill it.
               </h2>
               <p className="mt-2 max-w-md text-sm text-white/85">
@@ -380,7 +387,7 @@ function ForOwnersBand() {
                 </Link>
                 <Link
                   href="/host"
-                  className={`${buttonVariants({ size: "lg", variant: "ghost" })} text-white hover:bg-white/10`}
+                  className={cn(buttonVariants({ size: "lg", variant: "ghost" }), "border border-white/30 text-white hover:bg-white/10")}
                 >
                   Learn more <ArrowRight className="size-4" />
                 </Link>
@@ -423,7 +430,7 @@ function OpenPlayTeaser() {
           </Badge>
           <h2
             id="roadmap-heading"
-            className="text-balance text-2xl font-bold tracking-tight sm:text-3xl"
+            className="text-balance text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl"
           >
             What&apos;s coming next
           </h2>
@@ -499,7 +506,7 @@ function Features() {
       aria-labelledby="features-heading"
     >
       <Container>
-        <h2 id="features-heading" className="text-center text-xl font-bold sm:text-2xl">
+        <h2 id="features-heading" className="text-center text-2xl font-bold sm:text-3xl">
           Built for the way you actually play
         </h2>
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -521,7 +528,8 @@ function Features() {
           <FeatureCard
             icon={<Users />}
             title="Find a partner"
-            description="Coming soon — connect with players at your skill level near you."
+            description="Connect with players at your skill level near you."
+            comingSoon
           />
         </div>
       </Container>
@@ -533,18 +541,34 @@ function FeatureCard({
   icon,
   title,
   description,
+  comingSoon = false,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
+  comingSoon?: boolean;
 }) {
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4">
-      <div className="mb-2 inline-flex size-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-4">
+    <div
+      className={cn(
+        "rounded-[var(--radius-md)] border p-4",
+        comingSoon
+          ? "border-dashed border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] opacity-60"
+          : "border-[var(--color-border-default)] bg-[var(--color-bg)]",
+      )}
+    >
+      <div className="mb-3 inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] [&_svg]:size-5">
         {icon}
       </div>
-      <h3 className="text-base font-semibold">{title}</h3>
-      <p className="mt-1 text-xs text-[var(--color-fg-muted)]">{description}</p>
+      <div className="flex items-center gap-2">
+        <h3 className="text-base font-semibold">{title}</h3>
+        {comingSoon && (
+          <Badge variant="info" className="px-1.5 py-0.5 text-[10px]">
+            Soon
+          </Badge>
+        )}
+      </div>
+      <p className="mt-1.5 text-sm text-[var(--color-fg-muted)]">{description}</p>
     </div>
   );
 }
@@ -583,7 +607,7 @@ function FaqSection() {
     >
       <Container className="max-w-3xl">
         <div className="text-center">
-          <h2 id="faq-heading" className="text-xl font-bold sm:text-2xl">
+          <h2 id="faq-heading" className="text-2xl font-bold sm:text-3xl">
             Frequently asked
           </h2>
         </div>
