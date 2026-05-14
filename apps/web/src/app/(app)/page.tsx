@@ -82,7 +82,7 @@ function Hero() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-brand-500)] opacity-60" />
             <span className="relative inline-flex size-2 rounded-full bg-[var(--color-brand-500)]" />
           </span>
-          Now live in Agusan del Sur
+          Now live in the Philippines
         </div>
 
         <h1
@@ -221,7 +221,7 @@ function FeaturedVenues({ venues }: { venues: FeaturedVenue[] }) {
             />
             <h3 className="mt-4 text-lg font-semibold">Be the first to list</h3>
             <p className="mx-auto mt-1 max-w-md text-sm text-[var(--color-fg-muted)]">
-              We&apos;re launching with venues across Agusan del Sur. List your
+              We&apos;re onboarding venues across the Philippines. List your
               court and start taking bookings this week.
             </p>
             <div className="mt-6">
@@ -513,7 +513,7 @@ function Features() {
           <FeatureCard
             icon={<MapPin />}
             title="Courts near you"
-            description="Verified pickleball venues across the Philippines, starting with Agusan del Sur."
+            description="Verified pickleball venues across the Philippines — wherever a court is ready to take bookings."
           />
           <FeatureCard
             icon={<Calendar />}
@@ -596,8 +596,8 @@ function FaqSection() {
       a: "Receipts are stored privately and only the venue owner can view them to verify your booking.",
     },
     {
-      q: "When will you launch in my city?",
-      a: "We're starting in Agusan del Sur and adding cities as we onboard venues. Want yours next? List your court.",
+      q: "Is DinkHub available in my city?",
+      a: "We list courts wherever venue owners sign up — there's no city-by-city rollout. If you don't see courts near you yet, be the first to list yours.",
     },
   ];
   return (
