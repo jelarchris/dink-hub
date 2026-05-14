@@ -25,10 +25,10 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
   );
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  // Track whether Turnstile has been solved. When a siteKey is configured the
-  // submit button stays disabled until the token arrives, preventing the
-  // "Security check failed" error from blank tokens.
-  const [captchaSolved, setCaptchaSolved] = useState(!TURNSTILE_SITE_KEY);
+  // captchaSolved is intentionally NOT used to gate the submit button.
+  // The interaction-only Turnstile widget injects cf-turnstile-response into
+  // the form silently; the server validates it and returns a clear error if
+  // the token is missing, preventing the "frozen disabled button" UX trap.
   const fileRef = useRef<HTMLInputElement>(null);
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
@@ -132,7 +132,7 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
       <SubmitButton
         size="lg"
         pendingLabel="Uploading"
-        disabled={Boolean(fileError) || !captchaSolved}
+        disabled={Boolean(fileError)}
         className="mt-2"
       >
         Submit receipt
@@ -141,8 +141,6 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
       <TurnstileWidget
         siteKey={TURNSTILE_SITE_KEY}
         action="receipt-upload"
-        onVerify={() => setCaptchaSolved(true)}
-        onExpire={() => setCaptchaSolved(false)}
       />
     </form>
   );
