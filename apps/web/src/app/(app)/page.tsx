@@ -96,8 +96,8 @@ function Hero() {
         </h1>
 
         <p className="mx-auto mt-4 max-w-xl text-pretty text-base text-[var(--color-fg-muted)] sm:text-lg">
-          Browse verified courts in Agusan del Sur, pick an open slot, and pay
-          via GCash. No calls, no chats — confirmation lands in your inbox.
+          Browse verified courts near you, pick an open slot, and pay via
+          GCash. No calls, no chats &mdash; confirmation lands in your inbox.
         </p>
 
         <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
@@ -513,7 +513,7 @@ function Features() {
           <FeatureCard
             icon={<MapPin />}
             title="Courts near you"
-            description="Verified pickleball venues across Agusan del Sur, with more cities rolling out monthly."
+            description="Verified pickleball venues across the Philippines, starting with Agusan del Sur."
           />
           <FeatureCard
             icon={<Calendar />}
