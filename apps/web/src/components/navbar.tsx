@@ -170,6 +170,27 @@ export function Navbar({ user }: NavbarProps) {
     };
   }, []);
 
+  // If the user alt-tabs away while the mobile menu is open and the body is
+  // scroll-locked, then alt-tabs back, the browser's visibility lifecycle can
+  // leave the lock orphaned. Force-clear it whenever the page becomes visible
+  // so the page never gets stuck in an unclickable state.
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      if (!menuOpen) {
+        // Not open — safe to clear any stale lock left by a previous session.
+        document.documentElement.style.overflow = "";
+        document.documentElement.style.overscrollBehavior = "";
+        document.body.style.overflow = "";
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.width = "";
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [menuOpen]);
+
   useEffect(() => {
     if (!menuOpen) return;
     function onKey(e: KeyboardEvent) {
