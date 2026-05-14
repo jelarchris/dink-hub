@@ -95,7 +95,7 @@ export default async function MyBookingsPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {needsPayment && (
-                      <Link href={`/book/${it.booking.id}/pay`} className={buttonVariants({ size: "sm" })}>
+                      <Link href={`/book/${it.booking.id}/pay`} className={buttonVariants()}>
                         Pay now
                       </Link>
                     )}

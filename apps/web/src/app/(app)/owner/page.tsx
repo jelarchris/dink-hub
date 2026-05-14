@@ -245,7 +245,7 @@ export default async function OwnerDashboard({
                     <span className="text-xs font-bold uppercase tracking-wide text-[var(--color-fg-muted)]">
                       {dayLabel(dayKey, todayKey, tomorrowKey)}
                     </span>
-                    <span className="text-[10px] text-[var(--color-fg-subtle)]">
+                    <span className="text-xs text-[var(--color-fg-subtle)]">
                       {items.length} booking{items.length === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -395,10 +395,10 @@ function VenueTab({ href, label, active }: { href: string; label: string; active
   return (
     <Link
       href={href}
-      className={`inline-flex h-8 shrink-0 items-center rounded-full px-3 text-xs font-semibold transition-colors ${
+      className={`inline-flex h-9 shrink-0 items-center rounded-full px-3 text-xs font-semibold transition active:scale-95 ${
         active
           ? "bg-[var(--color-brand-700)] text-white"
-          : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)]"
+          : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)] active:bg-[var(--color-bg-muted)]"
       }`}
     >
       {label}
@@ -433,7 +433,7 @@ function TodayPanel({
       {nextBooking ? (
         <Link
           href={`/owner/bookings/${nextBooking.bookingId}`}
-          className="mt-4 block rounded-[var(--radius-md)] border border-[var(--color-brand-200)] bg-[var(--color-brand-50)] p-4 transition-colors hover:bg-[var(--color-brand-100)]"
+          className="mt-4 block rounded-[var(--radius-md)] border border-[var(--color-brand-200)] bg-[var(--color-brand-50)] p-4 transition active:scale-[0.98] hover:bg-[var(--color-brand-100)]"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -462,7 +462,7 @@ function TodayPanel({
             <Link
               key={item.bookingId}
               href={`/owner/bookings/${item.bookingId}`}
-              className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-3 py-2 text-sm transition-colors hover:bg-[var(--color-bg-muted)]"
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-3 py-2.5 text-sm transition active:scale-[0.97] hover:bg-[var(--color-bg-muted)]"
             >
               <span className="block text-xs font-semibold tabular-nums">
                 {COMPACT_TIME_FMT.format(item.startAt)}
@@ -555,7 +555,7 @@ function ActionItem({
   return (
     <Link
       href={href}
-      className="flex items-start justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-3 py-2.5 transition-colors hover:bg-[var(--color-bg-muted)]"
+      className="flex items-start justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-3 py-2.5 transition active:scale-[0.98] hover:bg-[var(--color-bg-muted)]"
     >
       <div className="flex min-w-0 items-start gap-3">
         <span className={`flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] ${urgent ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-700"}`}>
@@ -606,7 +606,7 @@ function StatCard({
       <div>
         <p className="break-words text-lg font-bold leading-tight tabular-nums sm:text-xl">{value}</p>
         <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-fg-muted)]">{title}</p>
-        {subtitle && <p className="mt-0.5 text-[10px] text-[var(--color-fg-subtle)]">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">{subtitle}</p>}
       </div>
     </div>
   );
@@ -620,7 +620,7 @@ function ScheduleRow({ item, showVenue }: { item: ScheduleItem; showVenue: boole
     <li>
       <Link
         href={`/owner/bookings/${item.bookingId}`}
-        className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-[var(--color-bg-subtle)] sm:px-4"
+        className="flex items-center gap-3 px-3 py-3 transition active:scale-[0.99] hover:bg-[var(--color-bg-subtle)] sm:px-4"
       >
         <div className="w-[4.8rem] shrink-0 text-center">
           <div className="font-mono text-sm font-semibold tabular-nums">{startLabel}</div>
@@ -674,7 +674,7 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-1.5 py-2 sm:px-2">
       <p className="text-lg font-bold tabular-nums">{value}</p>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-fg-muted)]">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-fg-muted)]">{label}</p>
     </div>
   );
 }
@@ -746,7 +746,7 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="flex min-h-[5.5rem] items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3 shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-bg-subtle)] sm:items-center sm:p-4"
+      className="flex min-h-[5.5rem] items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3 shadow-[var(--shadow-sm)] transition active:scale-[0.98] hover:bg-[var(--color-bg-subtle)] sm:items-center sm:p-4"
     >
       <div className="flex min-w-0 items-start gap-3 sm:items-center">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)]">

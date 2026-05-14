@@ -139,14 +139,13 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
             <div className="flex flex-wrap gap-2 pt-1">
               <form action={verifyAction}>
                 <input type="hidden" name="paymentId" value={props.paymentId} />
-                <SubmitButton size="sm" pendingLabel="Verifying">
+                <SubmitButton pendingLabel="Verifying">
                   <Check className="size-4" /> Verify payment
                 </SubmitButton>
               </form>
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 onClick={() => setMode("rejecting")}
                 disabled={verifyPending}
               >
@@ -170,13 +169,12 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
                 )}
               </FormField>
               <div className="flex gap-2">
-                <SubmitButton variant="destructive" size="sm" pendingLabel="Rejecting">
+                <SubmitButton variant="destructive" pendingLabel="Rejecting">
                   Confirm reject
                 </SubmitButton>
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
                   onClick={() => setMode("idle")}
                   disabled={rejectPending}
                 >

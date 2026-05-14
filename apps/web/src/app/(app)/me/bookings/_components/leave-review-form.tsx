@@ -78,7 +78,7 @@ export function LeaveReviewForm({ bookingId, venueName }: LeaveReviewFormProps) 
             onClick={() => setRating(star)}
             onMouseEnter={() => setHovered(star)}
             onMouseLeave={() => setHovered(null)}
-            className="p-0.5 transition-transform hover:scale-110"
+            className="p-1.5 transition-transform hover:scale-110 active:scale-95"
           >
             <svg
               width={24}
@@ -113,14 +113,14 @@ export function LeaveReviewForm({ bookingId, venueName }: LeaveReviewFormProps) 
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-[var(--radius-sm)] bg-[var(--color-brand-600)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--color-brand-700)] disabled:opacity-50"
+          className="rounded-[var(--radius-sm)] bg-[var(--color-brand-600)] px-4 py-2.5 text-sm font-semibold text-white transition active:scale-95 hover:bg-[var(--color-brand-700)] disabled:opacity-50"
         >
           {isPending ? "Submitting…" : "Submit"}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-xs text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+          className="py-2.5 px-2 text-xs text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
         >
           Cancel
         </button>

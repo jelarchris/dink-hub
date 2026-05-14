@@ -235,7 +235,7 @@ export default async function PlayerBookingDetailPage({
             {booking.status === "pending_payment" && (
               <Link
                 href={`/book/${booking.id}/pay`}
-                className={`${buttonVariants({ size: "sm" })} w-full justify-center`}
+                className={`${buttonVariants()} w-full justify-center`}
               >
                 Pay now
               </Link>
