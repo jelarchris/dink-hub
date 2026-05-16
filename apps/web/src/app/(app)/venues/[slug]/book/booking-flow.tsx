@@ -19,7 +19,8 @@ import {
 } from "@/features/booking/actions";
 import { submitReceiptAction } from "@/features/booking/payment-actions";
 import type { ActionResult } from "@/features/auth";
-import { Alert } from "@/components/ui/alert";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { Alert } from "@/components/ui/alert"};
 import { CopyButton } from "@/components/ui/copy-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -1043,19 +1044,14 @@ function Step2Body({
         >
           ← Back
         </button>
-        <button
-          type="submit"
+        <SubmitButton
           disabled={!canSubmit}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-4 py-3 text-sm font-semibold transition-colors",
-            canSubmit
-              ? "bg-[var(--color-brand-500)] text-white hover:bg-[var(--color-brand-600)]"
-              : "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]",
-          )}
+          pendingLabel="Submitting…"
+          className="flex-1 py-3 text-sm font-semibold"
         >
           <Check className="size-4" aria-hidden />
           Submit Booking
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

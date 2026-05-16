@@ -128,8 +128,8 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
 
       <SubmitButton
         size="lg"
-        pendingLabel="Uploading"
-        disabled={Boolean(fileError)}
+        pendingLabel="Uploading…"
+        disabled={Boolean(fileError) || fileName === null}
         className="mt-2"
       >
         Submit receipt

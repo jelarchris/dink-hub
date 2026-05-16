@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/service";
@@ -80,7 +81,7 @@ export async function submitReceiptAction(
   }
 
   const file = form.get("receipt");
-  if (!(file instanceof File)) return fail("Receipt image is required", "validation_failed");
+  if (!(file instanceof File)) return fail("Receipt image is required", "file_required");
 
   try {
     const upload = await uploadReceipt({ bookingId: parsed.data.bookingId, file });
@@ -102,10 +103,13 @@ export async function submitReceiptAction(
     return unwrap(err);
   }
 
-  // Side-effect: notify the venue owner. Failures captured, never thrown.
-  await notifyPaymentSubmitted(parsed.data.bookingId);
+  // Side-effect: notify the venue owner after response is delivered.
+  const submittedBookingId = parsed.data.bookingId;
+  after(async () => {
+    await notifyPaymentSubmitted(submittedBookingId);
+  });
 
-  revalidatePath(`/book/${parsed.data.bookingId}/pay`);
+  revalidatePath(`/book/${submittedBookingId}/pay`);
   revalidatePath("/me/bookings");
   return { ok: true, data: null };
 }
@@ -139,7 +143,12 @@ export async function verifyPaymentAction(
   // verifyPayment doesn't return the bookingId; re-resolve via the payment.
   // Cheap PK lookup.
   const payment = await findPaymentById(parsed.data.paymentId);
-  if (payment) await notifyPaymentVerified(payment.bookingId);
+  if (payment) {
+    const verifiedBookingId = payment.bookingId;
+    after(async () => {
+      await notifyPaymentVerified(verifiedBookingId);
+    });
+  }
 
   revalidatePath("/owner");
   revalidatePath("/owner/payments");
@@ -177,7 +186,13 @@ export async function rejectPaymentAction(
   }
 
   const payment = await findPaymentById(parsed.data.paymentId);
-  if (payment) await notifyPaymentRejected(payment.bookingId, parsed.data.reason);
+  if (payment) {
+    const rejectedBookingId = payment.bookingId;
+    const rejectedReason = parsed.data.reason;
+    after(async () => {
+      await notifyPaymentRejected(rejectedBookingId, rejectedReason);
+    });
+  }
 
   revalidatePath("/owner");
   revalidatePath("/owner/payments");
