@@ -20,7 +20,7 @@ import {
 import { submitReceiptAction } from "@/features/booking/payment-actions";
 import type { ActionResult } from "@/features/auth";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Alert } from "@/components/ui/alert"};
+import { Alert } from "@/components/ui/alert";
 import { CopyButton } from "@/components/ui/copy-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
