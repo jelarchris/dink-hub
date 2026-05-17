@@ -7,7 +7,7 @@ import { formatDateTimeManila } from "@/lib/date";
 import { SettingsForm } from "./settings-form";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Admin · Promo & settings" };
+export const metadata = { title: "Admin · Platform settings" };
 
 export default async function AdminSettingsPage() {
   const settings = await getSystemSettings();
@@ -15,31 +15,13 @@ export default async function AdminSettingsPage() {
 
   return (
     <Container className="py-3 sm:py-4">
-      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Promo &amp; settings</h1>
+      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Platform settings</h1>
       <p className="text-sm text-[var(--color-fg-muted)]">
-        Controls the homepage banner, the booking fee charged to players, and the DinkHub GCash
-        details venue owners use to remit weekly invoices.
+        Controls the booking fee charged to players and the DinkHub GCash details venue owners use
+        to remit weekly invoices.
       </p>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <Card>
-          <CardContent className="space-y-2 pt-6">
-            <h2 className="font-semibold">Promo status</h2>
-            <p className="text-3xl font-bold tracking-tight">
-              {settings.promoActive ? "ON" : "OFF"}
-            </p>
-            <p className="text-xs text-[var(--color-fg-muted)]">
-              {settings.promoActive
-                ? "Booking fee is ₱0 for every new booking."
-                : `Booking fee is ${formatPHP(settings.baseBookingFeeCentavos)} per booking.`}
-            </p>
-            {settings.promoUntilDate && (
-              <p className="text-xs text-[var(--color-fg-muted)]">
-                Communicated end date: {settings.promoUntilDate}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
           <CardContent className="space-y-2 pt-6">
             <h2 className="font-semibold">Base booking fee</h2>
@@ -47,8 +29,8 @@ export default async function AdminSettingsPage() {
               {formatPHP(settings.baseBookingFeeCentavos)}
             </p>
             <p className="text-xs text-[var(--color-fg-muted)]">
-              Charged once per booking when promo is OFF. Snapshotted to the booking row at
-              creation — historical bookings keep their old fee.
+              Charged once per booking. Snapshotted to the booking row at creation — historical
+              bookings keep their old fee. Use vouchers to give per-code discounts.
             </p>
           </CardContent>
         </Card>
@@ -68,24 +50,12 @@ export default async function AdminSettingsPage() {
 }
 
 function serialise(s: {
-  promoActive: boolean;
-  promoHeadline: string;
-  promoDescription: string;
-  promoUntilDate: string | null;
-  promoShowOnHome: boolean;
-  promoShowOnBooking: boolean;
   baseBookingFeeCentavos: bigint;
   invoiceDueDays: number;
   dinkhubGcashAccountName: string | null;
   dinkhubGcashAccountNumber: string | null;
   dinkhubGcashQrImagePath: string | null;
 }): {
-  promoActive: boolean;
-  promoHeadline: string;
-  promoDescription: string;
-  promoUntilDate: string | null;
-  promoShowOnHome: boolean;
-  promoShowOnBooking: boolean;
   baseBookingFeePhp: string;
   invoiceDueDays: number;
   dinkhubGcashAccountName: string | null;
@@ -97,12 +67,6 @@ function serialise(s: {
   const whole = cents / 100n;
   const frac = (cents % 100n).toString().padStart(2, "0");
   return {
-    promoActive: s.promoActive,
-    promoHeadline: s.promoHeadline,
-    promoDescription: s.promoDescription,
-    promoUntilDate: s.promoUntilDate,
-    promoShowOnHome: s.promoShowOnHome,
-    promoShowOnBooking: s.promoShowOnBooking,
     baseBookingFeePhp: `${whole.toString()}.${frac}`,
     invoiceDueDays: s.invoiceDueDays,
     dinkhubGcashAccountName: s.dinkhubGcashAccountName,

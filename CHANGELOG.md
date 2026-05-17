@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-18 (later 2)
+
+### Removed — Launch promo (replaced by vouchers)
+
+- The platform-wide "launch promo" toggle is gone. Vouchers (per-code, optionally venue-scoped) now handle every discount use case, so the promo is dead weight.
+- Booking fee always falls through to the admin-configured base fee (snapshotted to each new booking row as before). Existing bookings keep whatever fee they were created with — no historical data is rewritten.
+- Removed UI: top-strip banner across the app, hero callout on `/host`, booking-page callout, "Promo active" empty state on `/owner/invoices`, "Booking fees waived" tone on the owner balance card, the entire "Launch promo" card on `/admin/settings`, and the "Promo status" summary card.
+- Removed code: `components/promo-banner.tsx`, `getPromoState`, `PromoState`, `promoApplied` flag on `BookingFeeRule`, all `promo*` form fields + Zod schema entries.
+- Migration `0023_drop_promo.sql`: drops `promo_active`, `promo_headline`, `promo_description`, `promo_until_date`, `promo_show_on_home`, `promo_show_on_booking` from `system_settings`. Apply via Supabase SQL editor.
+- Files (new):
+  - `apps/web/src/db/migrations/0023_drop_promo.sql`
+- Files (deleted):
+  - `apps/web/src/components/promo-banner.tsx`
+- Files (modified): `db/schema/index.ts`, `features/system-settings/{service,schema,actions,index}.ts`, `features/booking/service.ts`, `features/booking/__tests__/service.test.ts`, `features/owner-invoices/components/owner-balance-card.tsx`, `app/(app)/{layout,host/page,owner/invoices/page,venues/[slug]/book/page,admin/settings/page,admin/settings/settings-form}.tsx`
+
 ## 2026-05-18 (later)
 
 ### Added — Optional venue scoping on vouchers

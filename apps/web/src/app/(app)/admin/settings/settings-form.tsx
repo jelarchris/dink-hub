@@ -12,12 +12,6 @@ import type { ActionResult } from "@/features/auth";
 
 export interface SettingsFormProps {
   settings: {
-    promoActive: boolean;
-    promoHeadline: string;
-    promoDescription: string;
-    promoUntilDate: string | null;
-    promoShowOnHome: boolean;
-    promoShowOnBooking: boolean;
     baseBookingFeePhp: string;
     invoiceDueDays: number;
     dinkhubGcashAccountName: string | null;
@@ -44,81 +38,10 @@ export function SettingsForm({ settings, qrUrl }: SettingsFormProps) {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div>
-            <h2 className="font-semibold">Launch promo</h2>
-            <p className="text-xs text-[var(--color-fg-muted)]">
-              When ON, every new booking is created with a ₱0 booking fee and the homepage shows
-              a banner.
-            </p>
-          </div>
-
-          <Toggle
-            name="promoActive"
-            label="Promo active"
-            description="Sets booking fee to ₱0 on all new bookings."
-            defaultChecked={settings.promoActive}
-          />
-
-          <Toggle
-            name="promoShowOnHome"
-            label="Show banner on homepage"
-            description="Strip across the top + hero callout."
-            defaultChecked={settings.promoShowOnHome}
-          />
-
-          <Toggle
-            name="promoShowOnBooking"
-            label="Show callout on booking page"
-            description="Subtle reminder above the slot picker."
-            defaultChecked={settings.promoShowOnBooking}
-          />
-
-          <Field
-            name="promoHeadline"
-            label="Banner headline"
-            defaultValue={settings.promoHeadline}
-            placeholder="Launch Promo — No Booking Fees!"
-            error={err("promoHeadline")}
-            required
-          />
-
-          <div>
-            <label
-              htmlFor="promoDescription"
-              className="block text-xs font-medium text-[var(--color-fg-muted)]"
-            >
-              Banner description
-            </label>
-            <Textarea
-              id="promoDescription"
-              name="promoDescription"
-              rows={2}
-              defaultValue={settings.promoDescription}
-              className="mt-1"
-              required
-              maxLength={280}
-            />
-            {err("promoDescription") && (
-              <p className="mt-1 text-xs text-[var(--color-danger)]">{err("promoDescription")}</p>
-            )}
-          </div>
-
-          <Field
-            name="promoUntilDate"
-            label="Communicated end date (optional)"
-            type="date"
-            defaultValue={settings.promoUntilDate ?? ""}
-            error={err("promoUntilDate")}
-            hint="Shown to users for transparency. Doesn't auto-disable — flip the toggle when ready."
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-4 pt-6">
-          <div>
             <h2 className="font-semibold">Booking fee &amp; invoicing</h2>
             <p className="text-xs text-[var(--color-fg-muted)]">
-              Used when promo is OFF. Stored in centavos as a snapshot on each booking.
+              Stored in centavos as a snapshot on each booking. Use vouchers for per-code
+              discounts.
             </p>
           </div>
           <Field
@@ -253,35 +176,6 @@ function Field({
       )}
       {error && <p className="mt-1 text-xs text-[var(--color-danger)]">{error}</p>}
     </div>
-  );
-}
-
-function Toggle({
-  name,
-  label,
-  description,
-  defaultChecked,
-}: {
-  name: string;
-  label: string;
-  description?: string;
-  defaultChecked: boolean;
-}) {
-  return (
-    <label className="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-default)] p-3">
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={defaultChecked}
-        className="mt-0.5 size-4 accent-[var(--color-brand-500)]"
-      />
-      <span className="flex-1">
-        <span className="block text-sm font-medium">{label}</span>
-        {description && (
-          <span className="block text-xs text-[var(--color-fg-muted)]">{description}</span>
-        )}
-      </span>
-    </label>
   );
 }
 

@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowUpRight, Receipt, Sparkles } from "lucide-react";
+import { ArrowUpRight, Receipt } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { PageHeader } from "@/components/ui/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { listInvoicesForOwner } from "@/features/owner-invoices";
-import { getPromoState } from "@/features/system-settings";
 import { formatPHP } from "@/lib/money";
 import type { OwnerInvoice } from "@/db/schema";
 
@@ -65,10 +64,7 @@ export default async function OwnerInvoicesPage() {
     );
   }
 
-  const [rows, promo] = await Promise.all([
-    listInvoicesForOwner(profile.id),
-    getPromoState(),
-  ]);
+  const rows = await listInvoicesForOwner(profile.id);
 
   return (
     <Container className="max-w-3xl py-3 sm:py-4">
@@ -80,7 +76,7 @@ export default async function OwnerInvoicesPage() {
       />
 
       {rows.length === 0 ? (
-        <EmptyState promoActive={promo.active} promoUntil={promo.untilDate} />
+        <EmptyState />
       ) : (
         <ol className="mt-3 grid gap-2">
           {rows.map(({ invoice, venue }) => (
@@ -122,20 +118,7 @@ export default async function OwnerInvoicesPage() {
   );
 }
 
-function EmptyState({ promoActive, promoUntil }: { promoActive: boolean; promoUntil: string | null }) {
-  if (promoActive) {
-    return (
-      <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--color-brand-300)] bg-gradient-to-br from-[var(--color-brand-50)] via-[var(--color-brand-100)] to-white p-6 text-center text-[var(--color-brand-900)] shadow-[var(--shadow-sm)]">
-        <Sparkles className="mx-auto size-8 text-[var(--color-brand-700)]" />
-        <h2 className="mt-2 text-lg font-semibold">No invoices yet — promo active</h2>
-        <p className="mt-1 text-sm">
-          Booking fees are waived during the launch promo
-          {promoUntil ? ` until ${formatDueDate(promoUntil)}` : ""}. We&apos;ll email you the first
-          invoice once the promo ends.
-        </p>
-      </div>
-    );
-  }
+function EmptyState() {
   return (
     <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-6 text-center shadow-[var(--shadow-sm)]">
       <Receipt className="mx-auto size-8 text-[var(--color-fg-muted)]" />

@@ -305,16 +305,10 @@ export const adminUsers = pgTable("admin_users", {
 });
 
 // ----------------------------------------------------------------------------
-// system_settings — single-row platform settings (promo + DinkHub GCash + base fee)
+// system_settings — single-row platform settings (DinkHub GCash + base fee)
 // ----------------------------------------------------------------------------
 export const systemSettings = pgTable("system_settings", {
   id: boolean("id").primaryKey().default(true),
-  promoActive: boolean("promo_active").notNull().default(true),
-  promoHeadline: text("promo_headline").notNull(),
-  promoDescription: text("promo_description").notNull(),
-  promoUntilDate: date("promo_until_date"),
-  promoShowOnHome: boolean("promo_show_on_home").notNull().default(true),
-  promoShowOnBooking: boolean("promo_show_on_booking").notNull().default(true),
   baseBookingFeeCentavos: bigint("base_booking_fee_centavos", { mode: "bigint" })
     .notNull()
     .default(2000n),

@@ -99,12 +99,6 @@ export async function updateSystemSettingsAction(
     after = await updateSystemSettings({
       actorId: admin.id,
       patch: {
-        promoActive: data.promoActive,
-        promoShowOnHome: data.promoShowOnHome,
-        promoShowOnBooking: data.promoShowOnBooking,
-        promoHeadline: data.promoHeadline,
-        promoDescription: data.promoDescription,
-        promoUntilDate: data.promoUntilDate,
         baseBookingFeeCentavos: phpStringToCentavos(data.baseBookingFeePhp),
         invoiceDueDays: data.invoiceDueDays,
         dinkhubGcashAccountName: data.dinkhubGcashAccountName,
@@ -130,18 +124,12 @@ export async function updateSystemSettingsAction(
     captureException(err, { scope: "system-settings.audit" });
   }
 
-  // Promo state powers the global banner; re-render every page that reads it.
+  // Settings flow into booking fee snapshot and owner balance card; refresh.
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
 
 function serialiseForAudit(s: {
-  promoActive: boolean;
-  promoHeadline: string;
-  promoDescription: string;
-  promoUntilDate: string | null;
-  promoShowOnHome: boolean;
-  promoShowOnBooking: boolean;
   baseBookingFeeCentavos: bigint;
   invoiceDueDays: number;
   dinkhubGcashAccountName: string | null;
@@ -149,12 +137,6 @@ function serialiseForAudit(s: {
   dinkhubGcashQrImagePath: string | null;
 }): Record<string, unknown> {
   return {
-    promoActive: s.promoActive,
-    promoHeadline: s.promoHeadline,
-    promoDescription: s.promoDescription,
-    promoUntilDate: s.promoUntilDate,
-    promoShowOnHome: s.promoShowOnHome,
-    promoShowOnBooking: s.promoShowOnBooking,
     baseBookingFeeCentavos: s.baseBookingFeeCentavos.toString(),
     invoiceDueDays: s.invoiceDueDays,
     dinkhubGcashAccountName: s.dinkhubGcashAccountName,

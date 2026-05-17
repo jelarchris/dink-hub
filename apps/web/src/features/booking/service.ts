@@ -185,10 +185,10 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
     throw new BookingError("court_closed", "Court is closed during this time window");
   }
 
-  // Booking-fee snapshot. During the launch promo this is 0; otherwise it's
-  // pulled from the platform settings singleton (admin-editable). Fall back to
-  // the legacy `system_fee_settings` table only if the new singleton hasn't
-  // been seeded yet — keeps test fixtures + older envs working.
+  // Booking-fee snapshot. Pulled from the platform settings singleton
+  // (admin-editable). Fall back to the legacy `system_fee_settings` table
+  // only if the new singleton hasn't been seeded yet — keeps test fixtures +
+  // older envs working.
   let systemFee: bigint;
   if (systemFeeResult !== null) {
     systemFee = systemFeeResult.snapshotCentavos;

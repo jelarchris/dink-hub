@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Container } from "@/components/ui/container";
-import { PromoBanner } from "@/components/promo-banner";
 import { findActiveVenueBySlug, getCourtsOccupancy } from "@/features/venues";
 import { findCurrentSystemFeeCentavos, findCourtRateBands } from "@/features/booking/repo";
 import { fromManilaWallClock, manilaUpcomingDays } from "@/lib/date";
@@ -64,8 +63,6 @@ export default async function BookCourtPage({
           Book a court
         </span>
       </div>
-
-      <PromoBanner variant="booking" />
 
       <BookingFlow
         venueSlug={venue.slug}

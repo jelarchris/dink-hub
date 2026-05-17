@@ -9,14 +9,12 @@ import {
   MapPin,
   Receipt,
   ShieldCheck,
-  Sparkles,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
-import { getCurrentBookingFeeRule } from "@/features/system-settings";
 
 export const metadata: Metadata = {
   title: "List your venue — DinkHub",
@@ -25,11 +23,9 @@ export const metadata: Metadata = {
 };
 
 export default async function HostPage() {
-  const fee = await getCurrentBookingFeeRule();
-
   return (
     <main className="flex flex-1 flex-col">
-      <Hero promoActive={fee.promoApplied} />
+      <Hero />
       <Benefits />
       <HowPaymentWorks />
       <Steps />
@@ -40,7 +36,7 @@ export default async function HostPage() {
   );
 }
 
-function Hero({ promoActive }: { promoActive: boolean }) {
+function Hero() {
   return (
     <section className="relative overflow-hidden border-b border-[var(--color-border-default)] bg-gradient-to-b from-[var(--color-brand-50)] to-[var(--color-bg)] px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <Container className="text-center">
@@ -70,15 +66,6 @@ function Hero({ promoActive }: { promoActive: boolean }) {
             See how it works
           </a>
         </div>
-        {promoActive ? (
-          <p className="mx-auto mt-5 max-w-xl text-sm text-[var(--color-brand-700)]">
-            <Sparkles
-              className="-mt-0.5 mr-1 inline size-4"
-              aria-hidden="true"
-            />
-            Launch promo active — now is the best time to get listed.
-          </p>
-        ) : null}
       </Container>
     </section>
   );

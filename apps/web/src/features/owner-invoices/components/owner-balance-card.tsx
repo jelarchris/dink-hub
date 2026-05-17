@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, Clock, Sparkles, TriangleAlert, XCircle } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Clock, TriangleAlert, XCircle } from "lucide-react";
 import { findOutstandingInvoiceForOwner } from "@/features/owner-invoices";
-import { getPromoState } from "@/features/system-settings";
 import { formatPHP } from "@/lib/money";
 import { cn } from "@/lib/cn";
 
@@ -18,11 +17,6 @@ function formatDueDate(value: string | Date): string {
   return DATE_FMT.format(d);
 }
 
-function formatPromoUntil(value: string): string {
-  const d = new Date(`${value}T00:00:00+08:00`);
-  return DATE_FMT.format(d);
-}
-
 function daysUntil(date: string | Date): number {
   const target = typeof date === "string" ? new Date(`${date}T00:00:00+08:00`) : date;
   const diff = target.getTime() - Date.now();
@@ -30,7 +24,7 @@ function daysUntil(date: string | Date): number {
 }
 
 interface ShellProps {
-  tone: "promo" | "due" | "submitted" | "rejected" | "clear";
+  tone: "due" | "submitted" | "rejected" | "clear";
   icon: React.ReactNode;
   kicker: string;
   headline: React.ReactNode;
@@ -40,8 +34,6 @@ interface ShellProps {
 
 function Shell({ tone, icon, kicker, headline, body, cta }: ShellProps) {
   const toneClass = {
-    promo:
-      "bg-gradient-to-br from-[var(--color-brand-50)] via-[var(--color-brand-100)] to-white text-[var(--color-brand-900)] border-[var(--color-brand-300)]",
     due: "bg-orange-50 text-orange-950 border-orange-200 dark:bg-orange-950/30 dark:text-orange-50 dark:border-orange-900",
     submitted: "bg-sky-50 text-sky-950 border-sky-200 dark:bg-sky-950/30 dark:text-sky-50 dark:border-sky-900",
     rejected: "bg-red-50 text-red-950 border-red-200 dark:bg-red-950/30 dark:text-red-50 dark:border-red-900",
@@ -50,7 +42,6 @@ function Shell({ tone, icon, kicker, headline, body, cta }: ShellProps) {
   }[tone];
 
   const iconBg = {
-    promo: "bg-white/70 text-[var(--color-brand-700)]",
     due: "bg-white/70 text-orange-700 dark:bg-orange-900/40 dark:text-orange-200",
     submitted: "bg-white/70 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200",
     rejected: "bg-white/70 text-red-700 dark:bg-red-900/40 dark:text-red-200",
@@ -115,10 +106,7 @@ function Shell({ tone, icon, kicker, headline, body, cta }: ShellProps) {
 }
 
 export async function OwnerBalanceCard({ ownerId }: { ownerId: string }) {
-  const [outstanding, promo] = await Promise.all([
-    findOutstandingInvoiceForOwner(ownerId),
-    getPromoState(),
-  ]);
+  const outstanding = await findOutstandingInvoiceForOwner(ownerId);
 
   if (outstanding) {
     const { invoice } = outstanding;
@@ -173,22 +161,6 @@ export async function OwnerBalanceCard({ ownerId }: { ownerId: string }) {
           </span>
         }
         cta={{ href: `/owner/invoices/${invoice.id}`, label: "Pay invoice" }}
-      />
-    );
-  }
-
-  if (promo.active) {
-    return (
-      <Shell
-        tone="promo"
-        icon={<Sparkles className="size-5" />}
-        kicker="Launch promo"
-        headline="Booking fees waived"
-        body={
-          promo.untilDate
-            ? `You owe DinkHub nothing for bookings until ${formatPromoUntil(promo.untilDate)}.`
-            : "You owe DinkHub nothing for bookings during the launch promo."
-        }
       />
     );
   }
