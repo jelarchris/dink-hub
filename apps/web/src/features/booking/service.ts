@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/db/client";
 import type { Booking, NewLedgerEntry, Payment, SlotHold } from "@/db/schema";
 import { getCurrentBookingFeeRule } from "@/features/system-settings/service";
-import { getRateForHour } from "@/lib/court-rate";
+import { computeCourtFeeAcrossBands } from "@/lib/court-rate";
 import { BookingError } from "./errors";
 import * as repo from "./repo";
 import {
@@ -200,22 +200,22 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
     systemFee = legacy;
   }
 
-  // Use the rate band that covers the booking's Manila start hour; fall back to base rate.
+  // Sum per-hour slot rates so bookings that span band boundaries (e.g.
+  // 3pm-6pm with a 5pm day/night switch) are priced as 150+150+200 rather
+  // than 150×3. Mirrors the UI math in `booking-flow.tsx`.
   const MANILA_OFFSET_MS = 8 * 3_600_000;
   const manilaStartHour = new Date(startAt.getTime() + MANILA_OFFSET_MS).getUTCHours();
-  const applicableRate = getRateForHour(
-    rateBands.map((b) => ({
-      fromHour: b.fromHour,
-      toHour: b.toHour,
-      rateCentavos: b.rateCentavos,
-    })),
+  const bandsForFee = rateBands.map((b) => ({
+    fromHour: b.fromHour,
+    toHour: b.toHour,
+    rateCentavos: b.rateCentavos,
+  }));
+  const duration = durationMinutes(startAt, endAt);
+  const courtFee = computeCourtFeeAcrossBands(
+    bandsForFee,
     manilaStartHour,
+    duration,
     courtRow.court.hourlyRateCentavos,
-  );
-
-  const courtFee = computeCourtFeeCentavos(
-    durationMinutes(startAt, endAt),
-    applicableRate,
   );
 
   // Voucher pre-check (outside the transaction so we fail fast with a nice
