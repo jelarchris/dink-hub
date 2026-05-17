@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, gt, inArray, isNull, lt, lte, sql, gte } from "drizzle-orm";
 import { db } from "@/db/client";
+import { getCurrentBookingFeeRule } from "@/features/system-settings";
 import {
   bookings,
   courtClosures,
@@ -110,14 +111,32 @@ export async function findPaymentById(
   return rows[0] ?? null;
 }
 
+/**
+ * Current snapshot value of the platform booking fee — what the player should
+ * see as the estimated fee on the booking page and what gets written onto
+ * `bookings.system_fee_centavos` at creation time.
+ *
+ * Source of truth is `system_settings` (the singleton edited by admin →
+ * `getCurrentBookingFeeRule`). The legacy `system_fee_settings` history
+ * table is read-only fallback for envs/tests where the singleton hasn't been
+ * seeded.
+ *
+ * Returns null only when neither source has a value (unreachable in prod).
+ */
 export async function findCurrentSystemFeeCentavos(exec: Executor = db): Promise<bigint | null> {
-  const rows = await exec
-    .select({ fee: systemFeeSettings.feeAmountCentavos })
-    .from(systemFeeSettings)
-    .where(lte(systemFeeSettings.effectiveFrom, sql`now()`))
-    .orderBy(desc(systemFeeSettings.effectiveFrom))
-    .limit(1);
-  return rows[0]?.fee ?? null;
+  try {
+    const rule = await getCurrentBookingFeeRule();
+    return rule.snapshotCentavos;
+  } catch {
+    // Singleton not seeded — fall back to legacy history table.
+    const rows = await exec
+      .select({ fee: systemFeeSettings.feeAmountCentavos })
+      .from(systemFeeSettings)
+      .where(lte(systemFeeSettings.effectiveFrom, sql`now()`))
+      .orderBy(desc(systemFeeSettings.effectiveFrom))
+      .limit(1);
+    return rows[0]?.fee ?? null;
+  }
 }
 
 export async function getDatabaseNow(exec: Executor = db): Promise<Date> {

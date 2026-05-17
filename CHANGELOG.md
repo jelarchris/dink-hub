@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-05-17 (evening, later 3)
+
+### Fixed — booking page showed stale system fee (₱20 instead of admin-set ₱15)
+
+- **Root cause:** the system has two fee tables — a legacy `system_fee_settings` history table and a newer `system_settings` singleton. Admin's settings form writes to the singleton, but `findCurrentSystemFeeCentavos` (which the public booking page calls to display the fee estimate) was still reading from the legacy table. Booking creation already read from the correct singleton, so bookings were *charging* ₱15 while the page *displayed* ₱20 — a trust-breaking mismatch.
+- **Fix:** `findCurrentSystemFeeCentavos` now delegates to `getCurrentBookingFeeRule()` (the single source of truth). Legacy table only used as fallback if the singleton row is missing (test fixtures / un-migrated envs).
+- Files:
+  - `apps/web/src/features/booking/repo.ts`
+
 ## 2026-05-17 (evening, later 2)
 
 ### Admin (system) dashboard — audit + polish
