@@ -9,6 +9,7 @@ import {
   releaseHold,
 } from "@/features/booking/service";
 import { isBookingError } from "@/features/booking/errors";
+import { isVoucherError } from "@/features/vouchers/errors";
 import { notifyBookingCancelledByPlayer } from "@/features/booking/notifications";
 import { getCurrentUser } from "@/features/auth/service";
 import { type ActionResult } from "@/features/auth";
@@ -25,6 +26,13 @@ const startBookingSchema = z.object({
   startAt: isoDateSchema,
   endAt: isoDateSchema,
   venueSlug: z.string().min(1),
+  voucherCode: z
+    .string()
+    .trim()
+    .min(3)
+    .max(40)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
 });
 
 const cancelSchema = z.object({ bookingId: z.string().uuid() });
@@ -36,6 +44,9 @@ function fail(message: string, code = "unknown"): ActionResult<never> {
 function unwrap(err: unknown): ActionResult<never> {
   if (isBookingError(err)) {
     return { ok: false, code: err.code, message: err.message };
+  }
+  if (isVoucherError(err)) {
+    return { ok: false, code: `voucher_${err.code}`, message: err.message };
   }
   captureException(err, { scope: "booking.action" });
   return fail("Something went wrong. Please try again.");
@@ -67,6 +78,7 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
     startAt: form.get("startAt"),
     endAt: form.get("endAt"),
     venueSlug: form.get("venueSlug"),
+    voucherCode: form.get("voucherCode") || undefined,
   });
   if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
 
@@ -82,6 +94,7 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
       courtId: parsed.data.courtId,
       startAt: parsed.data.startAt,
       endAt: parsed.data.endAt,
+      ...(parsed.data.voucherCode ? { voucherCode: parsed.data.voucherCode } : {}),
     });
     bookingId = booking.id;
   } catch (err) {
@@ -125,7 +138,16 @@ export async function startBookingFormAction(form: FormData): Promise<void> {
  */
 export async function startBookingReturningIdAction(
   form: FormData,
-): Promise<ActionResult<{ bookingId: string; totalCentavos: string; courtFeeCentavos: string; systemFeeCentavos: string }>> {
+): Promise<
+  ActionResult<{
+    bookingId: string;
+    totalCentavos: string;
+    courtFeeCentavos: string;
+    systemFeeCentavos: string;
+    discountCentavos: string;
+    voucherCodeSnapshot: string | null;
+  }>
+> {
   const user = await getCurrentUser();
   if (!user) return fail("Please sign in to continue", "not_authorized");
 
@@ -137,6 +159,7 @@ export async function startBookingReturningIdAction(
     startAt: form.get("startAt"),
     endAt: form.get("endAt"),
     venueSlug: form.get("venueSlug"),
+    voucherCode: form.get("voucherCode") || undefined,
   });
   if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
 
@@ -146,6 +169,7 @@ export async function startBookingReturningIdAction(
       courtId: parsed.data.courtId,
       startAt: parsed.data.startAt,
       endAt: parsed.data.endAt,
+      ...(parsed.data.voucherCode ? { voucherCode: parsed.data.voucherCode } : {}),
     });
     return {
       ok: true,
@@ -154,6 +178,8 @@ export async function startBookingReturningIdAction(
         totalCentavos: booking.totalCentavos.toString(),
         courtFeeCentavos: booking.courtFeeCentavos.toString(),
         systemFeeCentavos: booking.systemFeeCentavos.toString(),
+        discountCentavos: booking.discountCentavos.toString(),
+        voucherCodeSnapshot: booking.voucherCodeSnapshot,
       },
     };
   } catch (err) {

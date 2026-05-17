@@ -18,6 +18,7 @@ import {
   startBookingReturningIdAction,
 } from "@/features/booking/actions";
 import { submitReceiptAction } from "@/features/booking/payment-actions";
+import { previewVoucherAction } from "@/features/vouchers/actions";
 import type { ActionResult } from "@/features/auth";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
@@ -113,6 +114,18 @@ export function BookingFlow({
   // Step 1 → Step 2 transition
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Voucher state (Step 1)
+  const [voucherInput, setVoucherInput] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<{
+    code: string;
+    label: string;
+    discountCentavos: bigint;
+    baseSystemFeeCentavos: bigint;
+    discountedSystemFeeCentavos: bigint;
+  } | null>(null);
+  const [voucherChecking, setVoucherChecking] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Timer
@@ -385,6 +398,46 @@ export function BookingFlow({
     setFileError(null);
     setConfirmDetail(false);
     setConfirmTerms(false);
+    setVoucherInput("");
+    setAppliedVoucher(null);
+    setVoucherError(null);
+    setVoucherChecking(false);
+  }
+
+  async function applyVoucher(): Promise<void> {
+    const code = voucherInput.trim();
+    if (!code || !pickedStartIso || !pickedEndDate) return;
+    setVoucherChecking(true);
+    setVoucherError(null);
+    const startMs = new Date(pickedStartIso).getTime();
+    const endMs = pickedEndDate.getTime();
+    const durationMinutes = Math.round((endMs - startMs) / 60_000);
+    const startManilaHour = new Date(startMs + 8 * 3_600_000).getUTCHours();
+    const form = new FormData();
+    form.set("code", code);
+    form.set("courtId", selectedCourtId);
+    form.set("durationMinutes", String(durationMinutes));
+    form.set("startManilaHour", String(startManilaHour));
+    const result = await previewVoucherAction(null, form);
+    setVoucherChecking(false);
+    if (!result.ok) {
+      setAppliedVoucher(null);
+      setVoucherError(result.message);
+      return;
+    }
+    setAppliedVoucher({
+      code: result.data.code,
+      label: result.data.label,
+      discountCentavos: BigInt(result.data.discountCentavos),
+      baseSystemFeeCentavos: BigInt(result.data.baseSystemFeeCentavos),
+      discountedSystemFeeCentavos: BigInt(result.data.discountedSystemFeeCentavos),
+    });
+  }
+
+  function clearVoucher(): void {
+    setAppliedVoucher(null);
+    setVoucherInput("");
+    setVoucherError(null);
   }
 
   async function proceedToPayment(): Promise<void> {
@@ -396,6 +449,7 @@ export function BookingFlow({
     form.set("courtId", selectedCourtId);
     form.set("startAt", pickedStartIso);
     form.set("endAt", pickedEndDate.toISOString());
+    if (appliedVoucher) form.set("voucherCode", appliedVoucher.code);
     const result = await startBookingReturningIdAction(form);
     setIsCreating(false);
     if (!result.ok) {
@@ -424,10 +478,14 @@ export function BookingFlow({
   const canSubmitReceipt =
     confirmDetail && confirmTerms && fileName !== null && fileError === null;
 
-  // Amounts shown in modal — use snapshotted values once booking is created (step 2)
+  // Amounts shown in modal — use snapshotted values once booking is created (step 2).
+  // Before booking creation (step 1), apply any previewed voucher discount.
   const displayCourtFee = createdCourtFeeCentavos ?? totalPriceCentavos;
-  const displaySystemFee = createdSystemFeeCentavos ?? estimatedSystemFee;
-  const displayTotal = createdTotalCentavos ?? estimatedTotal;
+  const displaySystemFee =
+    createdSystemFeeCentavos ??
+    (appliedVoucher ? appliedVoucher.discountedSystemFeeCentavos : estimatedSystemFee);
+  const displayTotal =
+    createdTotalCentavos ?? (totalPriceCentavos + displaySystemFee);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -635,6 +693,13 @@ export function BookingFlow({
                   isCreating={isCreating}
                   onCancel={closeModal}
                   onNext={() => void proceedToPayment()}
+                  voucherInput={voucherInput}
+                  onVoucherInputChange={setVoucherInput}
+                  appliedVoucher={appliedVoucher}
+                  voucherChecking={voucherChecking}
+                  voucherError={voucherError}
+                  onApplyVoucher={() => void applyVoucher()}
+                  onClearVoucher={clearVoucher}
                 />
               ) : (
                 <Step2Body
@@ -713,6 +778,13 @@ function Step1Body({
   isCreating,
   onCancel,
   onNext,
+  voucherInput,
+  onVoucherInputChange,
+  appliedVoucher,
+  voucherChecking,
+  voucherError,
+  onApplyVoucher,
+  onClearVoucher,
 }: {
   venueName: string;
   courtName: string;
@@ -732,6 +804,19 @@ function Step1Body({
   isCreating: boolean;
   onCancel: () => void;
   onNext: () => void;
+  voucherInput: string;
+  onVoucherInputChange: (v: string) => void;
+  appliedVoucher: {
+    code: string;
+    label: string;
+    discountCentavos: bigint;
+    baseSystemFeeCentavos: bigint;
+    discountedSystemFeeCentavos: bigint;
+  } | null;
+  voucherChecking: boolean;
+  voucherError: string | null;
+  onApplyVoucher: () => void;
+  onClearVoucher: () => void;
 }) {
   const timeRange =
     pickedStartDate && pickedEndDate
@@ -765,6 +850,14 @@ function Step1Body({
           <div className="my-1 border-t border-[var(--color-border-default)]" />
           <SummaryRow label="Subtotal" value={formatPHP(courtFeeCentavos)} />
           <SummaryRow label="System Usage Fee" value={formatPHP(systemFeeCentavos)} />
+          {appliedVoucher && appliedVoucher.discountCentavos > 0n && (
+            <div className="flex items-center justify-between text-xs text-[var(--color-success-700)]">
+              <span>
+                Voucher <span className="font-mono font-semibold">{appliedVoucher.code}</span>
+              </span>
+              <span className="font-semibold">−{formatPHP(appliedVoucher.discountCentavos)}</span>
+            </div>
+          )}
           <div className="mt-1 flex items-center justify-between">
             <span className="text-sm font-bold">Total Amount</span>
             <span className="text-base font-bold text-[var(--color-brand-700)]">
@@ -772,6 +865,58 @@ function Step1Body({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Voucher */}
+      <div className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+          Voucher Code
+        </p>
+        {appliedVoucher ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[var(--color-success-700)]">
+                {appliedVoucher.code} applied
+              </p>
+              <p className="text-xs text-[var(--color-fg-muted)]">{appliedVoucher.label}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClearVoucher}
+              className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] px-3 py-1.5 text-xs font-semibold text-[var(--color-fg)] hover:bg-[var(--color-bg-subtle)]"
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <Input
+                value={voucherInput}
+                onChange={(e) => onVoucherInputChange(e.target.value.toUpperCase())}
+                placeholder="e.g. LAUNCH20"
+                className="flex-1 font-mono uppercase"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={onApplyVoucher}
+                disabled={voucherChecking || voucherInput.trim().length === 0}
+                className={cn(
+                  "rounded-[var(--radius-md)] px-3 py-2 text-sm font-semibold transition-colors",
+                  voucherChecking || voucherInput.trim().length === 0
+                    ? "cursor-not-allowed bg-[var(--color-bg-muted)] text-[var(--color-fg-subtle)]"
+                    : "bg-[var(--color-brand-500)] text-white hover:bg-[var(--color-brand-600)]",
+                )}
+              >
+                {voucherChecking ? "Checking…" : "Apply"}
+              </button>
+            </div>
+            {voucherError && (
+              <p className="mt-2 text-xs text-[var(--color-danger-600)]">{voucherError}</p>
+            )}
+          </>
+        )}
       </div>
 
       {/* Your Details */}

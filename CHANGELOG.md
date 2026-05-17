@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-05-18
+
+### Added — Voucher (discount code) system for booking fees
+
+- Admins can create promo codes that discount the system booking fee (either percent off, e.g. `LAUNCH20` = 20% off, or flat ₱ off). Codes have optional total-use caps, per-player caps, minimum court fee, and expiry date. Players paste the code on Step 1 of the booking flow, click Apply, see the discounted fee in the summary, then proceed to payment with the discounted amount.
+- **Architecture (Option B):** discount is baked into `system_fee_centavos` at booking creation. The generated `total_centavos` column (court_fee + system_fee) is untouched, so historical totals stay consistent. Three audit columns added to `bookings`: `voucher_id`, `voucher_code_snapshot`, `discount_centavos`.
+- **Atomic redemption:** `tryIncrementVoucherRedemption` uses an UPDATE with a WHERE clause inside the booking transaction — physically impossible to exceed `max_redemptions`.
+- **Per-user cap** enforced by counting existing redemptions for `(voucher_id, user_id)` inside the booking tx.
+- **Discount never exceeds base system fee** — capped server-side in `validateVoucherForBooking`.
+- **RLS:** authenticated users can read only active vouchers; redemptions readable only by the redeeming user or admins.
+- **Audit:** every voucher create + status change writes to `admin_audit_log`.
+- Files (new):
+  - `apps/web/src/db/migrations/0021_vouchers.sql` (enums, tables, RLS, bookings columns)
+  - `apps/web/src/features/vouchers/{schema,repo,service,errors,actions,preview-helpers,index}.ts`
+  - `apps/web/src/app/(app)/admin/vouchers/page.tsx` (list)
+  - `apps/web/src/app/(app)/admin/vouchers/new/{page,new-voucher-form}.tsx`
+  - `apps/web/src/app/(app)/admin/vouchers/[id]/{page,status-form}.tsx`
+- Files (modified):
+  - `apps/web/src/db/schema/{enums,index}.ts` (2 new enums, 2 new tables, 3 bookings columns)
+  - `apps/web/src/features/booking/schema.ts` (`voucherCode` optional input)
+  - `apps/web/src/features/booking/service.ts` (validate + snapshot + apply inside tx)
+  - `apps/web/src/features/booking/actions.ts` (forward `voucherCode`, handle `VoucherError`)
+  - `apps/web/src/app/(app)/admin/layout.tsx` (sidebar link with Tag icon)
+  - `apps/web/src/app/(app)/venues/[slug]/book/booking-flow.tsx` (voucher input + preview UI in Step 1, discount row in summary, forwards code into `proceedToPayment`)
+
 ## 2026-05-17 (evening, later 3)
 
 ### Fixed — booking page showed stale system fee (₱20 instead of admin-set ₱15)

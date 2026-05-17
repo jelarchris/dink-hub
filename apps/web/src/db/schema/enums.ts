@@ -81,3 +81,14 @@ export const ownerInvoiceStatusEnum = pgEnum("owner_invoice_status", [
   "rejected",
   "void",
 ]);
+
+export const voucherDiscountTypeEnum = pgEnum("voucher_discount_type", [
+  "percent",
+  "flat",
+]);
+
+export const voucherStatusEnum = pgEnum("voucher_status", [
+  "active",
+  "paused",
+  "expired",
+]);

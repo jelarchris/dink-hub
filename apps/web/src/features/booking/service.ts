@@ -153,7 +153,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       issues: parsed.error.flatten(),
     });
   }
-  const { playerId, courtId, startAt, endAt, holdId, notes } = parsed.data;
+  const { playerId, courtId, startAt, endAt, holdId, notes, voucherCode } = parsed.data;
 
   // Use server clock — reliable within < 1ms of DB clock (NTP-synced).
   // Avoids a SELECT NOW() round-trip that added ~20-40ms for nothing.
@@ -218,6 +218,21 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
     applicableRate,
   );
 
+  // Voucher pre-check (outside the transaction so we fail fast with a nice
+  // error before consuming a hold). Re-validated atomically inside the tx.
+  let preValidatedVoucher = null as Awaited<
+    ReturnType<typeof import("@/features/vouchers").validateVoucherForBooking>
+  > | null;
+  if (voucherCode) {
+    const { validateVoucherForBooking } = await import("@/features/vouchers");
+    preValidatedVoucher = await validateVoucherForBooking({
+      code: voucherCode,
+      userId: playerId,
+      courtFeeCentavos: courtFee,
+      baseSystemFeeCentavos: systemFee,
+    });
+  }
+
   return db.transaction(async (tx) => {
     // Use server clock inside the transaction too — avoids a SELECT NOW()
     // inside a serializable transaction which would add another round-trip.
@@ -250,8 +265,36 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       await repo.deleteHoldById(holdId, tx);
     }
 
+    // Voucher: re-validate inside the tx (covers per-user cap), insert the
+    // booking with the DISCOUNTED system fee snapshot, then atomically
+    // increment the redemption count + record the redemption row. A failed
+    // increment rolls back the entire booking.
+    let finalSystemFee = systemFee;
+    let voucherIdToSnapshot: string | null = null;
+    let voucherCodeToSnapshot: string | null = null;
+    let discountCentavos = 0n;
+    let validatedVoucher:
+      | Awaited<ReturnType<typeof import("@/features/vouchers").validateVoucherForBooking>>
+      | null = null;
+    if (voucherCode) {
+      const { validateVoucherForBooking } = await import("@/features/vouchers");
+      validatedVoucher = await validateVoucherForBooking({
+        code: voucherCode,
+        userId: playerId,
+        courtFeeCentavos: courtFee,
+        baseSystemFeeCentavos: systemFee,
+        tx,
+      });
+      finalSystemFee = validatedVoucher.discountedSystemFeeCentavos;
+      discountCentavos = validatedVoucher.discountCentavos;
+      voucherIdToSnapshot = validatedVoucher.voucher.id;
+      voucherCodeToSnapshot = validatedVoucher.voucher.code;
+      void preValidatedVoucher;
+    }
+
+    let booking: Booking;
     try {
-      return await repo.insertBooking(
+      booking = await repo.insertBooking(
         {
           playerId,
           courtId,
@@ -260,10 +303,13 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
           endAt,
           status: "pending_payment",
           courtFeeCentavos: courtFee,
-          systemFeeCentavos: systemFee,
+          systemFeeCentavos: finalSystemFee,
           cancellableUntil,
           paymentDueAt,
           notes: notes ?? null,
+          voucherId: voucherIdToSnapshot,
+          voucherCodeSnapshot: voucherCodeToSnapshot,
+          discountCentavos,
         } as Parameters<typeof repo.insertBooking>[0],
         tx,
       );
@@ -273,6 +319,17 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       }
       throw err;
     }
+
+    if (validatedVoucher) {
+      const { applyVoucherInTransaction } = await import("@/features/vouchers");
+      await applyVoucherInTransaction(tx, {
+        validated: validatedVoucher,
+        bookingId: booking.id,
+        userId: playerId,
+      });
+    }
+
+    return booking;
   });
 }
 

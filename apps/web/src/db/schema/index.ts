@@ -24,6 +24,8 @@ import {
   payoutStatusEnum,
   userRoleEnum,
   venueStatusEnum,
+  voucherDiscountTypeEnum,
+  voucherStatusEnum,
 } from "./enums";
 
 /**
@@ -196,6 +198,11 @@ export const bookings = pgTable("bookings", {
   // Set by the T-2h session-reminder cron after dispatching the email.
   // NULL = reminder not yet sent. Prevents duplicate sends on cron retries.
   reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+  // Voucher applied at booking creation. The DISCOUNTED system fee is what
+  // gets stored in system_fee_centavos; these columns are audit/display only.
+  voucherId: uuid("voucher_id"),
+  voucherCodeSnapshot: text("voucher_code_snapshot"),
+  discountCentavos: bigint("discount_centavos", { mode: "bigint" }).notNull().default(0n),
 });
 
 // ----------------------------------------------------------------------------
@@ -455,3 +462,38 @@ export type Review = typeof reviews.$inferSelect;
 export type NewReview = typeof reviews.$inferInsert;
 export type OpenPlayInterest = typeof openPlayInterest.$inferSelect;
 export type NewOpenPlayInterest = typeof openPlayInterest.$inferInsert;
+
+// ----------------------------------------------------------------------------
+// vouchers - discount codes that apply ONLY to the system/booking fee.
+// ----------------------------------------------------------------------------
+export const vouchers = pgTable("vouchers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull(),
+  discountType: voucherDiscountTypeEnum("discount_type").notNull(),
+  discountValue: bigint("discount_value", { mode: "bigint" }).notNull(),
+  maxRedemptions: integer("max_redemptions"),
+  redemptionCount: integer("redemption_count").notNull().default(0),
+  maxPerUser: integer("max_per_user").notNull().default(1),
+  minCourtFeeCentavos: bigint("min_court_fee_centavos", { mode: "bigint" }).notNull().default(0n),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validUntil: timestamp("valid_until", { withTimezone: true }),
+  status: voucherStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  createdBy: uuid("created_by").references(() => profiles.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const voucherRedemptions = pgTable("voucher_redemptions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  voucherId: uuid("voucher_id").notNull().references(() => vouchers.id, { onDelete: "restrict" }),
+  bookingId: uuid("booking_id").notNull().references(() => bookings.id, { onDelete: "cascade" }).unique(),
+  userId: uuid("user_id").notNull().references(() => profiles.id),
+  discountAppliedCentavos: bigint("discount_applied_centavos", { mode: "bigint" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Voucher = typeof vouchers.$inferSelect;
+export type NewVoucher = typeof vouchers.$inferInsert;
+export type VoucherRedemption = typeof voucherRedemptions.$inferSelect;
+export type NewVoucherRedemption = typeof voucherRedemptions.$inferInsert;

@@ -70,6 +70,14 @@ export const createBookingInputSchema = z
     endAt: z.date(),
     holdId: uuidSchema.optional(),
     notes: z.string().max(500).optional(),
+    /** Optional voucher code applied to the booking fee. */
+    voucherCode: z
+      .string()
+      .trim()
+      .min(3)
+      .max(40)
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .optional(),
   })
   .superRefine(validateSlotTimes);
 export type CreateBookingInput = z.infer<typeof createBookingInputSchema>;
