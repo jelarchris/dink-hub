@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-17 (evening, later 2)
+
+### Admin (system) dashboard — audit + polish
+
+- Audited `/admin/*` end-to-end: all 15 routes load real DB data, all 14 server actions guarded by `requireAdmin()`, audit logging on every mutation, double-entry ledger intact, optimistic concurrency throughout, query scoping correct (admin sees everything; not filtered by owner_id).
+- **Added** loading.tsx for all 5 admin detail pages (venues, users, bookings, payouts, invoices) — previously users saw a blank screen during the multi-join DB queries.
+- **Fixed** invoice receipt image eager-loads on the admin invoice detail page (was `lazy`, felt slow on a page where the receipt IS the primary content).
+- Files:
+  - `apps/web/src/app/(app)/admin/venues/[id]/loading.tsx` (new)
+  - `apps/web/src/app/(app)/admin/users/[id]/loading.tsx` (new)
+  - `apps/web/src/app/(app)/admin/bookings/[id]/loading.tsx` (new)
+  - `apps/web/src/app/(app)/admin/payouts/[id]/loading.tsx` (new)
+  - `apps/web/src/app/(app)/admin/invoices/[id]/loading.tsx` (new)
+  - `apps/web/src/app/(app)/admin/invoices/[id]/page.tsx`
+
 ## 2026-05-17 (evening, later)
 
 ### Owner dashboard — audit + polish

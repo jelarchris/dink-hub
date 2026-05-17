@@ -211,7 +211,7 @@ export default async function AdminInvoiceDetailPage({ params }: PageProps) {
                 src={receiptUrl}
                 alt="GCash receipt uploaded by venue owner"
                 className="h-auto w-full rounded-[var(--radius-sm)] bg-white object-contain"
-                loading="lazy"
+                loading="eager"
                 decoding="async"
               />
             </div>
