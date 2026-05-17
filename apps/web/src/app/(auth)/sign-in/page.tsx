@@ -8,9 +8,6 @@ import { Alert } from "@/components/ui/alert";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { TurnstileWidget } from "@/components/turnstile-widget";
-
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function SignInPage() {
   const params = useSearchParams();
@@ -75,8 +72,6 @@ export default function SignInPage() {
             Forgot password?
           </Link>
         </div>
-
-        <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signin" />
 
         <SubmitButton size="lg" pendingLabel="Signing in" className="mt-1">
           Sign in

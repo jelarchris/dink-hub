@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-17 (evening)
+
+### Removed — CAPTCHA disabled across all forms
+
+- **Why:** Private launch with ~100 invited users — bot signup/spam is not a realistic threat at this scale. The CAPTCHA was causing real users on mobile / distant networks to get stuck on "Security check failed".
+- **Server:** `verifyTurnstileToken` now hard-returns `{ success: true, skipped: true }` regardless of environment. Original logic preserved below the early return so re-enabling is a one-line revert later.
+- **Client:** `<TurnstileWidget>` removed from sign-up, sign-in, forgot-password, and invoice-receipt forms.
+- Files:
+  - `apps/web/src/lib/turnstile.ts`
+  - `apps/web/src/app/(auth)/sign-up/page.tsx`
+  - `apps/web/src/app/(auth)/sign-in/page.tsx`
+  - `apps/web/src/app/(auth)/forgot-password/page.tsx`
+  - `apps/web/src/app/(app)/owner/invoices/[id]/pay-form.tsx`
+
 ## 2026-05-17 (later)
 
 ### Fixed — Turnstile failing on mobile / distant networks

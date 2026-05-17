@@ -7,9 +7,6 @@ import { Alert } from "@/components/ui/alert";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { TurnstileWidget } from "@/components/turnstile-widget";
-
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function ForgotPasswordPage() {
   const [state, formAction] = useActionState<ActionResult | null, FormData>(
@@ -71,8 +68,6 @@ export default function ForgotPasswordPage() {
             />
           )}
         </FormField>
-
-        <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="forgot_password" />
 
         <SubmitButton size="lg" pendingLabel="Sending" className="mt-1">
           Send reset link

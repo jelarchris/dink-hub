@@ -9,9 +9,6 @@ import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { TurnstileWidget } from "@/components/turnstile-widget";
-
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 type Role = "player" | "venue_owner";
 
@@ -126,8 +123,6 @@ export default function SignUpPage() {
             />
           )}
         </FormField>
-
-        <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} action="signup" />
 
         <p className="text-xs text-[var(--color-fg-subtle)] leading-relaxed">
           By creating an account you agree to our{" "}

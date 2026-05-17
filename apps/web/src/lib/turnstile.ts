@@ -18,63 +18,21 @@ export interface TurnstileResult {
 /**
  * Verify a Cloudflare Turnstile token against siteverify.
  *
- * In non-production environments where TURNSTILE_SECRET_KEY is unset, this
- * returns success=true with skipped=true so local dev and tests don't need
- * Cloudflare credentials. In production an unset secret fails closed.
+ * CAPTCHA is currently DISABLED for the small private launch — the user base
+ * is invitation-only (~100 people) so bot signup is not a realistic threat.
+ * To re-enable: delete the early `return { success: true, skipped: true }`
+ * below and put the Turnstile widgets back on auth forms.
  */
 export async function verifyTurnstileToken(
   token: string | null | undefined,
   ip: string | null | undefined,
 ): Promise<TurnstileResult> {
-  const secret = env.TURNSTILE_SECRET_KEY;
-
-  if (!secret) {
-    if (env.NODE_ENV === "production") {
-      return { success: false, skipped: false, reason: "secret_not_configured" };
-    }
-    return { success: true, skipped: true };
-  }
-
-  if (!token || token.length < 10) {
-    return { success: false, skipped: false, reason: "missing_token" };
-  }
-
-  const body = new URLSearchParams({ secret, response: token });
-  if (ip) body.set("remoteip", ip);
-
-  let resp: Response;
-  try {
-    resp = await fetch(VERIFY_URL, {
-      method: "POST",
-      body,
-      // Keep this fast — siteverify is on the hot signin path.
-      signal: AbortSignal.timeout(5_000),
-    });
-  } catch (err) {
-    console.error("[turnstile] siteverify fetch failed", err);
-    return { success: false, skipped: false, reason: "fetch_failed" };
-  }
-
-  if (!resp.ok) {
-    return { success: false, skipped: false, reason: `siteverify_${resp.status}` };
-  }
-
-  const json = (await resp.json()) as {
-    success: boolean;
-    "error-codes"?: string[];
-  };
-
-  const errorCodes = json["error-codes"];
-  if (errorCodes && errorCodes.length > 0) {
-    if (json.success !== true) {
-      console.error("[turnstile] siteverify rejected", { errorCodes });
-    }
-    return { success: json.success === true, skipped: false, reason: errorCodes.join(",") };
-  }
-  if (json.success !== true) {
-    console.error("[turnstile] siteverify success=false with no error codes");
-  }
-  return { success: json.success === true, skipped: false };
+  // Hard skip — captcha disabled in all environments. See JSDoc above.
+  void token;
+  void ip;
+  void env;
+  void VERIFY_URL;
+  return { success: true, skipped: true };
 }
 
 /**
