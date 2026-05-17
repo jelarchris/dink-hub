@@ -47,10 +47,16 @@ export async function signUp(input: SignUpInput): Promise<{ userId: string; need
   }
 
   const supabase = await createClient();
+  // emailRedirectTo: where Supabase sends the user after they click the
+  // confirmation link. Without this, Supabase falls back to its dashboard
+  // "Site URL" which may be wrong (e.g. localhost) and the verification link
+  // lands on the wrong host. Always pin it to our canonical app URL.
+  const emailRedirectTo = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/sign-in`;
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
+      emailRedirectTo,
       data: {
         display_name: parsed.data.displayName,
         role: parsed.data.role,

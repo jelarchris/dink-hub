@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-17 (later)
+
+### Fixed — Turnstile failing on mobile / distant networks
+
+- **Issue:** Users on Android browsers from regions far from their usual location (e.g. ~200km away) were seeing "Security check failed — please retry" with no visible CAPTCHA to solve.
+- **Root cause:** The Turnstile widget was rendered with `appearance: "interaction-only"`, which keeps the iframe invisible. When Cloudflare's risk engine flags a session (mobile carriers, unfamiliar geos, older Android WebViews) it requires the user to complete an interactive challenge — but with the widget hidden, there was nothing to click, so no token was ever produced.
+- **Fix:** Changed appearance to `"always"`. Low-risk sessions still complete silently (brief "Verifying…" spinner), and flagged sessions now get a visible challenge they can actually solve.
+- File: `apps/web/src/components/turnstile-widget.tsx`
+
+### Fixed — Sign-up email verification link
+
+- Added explicit `emailRedirectTo` on `supabase.auth.signUp` so the confirmation link in the verification email points to our `NEXT_PUBLIC_APP_URL/sign-in` instead of relying on Supabase's dashboard "Site URL" fallback.
+- File: `apps/web/src/features/auth/service.ts`
+- **Action required in Supabase dashboard** (see notes below) to enable confirmation emails.
+
 ## 2026-05-17
 
 ### Added — Booking detail page redesign (`/me/bookings/[id]`)
