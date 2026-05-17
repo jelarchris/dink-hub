@@ -133,6 +133,12 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
             </div>
           </dl>
 
+          {amountMismatch && (
+            <Alert variant="warning">
+              Receipt amount ({formatPHP(submitted)}) does not match expected total ({formatPHP(expected)}). Verify carefully or reject if incorrect.
+            </Alert>
+          )}
+
           {error && <Alert variant="danger">{error}</Alert>}
 
           {mode === "idle" ? (

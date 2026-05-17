@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-17 (evening, later)
+
+### Owner dashboard — audit + polish
+
+- Ran end-to-end audit of `/owner/*` pages: all routes load real DB data, all forms wired to real server actions, RLS/authorization checks confirmed throughout, optimistic concurrency intact.
+- **Added** prominent warning Alert on payment review card when receipt amount doesn't match expected total — previously the mismatch was only a tiny red text easy to miss when verifying GCash payments.
+- **Added** loading state for `/owner/venues/[id]/courts/new` route (was missing — users saw blank while form loaded).
+- Files:
+  - `apps/web/src/app/(app)/owner/payments/review-card.tsx`
+  - `apps/web/src/app/(app)/owner/venues/[id]/courts/loading.tsx` (new)
+
 ## 2026-05-17 (evening)
 
 ### Removed — CAPTCHA disabled across all forms
