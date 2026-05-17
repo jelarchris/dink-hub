@@ -50,6 +50,13 @@ export const createVoucherInputSchema = z
       .max(500)
       .optional()
       .transform((s) => (s && s.length > 0 ? s : null)),
+    /** Optional venue UUID. Empty string ⇒ global voucher. */
+    venueId: z
+      .string()
+      .trim()
+      .optional()
+      .transform((s) => (s && s.length > 0 ? s : null))
+      .pipe(z.string().uuid().nullable()),
   })
   .superRefine((data, ctx) => {
     const value = Number(data.discountValue);

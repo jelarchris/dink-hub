@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-18 (later)
+
+### Added — Optional venue scoping on vouchers
+
+- Vouchers can now be restricted to a single venue. The new `vouchers.venue_id` column is `NULL` for global codes (work everywhere, default) or set to a specific venue UUID for venue-only codes.
+- Validation runs on both preview and inside the booking transaction. If the voucher's `venue_id` is set and doesn't match the booking's venue, the player gets a friendly "This voucher is not valid at this venue" error and the booking fee is unaffected.
+- Admin create form gains a "Restrict to venue" dropdown defaulted to "All venues (global)". Active, non-deleted venues only.
+- Admin list shows a Venue column ("All venues" for global codes, venue name otherwise). Detail page shows a "Venue scope" row.
+- `ON DELETE SET NULL`: deleting a venue silently downgrades the voucher to global instead of breaking redemptions.
+- Files (new):
+  - `apps/web/src/db/migrations/0022_voucher_venue_scope.sql`
+- Files (modified):
+  - `apps/web/src/db/schema/index.ts` (`venueId` column)
+  - `apps/web/src/features/vouchers/{schema,service,repo,actions,preview-helpers}.ts`
+  - `apps/web/src/features/booking/service.ts` (passes `venueId` to both validate calls)
+  - `apps/web/src/app/(app)/admin/vouchers/page.tsx` (Venue column)
+  - `apps/web/src/app/(app)/admin/vouchers/new/{page,new-voucher-form}.tsx` (venue dropdown)
+  - `apps/web/src/app/(app)/admin/vouchers/[id]/page.tsx` (Venue scope row)
+
 ## 2026-05-18
 
 ### Added — Voucher (discount code) system for booking fees

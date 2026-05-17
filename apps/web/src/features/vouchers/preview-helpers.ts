@@ -12,7 +12,7 @@ export async function findCurrentBookingCourtFeeForUser(args: {
   courtId: string;
   durationMinutes: number;
   startManilaHour: number;
-}): Promise<bigint> {
+}): Promise<{ courtFeeCentavos: bigint; venueId: string }> {
   const [court, rateBands] = await Promise.all([
     findCourtById(args.courtId),
     findCourtRateBands(args.courtId),
@@ -29,5 +29,6 @@ export async function findCurrentBookingCourtFeeForUser(args: {
     args.startManilaHour,
     court.court.hourlyRateCentavos,
   );
-  return (applicableRate * BigInt(args.durationMinutes)) / 60n;
+  const courtFeeCentavos = (applicableRate * BigInt(args.durationMinutes)) / 60n;
+  return { courtFeeCentavos, venueId: court.venue.id };
 }

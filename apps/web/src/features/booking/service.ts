@@ -230,6 +230,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       userId: playerId,
       courtFeeCentavos: courtFee,
       baseSystemFeeCentavos: systemFee,
+      venueId: courtRow.venue.id,
     });
   }
 
@@ -283,6 +284,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
         userId: playerId,
         courtFeeCentavos: courtFee,
         baseSystemFeeCentavos: systemFee,
+        venueId: courtRow.venue.id,
         tx,
       });
       finalSystemFee = validatedVoucher.discountedSystemFeeCentavos;

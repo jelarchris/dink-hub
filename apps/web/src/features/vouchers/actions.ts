@@ -103,6 +103,7 @@ export async function createVoucherAction(
       minCourtFeeCentavos: minFeeCentavos,
       validUntil,
       notes: d.notes,
+      venueId: d.venueId,
       createdBy: admin.id,
     });
     await recordAudit({
@@ -116,6 +117,7 @@ export async function createVoucherAction(
         discountValue: voucher.discountValue.toString(),
         maxRedemptions: voucher.maxRedemptions,
         maxPerUser: voucher.maxPerUser,
+        venueId: voucher.venueId,
       },
     });
     revalidatePath("/admin/vouchers");
@@ -186,7 +188,7 @@ export async function previewVoucherAction(
   if (!parsed.success) return fail("Invalid voucher request", "validation");
 
   try {
-    const courtFeeCentavos = await findCurrentBookingCourtFeeForUser({
+    const { courtFeeCentavos, venueId } = await findCurrentBookingCourtFeeForUser({
       courtId: parsed.data.courtId,
       durationMinutes: parsed.data.durationMinutes,
       startManilaHour: parsed.data.startManilaHour,
@@ -197,6 +199,7 @@ export async function previewVoucherAction(
       userId: user.id,
       courtFeeCentavos,
       baseSystemFeeCentavos: feeRule.snapshotCentavos,
+      venueId,
     });
     const label =
       validated.voucher.discountType === "percent"

@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/features/admin/service";
+import { vouchersRepo } from "@/features/vouchers";
 import { NewVoucherForm } from "./new-voucher-form";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export const metadata = { title: "Admin · New voucher" };
 
 export default async function NewVoucherPage() {
   await requireAdmin();
+  const venues = await vouchersRepo.listActiveVenuesForPicker();
   return (
     <Container className="py-3 sm:py-4">
       <Link
@@ -25,7 +27,7 @@ export default async function NewVoucherPage() {
 
       <Card className="mt-6 max-w-2xl">
         <CardContent className="pt-6">
-          <NewVoucherForm />
+          <NewVoucherForm venues={venues} />
         </CardContent>
       </Card>
     </Container>

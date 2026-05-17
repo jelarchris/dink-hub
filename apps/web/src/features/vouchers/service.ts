@@ -23,6 +23,8 @@ interface ValidateArgs {
   userId: string;
   courtFeeCentavos: bigint;
   baseSystemFeeCentavos: bigint;
+  /** Venue the booking belongs to. Used to enforce venue-scoped vouchers. */
+  venueId: string;
   /** Optional — when provided, also checks per-user redemption cap. */
   tx?: Tx;
 }
@@ -51,6 +53,13 @@ export async function validateVoucherForBooking(
   }
   if (voucher.validUntil && voucher.validUntil <= now) {
     throw new VoucherError("expired", "This voucher has expired");
+  }
+
+  if (voucher.venueId !== null && voucher.venueId !== args.venueId) {
+    throw new VoucherError(
+      "wrong_venue",
+      "This voucher is not valid at this venue",
+    );
   }
 
   if (

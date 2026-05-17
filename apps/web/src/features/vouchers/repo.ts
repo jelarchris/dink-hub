@@ -1,10 +1,11 @@
 import "server-only";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, type DB } from "@/db/client";
 import {
   vouchers,
   voucherRedemptions,
   bookings,
+  venues,
   type Voucher,
   type NewVoucher,
 } from "@/db/schema";
@@ -25,8 +26,38 @@ export async function findVoucherById(id: string): Promise<Voucher | undefined> 
   return rows[0];
 }
 
-export async function listVouchers(): Promise<Voucher[]> {
-  return db.select().from(vouchers).orderBy(desc(vouchers.createdAt));
+export async function listVouchers(): Promise<
+  Array<Voucher & { venueName: string | null }>
+> {
+  const rows = await db
+    .select({ voucher: vouchers, venueName: venues.name })
+    .from(vouchers)
+    .leftJoin(venues, eq(venues.id, vouchers.venueId))
+    .orderBy(desc(vouchers.createdAt));
+  return rows.map((r) => ({ ...r.voucher, venueName: r.venueName }));
+}
+
+export async function findVoucherWithVenueById(
+  id: string,
+): Promise<(Voucher & { venueName: string | null }) | undefined> {
+  const rows = await db
+    .select({ voucher: vouchers, venueName: venues.name })
+    .from(vouchers)
+    .leftJoin(venues, eq(venues.id, vouchers.venueId))
+    .where(eq(vouchers.id, id))
+    .limit(1);
+  const r = rows[0];
+  return r ? { ...r.voucher, venueName: r.venueName } : undefined;
+}
+
+export async function listActiveVenuesForPicker(): Promise<
+  Array<{ id: string; name: string }>
+> {
+  return db
+    .select({ id: venues.id, name: venues.name })
+    .from(venues)
+    .where(and(eq(venues.status, "active"), isNull(venues.deletedAt)))
+    .orderBy(asc(venues.name));
 }
 
 export async function insertVoucher(input: NewVoucher): Promise<Voucher> {

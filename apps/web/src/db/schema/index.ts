@@ -479,6 +479,7 @@ export const vouchers = pgTable("vouchers", {
   validUntil: timestamp("valid_until", { withTimezone: true }),
   status: voucherStatusEnum("status").notNull().default("active"),
   notes: text("notes"),
+  venueId: uuid("venue_id").references(() => venues.id, { onDelete: "set null" }),
   createdBy: uuid("created_by").references(() => profiles.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

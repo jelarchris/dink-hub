@@ -22,7 +22,7 @@ export default async function VoucherDetailPage({
   await requireAdmin();
   const { id } = await params;
 
-  const voucher = await vouchersRepo.findVoucherById(id);
+  const voucher = await vouchersRepo.findVoucherWithVenueById(id);
   if (!voucher) notFound();
 
   const [stats, redemptions] = await Promise.all([
@@ -63,6 +63,10 @@ export default async function VoucherDetailPage({
             <DetailRow
               label="Valid until"
               value={voucher.validUntil ? formatDateTimeManila(voucher.validUntil) : "No expiry"}
+            />
+            <DetailRow
+              label="Venue scope"
+              value={voucher.venueName ?? "All venues (global)"}
             />
             <DetailRow
               label="Minimum court fee"

@@ -9,7 +9,11 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { createVoucherAction } from "@/features/vouchers/actions";
 import type { ActionResult } from "@/features/auth";
 
-export function NewVoucherForm() {
+export function NewVoucherForm({
+  venues,
+}: {
+  venues: ReadonlyArray<{ id: string; name: string }>;
+}) {
   const router = useRouter();
   const [type, setType] = useState<"percent" | "flat">("percent");
   const [state, formAction] = useActionState<ActionResult | null, FormData>(
@@ -142,6 +146,29 @@ export function NewVoucherForm() {
             Optional. Voucher is valid through end-of-day Manila on this date.
           </p>
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="venueId" className="block text-xs font-bold uppercase tracking-wide text-[var(--color-fg-muted)]">
+          Restrict to venue
+        </label>
+        <select
+          id="venueId"
+          name="venueId"
+          defaultValue=""
+          className="mt-1 h-10 w-full rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] px-3 text-sm"
+        >
+          <option value="">All venues (global)</option>
+          {venues.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+        <FieldError errors={fieldErrors.venueId} />
+        <p className="mt-1 text-[11px] text-[var(--color-fg-subtle)]">
+          Leave as “All venues” to make the code work everywhere.
+        </p>
       </div>
 
       <div>

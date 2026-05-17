@@ -49,6 +49,7 @@ export default async function AdminVouchersPage() {
                 <tr>
                   <th className="px-4 py-2 font-medium">Code</th>
                   <th className="px-4 py-2 font-medium">Discount</th>
+                  <th className="px-4 py-2 font-medium">Venue</th>
                   <th className="px-4 py-2 font-medium">Used</th>
                   <th className="px-4 py-2 font-medium">Per user</th>
                   <th className="px-4 py-2 font-medium">Valid until</th>
@@ -70,6 +71,13 @@ export default async function AdminVouchersPage() {
                     <tr key={v.id}>
                       <td className="px-4 py-3 font-mono text-xs font-bold">{v.code}</td>
                       <td className="px-4 py-3">{discount}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {v.venueName ? (
+                          <span className="font-medium">{v.venueName}</span>
+                        ) : (
+                          <span className="text-[var(--color-fg-subtle)]">All venues</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-xs">{usage}</td>
                       <td className="px-4 py-3 text-xs">
                         {v.maxPerUser === 0 ? "∞" : v.maxPerUser}
