@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-05-18 (later 6)
+
+### Fix — Open Play "filled slots" no longer count stale unpaid signups
+
+- **Bug:** A player who joined an Open Play session but never uploaded a GCash receipt still counted as a filled slot for up to ~45 minutes (the 15-min payment window + the 30-min reminder cron interval). Other players saw the session as fuller than it really was.
+- **Fix, defence in depth:**
+  1. **Query-level (instant):** introduced a shared `activeSignupWhere` SQL fragment in `features/open-play/repo.ts` that excludes signups in `pending_payment` past their `payment_due_at`. Applied to all four count queries — `listPublishedSessions`, `listSessionsByVenue`, `listSessionsByOwner`, and `countActiveSignups` (used by the public session detail page and the join-capacity check). `activeSignupCount` is now correct on every page load, regardless of cron timing.
+  2. **Cron-level (DB consistency):** added `expirePendingSignups` to the every-minute `/api/cron/expire` route (alongside `releaseExpiredHolds` and `expireUnpaidBookings`), so the row actually flips to `expired` within ~60s. The existing every-30-min `open-play-reminder` cron still calls it as a backstop.
+- Knock-on benefits:
+  - The join-capacity check (`countActiveSignups` in `service.joinSession`) now releases the seat immediately once the previous player's window lapses — no need to wait for the cron.
+  - Owner dashboards see accurate counts in real time.
+- Files:
+  - `apps/web/src/features/open-play/repo.ts` (new `activeSignupWhere` fragment + 4 query updates)
+  - `apps/web/src/features/open-play/index.ts` (export `expirePendingSignups`)
+  - `apps/web/src/app/api/cron/expire/route.ts` (added open-play signup expiration)
+- Verified: `pnpm --filter web typecheck` ✓, `pnpm --filter web lint` ✓.
+
 ## 2026-05-18 (later 5)
 
 ### Feature — "Enable location" prompt + distance sort on /venues and /open-play
