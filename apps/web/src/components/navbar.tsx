@@ -23,6 +23,7 @@ import {
   ClipboardList,
   Receipt,
   ShieldCheck,
+  Trophy,
   LogOut,
   UserCircle2,
 } from "lucide-react";
@@ -63,6 +64,7 @@ function sectionsFor(role: Role): DrawerSection[] {
         heading: "Quick actions",
         links: [
           { href: "/venues", label: "Find courts", icon: Search },
+          { href: "/open-play", label: "Open Play", icon: Trophy },
         ],
       },
     ];
@@ -82,6 +84,7 @@ function sectionsFor(role: Role): DrawerSection[] {
         links: [
           { href: "/owner/venues", label: "My venues", icon: Building2 },
           { href: "/owner/bookings", label: "Bookings", icon: CalendarDays },
+          { href: "/owner/open-play", label: "Open Play", icon: Trophy },
           { href: "/owner/payments", label: "Payments", icon: Wallet },
           { href: "/owner/invoices", label: "Invoices", icon: FileText },
           { href: "/owner/reviews", label: "Reviews", icon: Star },
@@ -92,6 +95,7 @@ function sectionsFor(role: Role): DrawerSection[] {
         heading: "Quick actions",
         links: [
           { href: "/venues", label: "Find courts", icon: Search },
+          { href: "/open-play", label: "Open Play", icon: Trophy },
         ],
       },
     ];

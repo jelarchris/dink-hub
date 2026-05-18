@@ -39,6 +39,7 @@ export {
   findSignupById,
   findSignupPaymentBySignupId,
   listPublishedSessions,
+  listSessionsByOwner,
   listSessionsByVenue,
   listSignupsForPlayer,
   listSignupsForSession,

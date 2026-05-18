@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Store,
   TrendingUp,
+  Trophy,
   UserRound,
   Wallet,
 } from "lucide-react";
@@ -334,6 +335,12 @@ export default async function OwnerDashboard({
             title="Venues"
             subtitle="Courts, hours, GCash"
             badge={venueHealth.needsWork > 0 ? `${venueHealth.needsWork} to fix` : undefined}
+          />
+          <QuickAction
+            href="/owner/open-play"
+            icon={<Trophy className="size-4" />}
+            title="Open Play"
+            subtitle="Drop-in sessions"
           />
           <QuickAction
             href="/owner/invoices"

@@ -274,6 +274,58 @@ export async function listSessionsByVenue(
   }));
 }
 
+export async function listSessionsByOwner(
+  ownerId: string,
+  exec: Executor = db,
+): Promise<SessionListItem[]> {
+  const rows = await exec
+    .select({
+      session: openPlaySessions,
+      venue: {
+        id: venues.id,
+        name: venues.name,
+        slug: venues.slug,
+        city: venues.city,
+        province: venues.province,
+        coverImageUrl: venues.coverImageUrl,
+      },
+      court: { id: courts.id, name: courts.name },
+    })
+    .from(openPlaySessions)
+    .innerJoin(venues, eq(venues.id, openPlaySessions.venueId))
+    .innerJoin(courts, eq(courts.id, openPlaySessions.courtId))
+    .where(
+      and(eq(venues.ownerId, ownerId), isNull(openPlaySessions.deletedAt)),
+    )
+    .orderBy(desc(openPlaySessions.startAt))
+    .limit(200);
+
+  if (rows.length === 0) return [];
+
+  const sessionIds = rows.map((r) => r.session.id);
+  const counts = await exec
+    .select({ sessionId: openPlaySignups.sessionId, c: count() })
+    .from(openPlaySignups)
+    .where(
+      and(
+        sql`${openPlaySignups.sessionId} in (${sql.join(
+          sessionIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})`,
+        sql`${openPlaySignups.status} not in ('cancelled', 'expired')`,
+      ),
+    )
+    .groupBy(openPlaySignups.sessionId);
+  const countMap = new Map(counts.map((c) => [c.sessionId, Number(c.c)]));
+
+  return rows.map((r) => ({
+    session: r.session,
+    venue: r.venue,
+    court: r.court,
+    activeSignupCount: countMap.get(r.session.id) ?? 0,
+  }));
+}
+
 // ----------------------------------------------------------------------------
 // Signups
 // ----------------------------------------------------------------------------
