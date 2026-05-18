@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-05-18 (later 8)
+
+### Chore — Remove Cloudflare Turnstile / CAPTCHA from all flows
+
+- User reported the CAPTCHA widget was throwing "system failure" errors on sign-in / sign-up. Server-side `verifyTurnstileToken` had already been a no-op, and the React widget was no longer rendered anywhere, but the dead imports, env vars, and copy mentions remained — and the client-side script load was likely the source of the failure.
+- Removed every reference to Turnstile across the codebase:
+  - Deleted `apps/web/src/lib/turnstile.ts` and `apps/web/src/components/turnstile-widget.tsx`.
+  - Extracted the still-needed `getClientIp` helper (used for per-IP rate-limit identifiers) into a new `apps/web/src/lib/client-ip.ts`.
+  - Stripped `TURNSTILE_SECRET_KEY` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` from `lib/env.ts` (both schema entries and the `processEnv` map).
+  - Dropped the dead verify block + unused `headers` import from `features/owner-invoices/actions.ts`.
+  - Simplified `preflightAuthGate` in `features/auth/actions.ts` to a rate-limit-only check (no args, no captcha plumbing).
+  - Removed stale captcha comments in `book/[bookingId]/pay/receipt-form.tsx`, `venues/[slug]/book/booking-flow.tsx`, and `features/booking/actions.ts`.
+  - Rewrote the `host` FAQ ("verified email + per-user rate limits") and the `privacy` policy IP-address bullet and removed the Cloudflare CAPTCHA processor entry.
+  - Removed the `TURNSTILE_SITE_KEY → NEXT_PUBLIC_TURNSTILE_SITE_KEY` rename mapping from `scripts/push-env-to-vercel.ps1`.
+- Per-IP / per-user rate limits remain the abuse defence for auth, booking-create, and receipt-upload.
+- **Follow-up for the operator:** delete `TURNSTILE_SECRET_KEY` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` from the Vercel project env vars (they're now unused and will fail-fast the env validator if anything references them later).
+- Verified: `pnpm --filter web typecheck` ✓, `pnpm --filter web lint` ✓. Commits `557fc53` + `c57304f`.
+
 ## 2026-05-18 (later 7)
 
 ### Fix — Booking slots auto-release the moment the 15-min payment window lapses
