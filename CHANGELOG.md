@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-05-18 (later 7)
+
+### Fix — Booking slots auto-release the moment the 15-min payment window lapses
+
+- Symmetric fix to the open-play stale-signup bug from earlier today. A booking that the player created but never paid for could keep a court slot marked as "taken" for up to ~60s (until the every-minute cron flipped it to `expired`). For the next player trying to book the same slot, this manifested as either a phantom busy mark in the picker or a `slot_not_available` error on submit.
+- **Fix, defence in depth:**
+  1. **Query-level (instant UX):** added `AND NOT (status = 'pending_payment' AND payment_due_at <= now())` to all three court-availability queries in `features/venues/repo.ts` — `getCourtOccupancy` (single court picker), `getCourtsOccupancy` (batch picker for the booking page), and `getVenueAvailabilityMap` busy CTE (the home/listing availability grid). Display is now correct on every page load.
+  2. **Create-time (no phantom EXCLUDE violation):** new `expireOverlappingStalePendingBookings({ courtId, startAt, endAt })` helper in `features/booking/repo.ts` runs inside the same transaction as `insertBooking`, flipping any overlapping `pending_payment` booking on the same court whose 15-min window already lapsed. The `EXCLUDE USING gist` constraint then sees them as `expired` and lets the new booking through. Court-scoped + time-scoped so it never touches unrelated rows.
+- Doesn't change the EXCLUDE constraint itself (postgres `WHERE` predicates on partial indexes must be immutable, so `now()` can't be referenced there).
+- The every-minute cron (`/api/cron/expire`) still flips stale rows globally as a backstop.
+- Files:
+  - `apps/web/src/features/venues/repo.ts` (3 SQL queries patched)
+  - `apps/web/src/features/booking/repo.ts` (new `expireOverlappingStalePendingBookings`)
+  - `apps/web/src/features/booking/service.ts` (call helper inside `createBooking` tx, before `insertBooking`)
+- Verified: `pnpm --filter web typecheck` ✓, `pnpm --filter web lint` ✓.
+
 ## 2026-05-18 (later 6)
 
 ### Fix — Open Play "filled slots" no longer count stale unpaid signups
