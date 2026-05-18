@@ -296,6 +296,15 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
 
     let booking: Booking;
     try {
+      // Best-effort: expire any overlapping pending_payment booking on this
+      // court whose 15-min window has lapsed. Prevents a phantom EXCLUDE
+      // violation when the previous player's hold just expired but the
+      // every-minute cron hasn't flipped the row yet.
+      await repo.expireOverlappingStalePendingBookings(
+        { courtId, startAt, endAt },
+        tx,
+      );
+
       booking = await repo.insertBooking(
         {
           playerId,

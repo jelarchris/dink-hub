@@ -264,6 +264,37 @@ export async function findExpiredPendingBookings(
 }
 
 /**
+ * Expire any pending_payment bookings on `courtId` whose 15-min payment
+ * window has lapsed AND whose time range overlaps [startAt, endAt].
+ *
+ * Called inline from `createBooking` (in the same tx) so the EXCLUDE
+ * constraint doesn't reject a new booking just because the previous
+ * player let their window lapse seconds ago and the every-minute cron
+ * hasn't run yet. Returns the number of rows flipped.
+ *
+ * Court-scoped + time-scoped so we never touch unrelated rows.
+ */
+export async function expireOverlappingStalePendingBookings(
+  args: { courtId: string; startAt: Date; endAt: Date },
+  exec: Executor = db,
+): Promise<number> {
+  const rows = await exec
+    .update(bookings)
+    .set({ status: "expired" })
+    .where(
+      and(
+        eq(bookings.courtId, args.courtId),
+        eq(bookings.status, "pending_payment"),
+        lte(bookings.paymentDueAt, sql`now()`),
+        lt(bookings.startAt, args.endAt),
+        gt(bookings.endAt, args.startAt),
+      ),
+    )
+    .returning({ id: bookings.id });
+  return rows.length;
+}
+
+/**
  * Returns confirmed bookings whose session starts in [windowStart, windowEnd]
  * and that haven't had a reminder sent yet. The caller constrains the window
  * to ~30 min around the T-2h mark so each cron run covers exactly one firing

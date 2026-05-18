@@ -221,6 +221,7 @@ export async function getCourtOccupancy(args: {
     from bookings
     where court_id = ${args.courtId}
       and status not in ('cancelled', 'no_show', 'expired')
+      and not (status = 'pending_payment' and payment_due_at <= now())
       and start_at < ${args.toUtc.toISOString()}
       and end_at > ${args.fromUtc.toISOString()}
     union all
@@ -272,6 +273,7 @@ export async function getCourtsOccupancy(args: {
     from bookings
     where court_id in (${ids})
       and status not in ('cancelled', 'no_show', 'expired')
+      and not (status = 'pending_payment' and payment_due_at <= now())
       and start_at < ${args.toUtc.toISOString()}
       and end_at > ${args.fromUtc.toISOString()}
     union all
@@ -414,6 +416,7 @@ export async function getVenueAvailabilityMap(
         JOIN   venue_courts  vc ON vc.court_id = b.court_id
         CROSS  JOIN params   p
         WHERE  b.status NOT IN ('cancelled', 'no_show', 'expired')
+          AND  NOT (b.status = 'pending_payment' AND b.payment_due_at <= now())
           AND  b.start_at <  p.we
           AND  b.end_at   >  p.ws
     ),
