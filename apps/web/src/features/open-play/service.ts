@@ -244,12 +244,17 @@ export async function publishSession(input: PublishSessionInput): Promise<OpenPl
     }
 
     // 2. Flip the session to PUBLISHED with the shadow ref and fresh fee snapshot.
-    const updated = await repo.updateSession(session.id, session.version, {
-      status: "published",
-      publishedAt: new Date(),
-      shadowBookingId: shadow.id,
-      systemFeePerPlayerCentavos: feeRule.snapshotCentavos,
-    });
+    const updated = await repo.updateSession(
+      session.id,
+      session.version,
+      {
+        status: "published",
+        publishedAt: new Date(),
+        shadowBookingId: shadow.id,
+        systemFeePerPlayerCentavos: feeRule.snapshotCentavos,
+      },
+      tx,
+    );
     if (!updated) {
       throw new OpenPlayError("concurrent_modification", "Session was modified by another request");
     }
@@ -298,12 +303,17 @@ export async function cancelSession(
       .returning({ id: openPlaySignups.id });
 
     // 3. Flip the session itself.
-    const updated = await repo.updateSession(session.id, session.version, {
-      status: "cancelled",
-      cancelledAt: now,
-      cancelledBy: parsed.data.ownerId,
-      cancellationReason: reason,
-    });
+    const updated = await repo.updateSession(
+      session.id,
+      session.version,
+      {
+        status: "cancelled",
+        cancelledAt: now,
+        cancelledBy: parsed.data.ownerId,
+        cancellationReason: reason,
+      },
+      tx,
+    );
     if (!updated) {
       throw new OpenPlayError("concurrent_modification", "Session was modified by another request");
     }
