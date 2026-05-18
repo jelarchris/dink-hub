@@ -482,9 +482,6 @@ export function BookingFlow({
     setFileName(f.name);
   }
 
-  // captchaSolved intentionally omitted: the invisible Turnstile widget injects
-  // cf-turnstile-response into the form; the server validates it and returns a
-  // visible error if missing/invalid, preventing the "nothing happens" UX trap.
   const canSubmitReceipt =
     confirmDetail && confirmTerms && fileName !== null && fileError === null;
 

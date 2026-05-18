@@ -64,9 +64,7 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
     redirect(`/sign-in?next=${next}`);
   }
 
-  // Rate limit booking creation per user. CAPTCHA is intentionally NOT used
-  // here: the slot picker renders one <form> per slot which makes a single
-  // shared Turnstile widget impractical. The flow is auth-gated and the
+  // Rate limit booking creation per user. The flow is auth-gated and the
   // database EXCLUDE constraint guarantees no double-bookings, so per-user
   // rate limiting is the proportional defense against abuse.
   const rl = await checkRateLimit(limiters.bookingCreate, `booking:${user.id}`);

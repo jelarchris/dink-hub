@@ -9,7 +9,6 @@ if (-not (Test-Path $envPath)) { Write-Error "Missing $envPath"; exit 1 }
 $skip   = @('E2E_TEST_TOKEN')
 $rename = @{
   'ESEND_FROM_EMAIL'   = 'RESEND_FROM_EMAIL'
-  'TURNSTILE_SITE_KEY' = 'NEXT_PUBLIC_TURNSTILE_SITE_KEY'
 }
 $override = @{
   'NEXT_PUBLIC_APP_URL' = 'https://dinkhub.ph'

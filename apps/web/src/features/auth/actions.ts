@@ -4,11 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { checkRateLimit, limiters, rateLimitMessage } from "@/lib/rate-limit";
-import {
-  TURNSTILE_FIELD_NAME,
-  getClientIp,
-  verifyTurnstileToken,
-} from "@/lib/turnstile";
+import { getClientIp } from "@/lib/client-ip";
 import { captureException } from "@/lib/observability";
 import { AuthError, isAuthError } from "./errors";
 import * as authService from "./service";
@@ -44,27 +40,17 @@ function s(form: FormData, key: string): string {
 }
 
 /**
- * Pre-flight check shared by signup/signin: enforce per-IP rate limit,
- * then verify the Turnstile token. Returns a typed error result if either
- * gate fails, otherwise null to continue. Identifier falls back to a static
- * string so abusers cannot bypass the limiter by stripping forwarding
- * headers — they would all share the same bucket.
+ * Pre-flight check shared by signup/signin: enforce per-IP rate limit.
+ * Identifier falls back to a static string so abusers cannot bypass the
+ * limiter by stripping forwarding headers — they would all share the same
+ * bucket.
  */
-async function preflightAuthGate(form: FormData): Promise<ActionResult<never> | null> {
+async function preflightAuthGate(_form: FormData): Promise<ActionResult<never> | null> {
   const h = await headers();
   const ip = getClientIp(h);
   const rl = await checkRateLimit(limiters.auth, `auth:${ip ?? "unknown"}`);
   if (!rl.allowed) {
     return { ok: false, code: "rate_limited", message: rateLimitMessage(rl.resetMs) };
-  }
-  const token = s(form, TURNSTILE_FIELD_NAME);
-  const cap = await verifyTurnstileToken(token, ip);
-  if (!cap.success) {
-    return {
-      ok: false,
-      code: "captcha_failed",
-      message: "Security check failed — please retry.",
-    };
   }
   return null;
 }
@@ -131,8 +117,8 @@ export async function updatePasswordAction(
   _prev: ActionResult | null,
   form: FormData,
 ): Promise<ActionResult> {
-  // Per-IP rate limit, but no Turnstile here — the user already proved
-  // possession of a one-time recovery link to reach this screen.
+  // Per-IP rate limit — the user already proved possession of a one-time
+  // recovery link to reach this screen.
   const h = await headers();
   const ip = getClientIp(h);
   const rl = await checkRateLimit(limiters.auth, `auth:${ip ?? "unknown"}`);

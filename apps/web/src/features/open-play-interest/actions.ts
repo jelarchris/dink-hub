@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { checkRateLimit, limiters, rateLimitMessage } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/turnstile";
+import { getClientIp } from "@/lib/client-ip";
 import { isOpenPlayInterestError } from "./errors";
 import { registerInterest } from "./service";
 

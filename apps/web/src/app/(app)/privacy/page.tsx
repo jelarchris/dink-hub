@@ -114,8 +114,8 @@ export default function PrivacyPage() {
                   device/browser information, collected via Sentry for debugging purposes.
                 </li>
                 <li>
-                  <strong>IP address</strong> — used for rate limiting and fraud prevention via
-                  Cloudflare Turnstile. Not stored in our primary database.
+                  <strong>IP address</strong> — used for rate limiting and abuse prevention.
+                  Not stored in our primary database.
                 </li>
                 <li>
                   <strong>Cookies</strong> — we use session cookies for authentication (managed by
@@ -182,9 +182,6 @@ export default function PrivacyPage() {
                   </li>
                   <li>
                     <strong>Sentry (USA)</strong> — error monitoring (stack traces, no PII logged).
-                  </li>
-                  <li>
-                    <strong>Cloudflare Inc. (USA)</strong> — security, DDoS mitigation, and CAPTCHA.
                   </li>
                   <li>
                     <strong>Upstash Inc. (USA)</strong> — rate limiting counters (IP hashes only).

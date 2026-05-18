@@ -17,7 +17,6 @@ const serverSchema = z.object({
     .min(3)
     .default("DinkHub <onboarding@resend.dev>"),
   SEMAPHORE_API_KEY: z.string().optional(),
-  TURNSTILE_SECRET_KEY: z.string().optional(),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
@@ -36,7 +35,6 @@ const clientSchema = z.object({
   NEXT_PUBLIC_APP_ENV: z.enum(["development", "preview", "production", "ci"]).default("development"),
   NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
   NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
-  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
 });
 
@@ -59,7 +57,6 @@ const processEnv = {
   NEXT_PUBLIC_APP_ENV: blankToUndefined(process.env.NEXT_PUBLIC_APP_ENV),
   NEXT_PUBLIC_POSTHOG_KEY: blankToUndefined(process.env.NEXT_PUBLIC_POSTHOG_KEY),
   NEXT_PUBLIC_POSTHOG_HOST: blankToUndefined(process.env.NEXT_PUBLIC_POSTHOG_HOST),
-  NEXT_PUBLIC_TURNSTILE_SITE_KEY: blankToUndefined(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
   NEXT_PUBLIC_SENTRY_DSN: blankToUndefined(process.env.NEXT_PUBLIC_SENTRY_DSN),
   SUPABASE_SERVICE_ROLE_KEY: blankToUndefined(process.env.SUPABASE_SERVICE_ROLE_KEY),
   DATABASE_URL: blankToUndefined(process.env.DATABASE_URL),
@@ -67,7 +64,6 @@ const processEnv = {
   RESEND_API_KEY: blankToUndefined(process.env.RESEND_API_KEY),
   RESEND_FROM_EMAIL: blankToUndefined(process.env.RESEND_FROM_EMAIL),
   SEMAPHORE_API_KEY: blankToUndefined(process.env.SEMAPHORE_API_KEY),
-  TURNSTILE_SECRET_KEY: blankToUndefined(process.env.TURNSTILE_SECRET_KEY),
   UPSTASH_REDIS_REST_URL: blankToUndefined(process.env.UPSTASH_REDIS_REST_URL),
   UPSTASH_REDIS_REST_TOKEN: blankToUndefined(process.env.UPSTASH_REDIS_REST_TOKEN),
   SENTRY_DSN: blankToUndefined(process.env.SENTRY_DSN),

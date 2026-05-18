@@ -355,7 +355,7 @@ function Faq() {
     },
     {
       q: "Do players need an account?",
-      a: "Yes — verified email accounts only. We use Cloudflare Turnstile and rate limits to keep bots and prank bookings out.",
+      a: "Yes — verified email accounts only. We use per-user rate limits to keep prank bookings out.",
     },
     {
       q: "What about GCash refunds?",

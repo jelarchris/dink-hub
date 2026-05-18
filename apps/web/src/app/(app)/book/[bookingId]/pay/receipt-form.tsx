@@ -22,10 +22,6 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
   );
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  // captchaSolved is intentionally NOT used to gate the submit button.
-  // The interaction-only Turnstile widget injects cf-turnstile-response into
-  // the form silently; the server validates it and returns a clear error if
-  // the token is missing, preventing the "frozen disabled button" UX trap.
   const fileRef = useRef<HTMLInputElement>(null);
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
