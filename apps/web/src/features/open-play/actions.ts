@@ -61,19 +61,29 @@ function unwrap(err: unknown): ActionResult<never> {
   return fail("Something went wrong. Please try again.");
 }
 
-function bigintFromForm(value: FormDataEntryValue | null): bigint | null {
-  if (typeof value !== "string" || value.length === 0) return null;
-  try {
-    return BigInt(value);
-  } catch {
-    return null;
-  }
-}
-
 function dateFromForm(value: FormDataEntryValue | null): Date | null {
   if (typeof value !== "string" || value.length === 0) return null;
-  const d = new Date(value);
+  // <input type="datetime-local"> returns "YYYY-MM-DDTHH:mm" with NO timezone.
+  // The user is entering venue-local time (Asia/Manila, UTC+8). If we let
+  // the server's `new Date()` parse it, it interprets the string as the
+  // server's local time (UTC on Vercel) — shifting every booking by 8 hours.
+  // Explicitly anchor to +08:00 so what the owner picks is what gets stored.
+  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+    ? `${value}:00+08:00`
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)
+      ? `${value}+08:00`
+      : value;
+  const d = new Date(normalized);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Convert a peso amount string (e.g. "150" or "150.50") into bigint centavos.
+// Returns null on invalid / negative input.
+function centavosFromPesoForm(value: FormDataEntryValue | null): bigint | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return BigInt(Math.round(n * 100));
 }
 
 // ===========================================================================
@@ -87,7 +97,7 @@ export async function createSessionAction(
   const user = await getCurrentUser();
   if (!user) return fail("Please sign in", "not_authorized");
 
-  const price = bigintFromForm(form.get("pricePerPlayerCentavos"));
+  const price = centavosFromPesoForm(form.get("pricePhp"));
   const startAt = dateFromForm(form.get("startAt"));
   const endAt = dateFromForm(form.get("endAt"));
   if (price === null) return fail("Price is required", "validation_failed");
@@ -131,11 +141,13 @@ export async function updateSessionAction(
   const user = await getCurrentUser();
   if (!user) return fail("Please sign in", "not_authorized");
 
-  const price = form.get("pricePerPlayerCentavos");
+  const price = form.get("pricePhp");
   const capacity = form.get("capacity");
   const description = form.get("description");
   const skillLevel = form.get("skillLevel");
   const title = form.get("title");
+
+  const priceCentavos = centavosFromPesoForm(price);
 
   const parsed = updateSessionInputSchema.safeParse({
     ownerId: user.id,
@@ -144,7 +156,7 @@ export async function updateSessionAction(
     ...(typeof description === "string" && { description }),
     ...(typeof skillLevel === "string" && { skillLevel }),
     ...(typeof capacity === "string" && capacity.length > 0 && { capacity: Number(capacity) }),
-    ...(typeof price === "string" && price.length > 0 && { pricePerPlayerCentavos: BigInt(price) }),
+    ...(priceCentavos !== null && { pricePerPlayerCentavos: priceCentavos }),
   });
   if (!parsed.success) {
     return {

@@ -165,20 +165,20 @@ export function SessionForm({ venueId, courts }: SessionFormProps) {
         </FormField>
 
         <FormField
-          id="pricePerPlayerCentavos"
-          label="Price per player (centavos)"
-          hint="Use 15000 for ₱150.00"
-          error={err("pricePerPlayerCentavos")}
+          id="pricePhp"
+          label="Price per player"
+          hint="In pesos. e.g. enter 150 for ₱150."
+          error={err("pricePerPlayerCentavos") ?? err("pricePhp")}
         >
           {({ id, describedBy, invalid }) => (
             <Input
               id={id}
-              name="pricePerPlayerCentavos"
+              name="pricePhp"
               type="number"
               min={0}
-              step={100}
+              step={1}
               required
-              defaultValue={15000}
+              defaultValue={150}
               aria-describedby={describedBy}
               invalid={invalid}
             />
