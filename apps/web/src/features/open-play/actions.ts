@@ -62,9 +62,24 @@ function unwrap(err: unknown): ActionResult<never> {
   // Surface the real cause so we can diagnose unexpected failures
   // (DB constraint violations, RLS denials, network errors, etc.) instead of
   // the opaque "Something went wrong" message. Owner-only actions — safe to show.
-  const detail =
-    err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  return fail(`Something went wrong: ${detail}`);
+  // Walk the cause chain to find the deepest message (Drizzle wraps PG errors).
+  const parts: string[] = [];
+  let cur: unknown = err;
+  const seen = new Set<unknown>();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    if (cur instanceof Error) {
+      const pg = cur as Error & { code?: string; detail?: string };
+      const tag = pg.code ? `[${pg.code}] ` : "";
+      const detail = pg.detail ? ` — ${pg.detail}` : "";
+      parts.push(`${tag}${cur.name}: ${cur.message}${detail}`);
+      cur = (cur as { cause?: unknown }).cause;
+    } else {
+      parts.push(String(cur));
+      break;
+    }
+  }
+  return fail(`Something went wrong: ${parts.join(" → ")}`);
 }
 
 function dateFromForm(value: FormDataEntryValue | null): Date | null {
