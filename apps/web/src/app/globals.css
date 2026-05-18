@@ -184,6 +184,71 @@ label {
   }
 }
 
+/* ============================================================
+   Launch announcement modal — pickleball-flavoured entrance
+   ============================================================ */
+
+@keyframes launch-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes launch-modal-in {
+  0%   { opacity: 0; transform: translateY(24px) scale(0.92); }
+  60%  { opacity: 1; transform: translateY(-4px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes launch-ball-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  45%      { transform: translateY(-14px) rotate(-12deg); }
+  55%      { transform: translateY(-14px) rotate(-12deg); }
+}
+
+@keyframes launch-ball-shadow {
+  0%, 100% { transform: scaleX(1);   opacity: 0.35; }
+  45%      { transform: scaleX(0.55); opacity: 0.15; }
+  55%      { transform: scaleX(0.55); opacity: 0.15; }
+}
+
+@keyframes launch-paddle-swing {
+  0%, 100% { transform: rotate(-8deg); }
+  50%      { transform: rotate(6deg); }
+}
+
+@keyframes launch-live-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.6); opacity: 0.45; }
+}
+
+@keyframes launch-confetti-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0deg) scale(0.4);
+  }
+  10% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(var(--cx), var(--cy)) rotate(var(--cr)) scale(1);
+  }
+}
+
+.launch-backdrop-in   { animation: launch-backdrop-in 220ms ease-out both; }
+.launch-modal-in      { animation: launch-modal-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.launch-ball-bounce   { animation: launch-ball-bounce 1.8s ease-in-out infinite; transform-origin: center bottom; }
+.launch-ball-shadow   { animation: launch-ball-shadow 1.8s ease-in-out infinite; transform-origin: center; }
+.launch-paddle-swing  { animation: launch-paddle-swing 2.4s ease-in-out infinite; transform-origin: 50% 85%; }
+.launch-live-pulse    { animation: launch-live-pulse 1.4s ease-in-out infinite; }
+.launch-confetti      {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  animation: launch-confetti-burst 1100ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
 @keyframes mobile-drawer-backdrop-in {
   from {
     opacity: 0;

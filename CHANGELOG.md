@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-05-18 (later 4)
+
+### Feature — Animated launch announcement modal
+
+- New one-time popup announcing that Open Play is live, mounted globally in the `(app)` route group so it surfaces on the home page, venue listings, profile, etc. Suppressed on `/open-play/*`, `/owner/*`, `/admin/*`, and all auth routes (don't interrupt task-focused flows or pages where the announcement would be redundant).
+- Pickleball-themed visuals — no images, all SVG + CSS:
+  - Bouncing yellow pickleball (radial-gradient face, six holes, highlight) with a soft scaling ground shadow for weight.
+  - Swinging green paddle (brand colors) behind the ball as a continuous loop.
+  - 16-piece confetti burst on open using brand + accent + warning + info tokens, each piece randomized via CSS custom properties (`--cx`, `--cy`, `--cr`).
+  - Spring-overshoot entrance (`cubic-bezier(0.34, 1.56, 0.64, 1)`) for the modal, fade for the backdrop.
+  - Pulsing red "LIVE" badge in the top-left of the hero.
+- Behavior:
+  - 1.8s delay after first eligible page load (lets the page settle so it feels like an event, not a blocker).
+  - Dismissed-once-per-device via `localStorage["dinkhub-announce:open-play-launch-v1"]`. Key versioned so future announcements re-surface for existing users.
+  - Full a11y: `role="dialog"`, `aria-modal`, `aria-labelledby`, `aria-describedby`, ESC closes, backdrop click closes, primary CTA auto-focuses, body scroll locked while open, close button has accessible label.
+  - Respects `prefers-reduced-motion` — already handled globally in `globals.css` (`animation-duration: 0.01ms !important`), so the modal still appears but without the bounce/swing/confetti motion.
+  - No new dependencies. Pure CSS keyframes added to `globals.css`.
+- Primary CTA links to `/open-play` and dismisses on click. Secondary "Maybe later" simply dismisses.
+- Files:
+  - `apps/web/src/components/launch-announcement.tsx` (new, ~250 lines client component with inline pickleball + paddle SVG)
+  - `apps/web/src/app/(app)/layout.tsx` (mount once at the end of the layout)
+  - `apps/web/src/app/globals.css` (7 new keyframes + utility classes under a "Launch announcement modal" section)
+- Verified: `pnpm typecheck` ✓, `pnpm lint` ✓.
+
 ## 2026-05-18 (later 3)
 
 ### Polish — Open Play feedback & share UX

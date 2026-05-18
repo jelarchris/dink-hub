@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { NavbarServer } from "@/components/navbar.server";
 import { Footer } from "@/components/footer";
+import { LaunchAnnouncement } from "@/components/launch-announcement";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </Suspense>
       <div className="flex flex-1 flex-col">{children}</div>
       <Footer />
+      <LaunchAnnouncement />
     </>
   );
 }
