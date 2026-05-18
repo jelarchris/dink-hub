@@ -450,6 +450,16 @@ export function BookingFlow({
     form.set("startAt", pickedStartIso);
     form.set("endAt", pickedEndDate.toISOString());
     if (appliedVoucher) form.set("voucherCode", appliedVoucher.code);
+    // Per-booking notification email override. Only sent when the player
+    // edited the email to something different from their account email.
+    // The server validates the format; account email is left untouched.
+    const trimmedEmail = editEmail.trim();
+    if (
+      trimmedEmail.length > 0 &&
+      trimmedEmail.toLowerCase() !== playerEmail.trim().toLowerCase()
+    ) {
+      form.set("contactEmail", trimmedEmail);
+    }
     const result = await startBookingReturningIdAction(form);
     setIsCreating(false);
     if (!result.ok) {

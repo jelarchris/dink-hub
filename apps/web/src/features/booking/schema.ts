@@ -78,6 +78,12 @@ export const createBookingInputSchema = z
       .max(40)
       .regex(/^[A-Za-z0-9_-]+$/)
       .optional(),
+    /**
+     * Optional per-booking notification email override. When provided, all
+     * player-facing emails for this booking are sent here instead of the
+     * account's profiles.email. The account email itself is unchanged.
+     */
+    contactEmail: z.string().trim().toLowerCase().email().max(254).optional(),
   })
   .superRefine(validateSlotTimes);
 export type CreateBookingInput = z.infer<typeof createBookingInputSchema>;

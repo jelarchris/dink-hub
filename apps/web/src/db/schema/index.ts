@@ -203,6 +203,8 @@ export const bookings = pgTable("bookings", {
   voucherId: uuid("voucher_id"),
   voucherCodeSnapshot: text("voucher_code_snapshot"),
   discountCentavos: bigint("discount_centavos", { mode: "bigint" }).notNull().default(0n),
+  // Per-booking notification email override. NULL = use profiles.email.
+  contactEmail: text("contact_email"),
 });
 
 // ----------------------------------------------------------------------------

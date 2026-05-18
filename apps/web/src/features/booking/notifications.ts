@@ -54,6 +54,7 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
       totalCentavos: bookings.totalCentavos,
       rescheduledCount: bookings.rescheduledCount,
       playerId: bookings.playerId,
+      contactEmail: bookings.contactEmail,
       courtName: courts.name,
       venueName: venues.name,
       ownerId: venues.ownerId,
@@ -101,7 +102,9 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
     ownerEmail: ownerRow.email,
     ownerDisplayName: ownerRow.displayName,
     ownerNotificationPrefs: ownerRow.notificationPrefs,
-    playerEmail: playerRow.email,
+    // Prefer the per-booking override entered on the booking modal; fall back
+    // to the account email when the player didn't override it.
+    playerEmail: base.contactEmail ?? playerRow.email,
     playerDisplayName: playerRow.displayName,
     gcashReferenceNumber: paymentRow?.ref ?? null,
   };

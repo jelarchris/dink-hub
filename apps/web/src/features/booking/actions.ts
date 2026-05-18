@@ -33,6 +33,7 @@ const startBookingSchema = z.object({
     .max(40)
     .regex(/^[A-Za-z0-9_-]+$/)
     .optional(),
+  contactEmail: z.string().trim().toLowerCase().email().max(254).optional(),
 });
 
 const cancelSchema = z.object({ bookingId: z.string().uuid() });
@@ -79,6 +80,7 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
     endAt: form.get("endAt"),
     venueSlug: form.get("venueSlug"),
     voucherCode: form.get("voucherCode") || undefined,
+    contactEmail: form.get("contactEmail") || undefined,
   });
   if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
 
@@ -95,6 +97,7 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
       startAt: parsed.data.startAt,
       endAt: parsed.data.endAt,
       ...(parsed.data.voucherCode ? { voucherCode: parsed.data.voucherCode } : {}),
+      ...(parsed.data.contactEmail ? { contactEmail: parsed.data.contactEmail } : {}),
     });
     bookingId = booking.id;
   } catch (err) {
@@ -160,6 +163,7 @@ export async function startBookingReturningIdAction(
     endAt: form.get("endAt"),
     venueSlug: form.get("venueSlug"),
     voucherCode: form.get("voucherCode") || undefined,
+    contactEmail: form.get("contactEmail") || undefined,
   });
   if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
 
@@ -170,6 +174,7 @@ export async function startBookingReturningIdAction(
       startAt: parsed.data.startAt,
       endAt: parsed.data.endAt,
       ...(parsed.data.voucherCode ? { voucherCode: parsed.data.voucherCode } : {}),
+      ...(parsed.data.contactEmail ? { contactEmail: parsed.data.contactEmail } : {}),
     });
     return {
       ok: true,

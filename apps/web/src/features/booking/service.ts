@@ -153,7 +153,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       issues: parsed.error.flatten(),
     });
   }
-  const { playerId, courtId, startAt, endAt, holdId, notes, voucherCode } = parsed.data;
+  const { playerId, courtId, startAt, endAt, holdId, notes, voucherCode, contactEmail } = parsed.data;
 
   // Use server clock — reliable within < 1ms of DB clock (NTP-synced).
   // Avoids a SELECT NOW() round-trip that added ~20-40ms for nothing.
@@ -312,6 +312,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
           voucherId: voucherIdToSnapshot,
           voucherCodeSnapshot: voucherCodeToSnapshot,
           discountCentavos,
+          contactEmail: contactEmail ?? null,
         } as Parameters<typeof repo.insertBooking>[0],
         tx,
       );
