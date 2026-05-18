@@ -249,6 +249,7 @@ function BookingStatusBadge({ status }: { status: Booking["status"] }) {
     no_show: { label: "No-show", variant: "danger" },
     expired: { label: "Expired", variant: "neutral" },
     refunded: { label: "Refunded", variant: "neutral" },
+    open_play: { label: "Open Play", variant: "info" },
   };
   const { label, variant } = variants[status];
   return <Badge variant={variant}>{label}</Badge>;

@@ -1,0 +1,591 @@
+import "server-only";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { openPlaySessions, openPlaySignups, venues } from "@/db/schema";
+import type {
+  Booking,
+  NewBooking,
+  NewOpenPlaySession,
+  NewOpenPlaySignup,
+  NewOpenPlaySignupPayment,
+  OpenPlaySession,
+  OpenPlaySignup,
+  OpenPlaySignupPayment,
+} from "@/db/schema";
+import { getCurrentBookingFeeRule } from "@/features/system-settings/service";
+import { OpenPlayError } from "./errors";
+import * as repo from "./repo";
+import {
+  cancelSessionInputSchema,
+  cancelSignupInputSchema,
+  createSessionInputSchema,
+  joinSessionInputSchema,
+  publishSessionInputSchema,
+  rejectSignupPaymentInputSchema,
+  submitSignupPaymentInputSchema,
+  updateSessionInputSchema,
+  verifySignupPaymentInputSchema,
+  type CancelSessionInput,
+  type CancelSignupInput,
+  type CreateSessionInput,
+  type JoinSessionInput,
+  type PublishSessionInput,
+  type RejectSignupPaymentInput,
+  type SubmitSignupPaymentInput,
+  type UpdateSessionInput,
+  type VerifySignupPaymentInput,
+} from "./schema";
+
+/**
+ * Open-play service. All public business operations live here.
+ *
+ * Authorization model:
+ *   - Owner ops: caller's id must equal venues.owner_id (re-checked server-side).
+ *   - Player ops: caller's id must equal openPlaySignups.player_id.
+ *
+ * Concurrency model:
+ *   - The shadow `bookings` row uses the existing EXCLUDE constraint, so two
+ *     overlapping published sessions on the same court are physically rejected.
+ *   - Capacity is enforced by the `ops_check_capacity()` DB trigger — concurrent
+ *     joins can never oversubscribe.
+ *   - Optimistic concurrency via `version` on every mutating UPDATE.
+ */
+
+const CANCEL_WINDOW_MS = 15 * 60_000;
+const PAYMENT_DUE_TTL_MS = 15 * 60_000;
+
+const PG_EXCLUSION_VIOLATION = "23P01";
+const PG_UNIQUE_VIOLATION = "23505";
+const PG_CHECK_VIOLATION = "23514";
+
+function isPgError(err: unknown, code: string): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  if ("code" in err && (err as { code: unknown }).code === code) return true;
+  if ("cause" in err) return isPgError((err as { cause: unknown }).cause, code);
+  return false;
+}
+
+function isCapacityError(err: unknown): boolean {
+  // The trigger raises a CHECK violation with message 'open play session is full'.
+  if (!isPgError(err, PG_CHECK_VIOLATION)) return false;
+  if (typeof err !== "object" || err === null) return false;
+  const messageHolder =
+    "message" in err
+      ? (err as { message: unknown }).message
+      : "cause" in err && typeof (err as { cause: unknown }).cause === "object"
+        ? ((err as { cause: { message?: unknown } }).cause.message as unknown)
+        : undefined;
+  return typeof messageHolder === "string" && messageHolder.includes("open play session is full");
+}
+
+function addMilliseconds(date: Date, ms: number): Date {
+  return new Date(date.getTime() + ms);
+}
+
+async function assertOwnsVenue(venueId: string, ownerId: string): Promise<void> {
+  const rows = await db
+    .select({ ownerId: venues.ownerId, status: venues.status, deletedAt: venues.deletedAt })
+    .from(venues)
+    .where(eq(venues.id, venueId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new OpenPlayError("venue_not_found", "Venue does not exist");
+  if (row.ownerId !== ownerId) {
+    throw new OpenPlayError("not_authorized", "You don't own this venue");
+  }
+  if (row.deletedAt || row.status !== "active") {
+    throw new OpenPlayError("venue_inactive", "Venue is not accepting sessions");
+  }
+}
+
+// ============================================================================
+// 1. createSession — owner creates a DRAFT session (no shadow booking yet)
+// ============================================================================
+export async function createSession(input: CreateSessionInput): Promise<OpenPlaySession> {
+  const parsed = createSessionInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new OpenPlayError("validation_failed", "Invalid session input", {
+      issues: parsed.error.flatten(),
+    });
+  }
+  const data = parsed.data;
+
+  if (data.startAt.getTime() <= Date.now()) {
+    throw new OpenPlayError("validation_failed", "startAt must be in the future");
+  }
+
+  await assertOwnsVenue(data.venueId, data.ownerId);
+
+  const courtRow = await repo.findCourtById(data.courtId);
+  if (!courtRow) throw new OpenPlayError("court_not_found", "Court does not exist");
+  if (courtRow.venue.id !== data.venueId) {
+    throw new OpenPlayError("not_authorized", "Court does not belong to this venue");
+  }
+  if (!courtRow.court.isActive || courtRow.court.deletedAt) {
+    throw new OpenPlayError("court_inactive", "Court is not bookable");
+  }
+  if (await repo.hasActiveClosureInRange(data)) {
+    throw new OpenPlayError("court_closed", "Court is closed during this time window");
+  }
+
+  const feeRule = await getCurrentBookingFeeRule().catch(() => null);
+  if (!feeRule) {
+    throw new OpenPlayError("system_fee_unavailable", "No active booking fee configured");
+  }
+
+  return repo.insertSession({
+    venueId: data.venueId,
+    courtId: data.courtId,
+    hostProfileId: data.ownerId,
+    title: data.title,
+    description: data.description ?? null,
+    skillLevel: data.skillLevel,
+    capacity: data.capacity,
+    pricePerPlayerCentavos: data.pricePerPlayerCentavos,
+    systemFeePerPlayerCentavos: feeRule.snapshotCentavos,
+    startAt: data.startAt,
+    endAt: data.endAt,
+    status: "draft",
+  } as NewOpenPlaySession);
+}
+
+// ============================================================================
+// 2. updateSession — owner edits a DRAFT session
+// ============================================================================
+export async function updateSession(input: UpdateSessionInput): Promise<OpenPlaySession> {
+  const parsed = updateSessionInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new OpenPlayError("validation_failed", "Invalid update input");
+  }
+  const data = parsed.data;
+
+  const session = await repo.findSessionById(data.sessionId);
+  if (!session) throw new OpenPlayError("session_not_found", "Session does not exist");
+  await assertOwnsVenue(session.venueId, data.ownerId);
+
+  if (session.status !== "draft") {
+    throw new OpenPlayError(
+      "session_wrong_status",
+      "Only draft sessions can be edited",
+    );
+  }
+
+  const patch: Parameters<typeof repo.updateSession>[2] = {};
+  if (data.title !== undefined) patch.title = data.title;
+  if (data.description !== undefined) patch.description = data.description ?? null;
+  if (data.skillLevel !== undefined) patch.skillLevel = data.skillLevel;
+  if (data.capacity !== undefined) patch.capacity = data.capacity;
+  if (data.pricePerPlayerCentavos !== undefined) {
+    patch.pricePerPlayerCentavos = data.pricePerPlayerCentavos;
+  }
+
+  const updated = await repo.updateSession(data.sessionId, session.version, patch);
+  if (!updated) {
+    throw new OpenPlayError("concurrent_modification", "Session was modified by another request");
+  }
+  return updated;
+}
+
+// ============================================================================
+// 3. publishSession — flips DRAFT → PUBLISHED, inserts the shadow booking
+// ============================================================================
+export async function publishSession(input: PublishSessionInput): Promise<OpenPlaySession> {
+  const parsed = publishSessionInputSchema.safeParse(input);
+  if (!parsed.success) throw new OpenPlayError("validation_failed", "Invalid input");
+
+  const session = await repo.findSessionById(parsed.data.sessionId);
+  if (!session) throw new OpenPlayError("session_not_found", "Session does not exist");
+  await assertOwnsVenue(session.venueId, parsed.data.ownerId);
+
+  if (session.status !== "draft") {
+    throw new OpenPlayError("session_wrong_status", "Only draft sessions can be published");
+  }
+  if (session.startAt.getTime() <= Date.now()) {
+    throw new OpenPlayError("session_already_started", "Session start time has already passed");
+  }
+
+  // Re-snapshot the system fee at publish time — captures admin updates made
+  // after the draft was first created.
+  const feeRule = await getCurrentBookingFeeRule().catch(() => null);
+  if (!feeRule) {
+    throw new OpenPlayError("system_fee_unavailable", "No active booking fee configured");
+  }
+
+  return db.transaction(async (tx) => {
+    // 1. Insert the shadow booking. Using owner as the player_id keeps the
+    //    NOT NULL + FK happy without creating a fake profile. Money is zero
+    //    so it never lands in payouts/invoices.
+    let shadow: Booking;
+    try {
+      shadow = await repo.insertShadowBooking(
+        {
+          playerId: parsed.data.ownerId,
+          courtId: session.courtId,
+          venueId: session.venueId,
+          startAt: session.startAt,
+          endAt: session.endAt,
+          status: "open_play",
+          courtFeeCentavos: 0n,
+          systemFeeCentavos: 0n,
+          cancellableUntil: session.endAt,
+          paymentDueAt: session.endAt,
+          notes: `[open-play] ${session.title}`,
+        } as NewBooking,
+        tx,
+      );
+    } catch (err) {
+      if (isPgError(err, PG_EXCLUSION_VIOLATION)) {
+        throw new OpenPlayError(
+          "slot_not_available",
+          "Court is already booked for this time window",
+        );
+      }
+      throw err;
+    }
+
+    // 2. Flip the session to PUBLISHED with the shadow ref and fresh fee snapshot.
+    const updated = await repo.updateSession(session.id, session.version, {
+      status: "published",
+      publishedAt: new Date(),
+      shadowBookingId: shadow.id,
+      systemFeePerPlayerCentavos: feeRule.snapshotCentavos,
+    });
+    if (!updated) {
+      throw new OpenPlayError("concurrent_modification", "Session was modified by another request");
+    }
+    return updated;
+  });
+}
+
+// ============================================================================
+// 4. cancelSession — owner cancels; shadow booking is cancelled too
+//    Active signups are auto-cancelled by the same transaction.
+// ============================================================================
+export async function cancelSession(
+  input: CancelSessionInput,
+): Promise<{ session: OpenPlaySession; cancelledSignupIds: string[] }> {
+  const parsed = cancelSessionInputSchema.safeParse(input);
+  if (!parsed.success) throw new OpenPlayError("validation_failed", "Invalid input");
+
+  const session = await repo.findSessionById(parsed.data.sessionId);
+  if (!session) throw new OpenPlayError("session_not_found", "Session does not exist");
+  await assertOwnsVenue(session.venueId, parsed.data.ownerId);
+
+  if (session.status === "cancelled") return { session, cancelledSignupIds: [] };
+  if (session.status === "completed") {
+    throw new OpenPlayError("session_wrong_status", "Completed sessions cannot be cancelled");
+  }
+
+  const reason = parsed.data.reason ?? "Cancelled by venue owner";
+  const now = new Date();
+
+  return db.transaction(async (tx) => {
+    // 1. Free the slot.
+    if (session.shadowBookingId) {
+      await repo.cancelShadowBooking(session.shadowBookingId, parsed.data.ownerId, reason, tx);
+    }
+
+    // 2. Cancel every active signup so players see it in /me/open-play.
+    const signupsCancelled = await tx
+      .update(openPlaySignups)
+      .set({
+        status: "cancelled",
+        cancelledAt: now,
+        cancelledBy: parsed.data.ownerId,
+        cancellationReason: reason,
+      })
+      .where(eq(openPlaySignups.sessionId, session.id))
+      .returning({ id: openPlaySignups.id });
+
+    // 3. Flip the session itself.
+    const updated = await repo.updateSession(session.id, session.version, {
+      status: "cancelled",
+      cancelledAt: now,
+      cancelledBy: parsed.data.ownerId,
+      cancellationReason: reason,
+    });
+    if (!updated) {
+      throw new OpenPlayError("concurrent_modification", "Session was modified by another request");
+    }
+
+    return {
+      session: updated,
+      cancelledSignupIds: signupsCancelled.map((s) => s.id),
+    };
+  });
+}
+
+// ============================================================================
+// 5. joinSession — player joins a published session
+// ============================================================================
+export async function joinSession(input: JoinSessionInput): Promise<OpenPlaySignup> {
+  const parsed = joinSessionInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new OpenPlayError("validation_failed", "Invalid join input", {
+      issues: parsed.error.flatten(),
+    });
+  }
+  const { playerId, sessionId, contactEmail } = parsed.data;
+
+  const session = await repo.findSessionById(sessionId);
+  if (!session) throw new OpenPlayError("session_not_found", "Session does not exist");
+  if (session.status !== "published") {
+    throw new OpenPlayError("session_not_published", "Session is not open for joining");
+  }
+  if (session.startAt.getTime() <= Date.now()) {
+    throw new OpenPlayError("session_already_started", "Session has already started");
+  }
+
+  const now = new Date();
+
+  try {
+    return await repo.insertSignup({
+      sessionId,
+      playerId,
+      status: "pending_payment",
+      courtFeeCentavos: session.pricePerPlayerCentavos,
+      systemFeeCentavos: session.systemFeePerPlayerCentavos,
+      contactEmail: contactEmail ?? null,
+      cancellableUntil: addMilliseconds(now, CANCEL_WINDOW_MS),
+      paymentDueAt: addMilliseconds(now, PAYMENT_DUE_TTL_MS),
+    } as NewOpenPlaySignup);
+  } catch (err) {
+    if (isCapacityError(err)) {
+      throw new OpenPlayError("session_full", "This session is full");
+    }
+    if (isPgError(err, PG_UNIQUE_VIOLATION)) {
+      throw new OpenPlayError("already_signed_up", "You already have an active signup for this session");
+    }
+    throw err;
+  }
+}
+
+// ============================================================================
+// 6. cancelSignup — player self-cancels within the 15-min window
+// ============================================================================
+export async function cancelSignup(input: CancelSignupInput): Promise<OpenPlaySignup> {
+  const parsed = cancelSignupInputSchema.safeParse(input);
+  if (!parsed.success) throw new OpenPlayError("validation_failed", "Invalid input");
+
+  const signup = await repo.findSignupById(parsed.data.signupId);
+  if (!signup) throw new OpenPlayError("signup_not_found", "Signup does not exist");
+  if (signup.playerId !== parsed.data.playerId) {
+    throw new OpenPlayError("signup_not_owned", "Signup belongs to a different player");
+  }
+  if (signup.status === "cancelled") return signup;
+  if (signup.status === "expired" || signup.status === "refunded") {
+    throw new OpenPlayError("signup_wrong_status", "Signup cannot be cancelled");
+  }
+  if (signup.cancellableUntil.getTime() <= Date.now()) {
+    throw new OpenPlayError(
+      "signup_not_cancellable",
+      "The 15-minute cancellation window has elapsed",
+    );
+  }
+
+  const updated = await repo.updateSignup(signup.id, signup.version, {
+    status: "cancelled",
+    cancelledAt: new Date(),
+    cancelledBy: parsed.data.playerId,
+    cancellationReason: "Player self-cancel",
+  });
+  if (!updated) {
+    throw new OpenPlayError("concurrent_modification", "Signup was modified by another request");
+  }
+  return updated;
+}
+
+// ============================================================================
+// 7. submitSignupPayment — player uploads GCash receipt
+// ============================================================================
+export async function submitSignupPayment(
+  input: SubmitSignupPaymentInput,
+): Promise<OpenPlaySignupPayment> {
+  const parsed = submitSignupPaymentInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new OpenPlayError("validation_failed", "Invalid payment input", {
+      issues: parsed.error.flatten(),
+    });
+  }
+  const data = parsed.data;
+
+  return db.transaction(async (tx) => {
+    const signup = await repo.findSignupById(data.signupId, tx);
+    if (!signup) throw new OpenPlayError("signup_not_found", "Signup does not exist");
+    if (signup.playerId !== data.playerId) {
+      throw new OpenPlayError("signup_not_owned", "Signup belongs to a different player");
+    }
+    if (signup.status !== "pending_payment") {
+      throw new OpenPlayError(
+        "signup_wrong_status",
+        `Cannot submit — signup is ${signup.status.replace("_", " ")}`,
+      );
+    }
+    if (data.amountCentavos !== signup.totalCentavos) {
+      throw new OpenPlayError(
+        "validation_failed",
+        "Amount does not match the signup total",
+      );
+    }
+
+    let payment: OpenPlaySignupPayment;
+    try {
+      payment = await repo.insertSignupPayment(
+        {
+          signupId: data.signupId,
+          receiptImagePath: data.receiptImagePath,
+          receiptHash: data.receiptHash,
+          amountCentavos: data.amountCentavos,
+          gcashReferenceNumber: data.gcashReferenceNumber ?? null,
+          status: "submitted",
+          submittedBy: data.playerId,
+        } as NewOpenPlaySignupPayment,
+        tx,
+      );
+    } catch (err) {
+      if (isPgError(err, PG_UNIQUE_VIOLATION)) {
+        throw new OpenPlayError("duplicate_receipt", "This receipt has already been submitted");
+      }
+      throw err;
+    }
+
+    const updated = await repo.updateSignup(signup.id, signup.version, {
+      status: "payment_submitted",
+    }, tx);
+    if (!updated) {
+      throw new OpenPlayError("concurrent_modification", "Signup was modified by another request");
+    }
+    return payment;
+  });
+}
+
+// ============================================================================
+// 8. verifySignupPayment — owner marks a payment as verified
+// ============================================================================
+export async function verifySignupPayment(
+  input: VerifySignupPaymentInput,
+): Promise<OpenPlaySignupPayment> {
+  const parsed = verifySignupPaymentInputSchema.safeParse(input);
+  if (!parsed.success) throw new OpenPlayError("validation_failed", "Invalid input");
+
+  return db.transaction(async (tx) => {
+    const payment = await repo.findSignupPaymentById(parsed.data.paymentId, tx);
+    if (!payment) throw new OpenPlayError("payment_not_found", "Payment does not exist");
+    if (payment.status === "verified") {
+      throw new OpenPlayError("payment_already_verified", "Payment is already verified");
+    }
+
+    const signup = await repo.findSignupById(payment.signupId, tx);
+    if (!signup) throw new OpenPlayError("signup_not_found", "Signup does not exist");
+    const sessionWithVenue = await repo.findSessionWithVenue(signup.sessionId, tx);
+    if (!sessionWithVenue) throw new OpenPlayError("session_not_found", "Session does not exist");
+    if (sessionWithVenue.venue.ownerId !== parsed.data.verifierId) {
+      throw new OpenPlayError("not_authorized", "Only the venue owner can verify payments");
+    }
+
+    const updatedPayment = await repo.updateSignupPayment(payment.id, payment.version, {
+      status: "verified",
+      verifiedBy: parsed.data.verifierId,
+      verifiedAt: new Date(),
+    }, tx);
+    if (!updatedPayment) {
+      throw new OpenPlayError("concurrent_modification", "Payment was modified by another request");
+    }
+
+    const updatedSignup = await repo.updateSignup(signup.id, signup.version, {
+      status: "confirmed",
+    }, tx);
+    if (!updatedSignup) {
+      throw new OpenPlayError("concurrent_modification", "Signup was modified by another request");
+    }
+
+    return updatedPayment;
+  });
+}
+
+// ============================================================================
+// 9. rejectSignupPayment — owner rejects, signup goes back to pending_payment
+// ============================================================================
+export async function rejectSignupPayment(
+  input: RejectSignupPaymentInput,
+): Promise<OpenPlaySignupPayment> {
+  const parsed = rejectSignupPaymentInputSchema.safeParse(input);
+  if (!parsed.success) throw new OpenPlayError("validation_failed", "Invalid input");
+
+  return db.transaction(async (tx) => {
+    const payment = await repo.findSignupPaymentById(parsed.data.paymentId, tx);
+    if (!payment) throw new OpenPlayError("payment_not_found", "Payment does not exist");
+    if (payment.status === "verified") {
+      throw new OpenPlayError("payment_already_verified", "Cannot reject a verified payment");
+    }
+
+    const signup = await repo.findSignupById(payment.signupId, tx);
+    if (!signup) throw new OpenPlayError("signup_not_found", "Signup does not exist");
+    const sessionWithVenue = await repo.findSessionWithVenue(signup.sessionId, tx);
+    if (!sessionWithVenue) throw new OpenPlayError("session_not_found", "Session does not exist");
+    if (sessionWithVenue.venue.ownerId !== parsed.data.verifierId) {
+      throw new OpenPlayError("not_authorized", "Only the venue owner can reject payments");
+    }
+
+    const updatedPayment = await repo.updateSignupPayment(payment.id, payment.version, {
+      status: "rejected",
+      verifiedBy: parsed.data.verifierId,
+      verifiedAt: new Date(),
+      rejectionReason: parsed.data.reason,
+    }, tx);
+    if (!updatedPayment) {
+      throw new OpenPlayError("concurrent_modification", "Payment was modified by another request");
+    }
+
+    // Send the signup back to pending_payment so the player can re-upload.
+    await repo.updateSignup(signup.id, signup.version, {
+      status: "pending_payment",
+    }, tx);
+
+    return updatedPayment;
+  });
+}
+
+// ============================================================================
+// 10. Cron — T-2h reminder for confirmed signups
+// ============================================================================
+export async function sendOpenPlayReminders(): Promise<{ sent: number; expired: number }> {
+  // Expire stale pending_payment signups so reminders aren't sent to them.
+  const expired = await repo.expirePendingSignups();
+
+  const now = new Date();
+  const windowEnd = new Date(now.getTime() + 2.5 * 60 * 60_000);
+
+  // Pull confirmed signups joined with their session; filter the time window
+  // in JS — the volume per cron tick is bounded (a few sessions max).
+  const candidates = await db
+    .select({
+      signupId: openPlaySignups.id,
+      version: openPlaySignups.version,
+      startAt: openPlaySessions.startAt,
+      reminderSentAt: openPlaySignups.reminderSentAt,
+    })
+    .from(openPlaySignups)
+    .innerJoin(openPlaySessions, eq(openPlaySessions.id, openPlaySignups.sessionId))
+    .where(eq(openPlaySignups.status, "confirmed"));
+
+  const due = candidates.filter(
+    (r) =>
+      r.reminderSentAt === null &&
+      r.startAt.getTime() > now.getTime() &&
+      r.startAt.getTime() <= windowEnd.getTime(),
+  );
+
+  let sent = 0;
+  const { notifyOpenPlaySessionReminder } = await import("./notifications");
+  for (const c of due) {
+    const updated = await repo.updateSignup(c.signupId, c.version, {
+      reminderSentAt: new Date(),
+    });
+    if (updated) {
+      sent++;
+      await notifyOpenPlaySessionReminder(c.signupId);
+    }
+  }
+  return { sent, expired };
+}

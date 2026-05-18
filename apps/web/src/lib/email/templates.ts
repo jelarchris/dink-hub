@@ -737,3 +737,202 @@ export function sessionReminderEmail(ctx: BookingEmailContext & {
       `View booking: ${link}\n`,
   };
 }
+
+// ===========================================================================
+// Open Play templates
+// ===========================================================================
+
+export interface OpenPlayEmailContext {
+  sessionId: string;
+  signupId: string;
+  sessionTitle: string;
+  venueName: string;
+  courtName: string;
+  startAt: Date;
+  endAt: Date;
+  capacity: number;
+  pricePerPlayerCentavos: bigint;
+  totalCentavos: bigint;
+}
+
+function formatOpenPlayWindow(startAt: Date, endAt: Date): string {
+  return formatBookingWindow(startAt, endAt);
+}
+
+// ---------------------------------------------------------------------------
+// open_play_join_pending → player (just joined, needs to pay)
+// ---------------------------------------------------------------------------
+export function openPlayJoinPendingEmail(ctx: OpenPlayEmailContext & {
+  playerDisplayName: string;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/open-play/signups/${ctx.signupId}/pay`;
+
+  return {
+    subject: `You're on the list — upload your GCash receipt for ${ctx.sessionTitle}`,
+    html: shell({
+      heading: `Almost in — finish your payment`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, you've reserved a seat at <strong>${escapeHtml(ctx.sessionTitle)}</strong>. Upload your GCash receipt within 15 minutes to lock it in.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0;"><strong>Amount due:</strong> ${escapeHtml(total)}</p>
+        </div>
+        <p style="margin:0;">After the 15-minute window, your seat is released back to the pool.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "Upload receipt",
+    }),
+    text:
+      `Upload your GCash receipt\n\n` +
+      `You've reserved a seat at ${ctx.sessionTitle}.\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nAmount due: ${total}\n\n` +
+      `Pay here: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// open_play_join_confirmed → player (payment verified)
+// ---------------------------------------------------------------------------
+export function openPlayJoinConfirmedEmail(ctx: OpenPlayEmailContext & {
+  playerDisplayName: string;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/me/open-play`;
+
+  return {
+    subject: `Seat confirmed — ${ctx.sessionTitle} on ${when}`,
+    html: shell({
+      heading: `You're in 🏸`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, the venue verified your payment. Your seat at <strong>${escapeHtml(ctx.sessionTitle)}</strong> is locked in.</p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0;"><strong>Total paid:</strong> ${escapeHtml(total)}</p>
+        </div>
+        <p style="margin:0;">Show up 10 minutes early, bring water, and have a great game.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "View my open-play",
+    }),
+    text:
+      `Seat confirmed\n\n` +
+      `Your seat at ${ctx.sessionTitle} is locked in.\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal paid: ${total}\n\n` +
+      `View: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// open_play_signup_payment_submitted → owner (player uploaded receipt)
+// ---------------------------------------------------------------------------
+export function openPlaySignupPaymentSubmittedEmail(ctx: OpenPlayEmailContext & {
+  ownerDisplayName: string;
+  playerDisplayName: string;
+  gcashReferenceNumber?: string | null;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/owner/open-play/${ctx.sessionId}`;
+  const refLine = ctx.gcashReferenceNumber
+    ? `<p style="margin:0 0 6px 0;"><strong>GCash ref:</strong> ${escapeHtml(ctx.gcashReferenceNumber)}</p>`
+    : "";
+
+  return {
+    subject: `Open Play receipt to verify — ${ctx.sessionTitle}`,
+    html: shell({
+      heading: `Receipt awaiting verification`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.ownerDisplayName)}, ${escapeHtml(ctx.playerDisplayName)} just uploaded a receipt for <strong>${escapeHtml(ctx.sessionTitle)}</strong>.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Amount:</strong> ${escapeHtml(total)}</p>
+          ${refLine}
+        </div>
+        <p style="margin:0;">Confirm in the session dashboard once funds arrive.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "Open session",
+    }),
+    text:
+      `Open Play receipt to verify\n\n` +
+      `${ctx.playerDisplayName} uploaded a receipt for ${ctx.sessionTitle}.\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nAmount: ${total}\n` +
+      (ctx.gcashReferenceNumber ? `GCash ref: ${ctx.gcashReferenceNumber}\n` : "") +
+      `\nReview: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// open_play_cancelled_by_owner → player (owner cancelled the whole session)
+// ---------------------------------------------------------------------------
+export function openPlayCancelledByOwnerEmail(ctx: OpenPlayEmailContext & {
+  playerDisplayName: string;
+  reason: string;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const link = `${APP_URL}/open-play`;
+  return {
+    subject: `Open Play cancelled — ${ctx.sessionTitle}`,
+    html: shell({
+      heading: `Session cancelled`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, the venue cancelled <strong>${escapeHtml(ctx.sessionTitle)}</strong> on ${escapeHtml(when)}.</p>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 4px 0;"><strong>Reason given:</strong></p>
+          <p style="margin:0;color:#991b1b;">${escapeHtml(ctx.reason)}</p>
+        </div>
+        <p style="margin:0;">If you already paid, the venue will refund you directly via GCash.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "Find another session",
+    }),
+    text:
+      `Session cancelled\n\n` +
+      `The venue cancelled ${ctx.sessionTitle} on ${when}.\n` +
+      `Reason: ${ctx.reason}\n\n` +
+      `If you already paid, the venue will refund via GCash directly.\n\n` +
+      `Browse: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// open_play_session_reminder → player (T-2h)
+// ---------------------------------------------------------------------------
+export function openPlaySessionReminderEmail(ctx: OpenPlayEmailContext & {
+  playerDisplayName: string;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const link = `${APP_URL}/me/open-play`;
+  return {
+    subject: `Heads up — ${ctx.sessionTitle} starts in 2 hours`,
+    html: shell({
+      heading: `Open Play in 2 hours 🏸`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, your seat at <strong>${escapeHtml(ctx.sessionTitle)}</strong> kicks off soon.</p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+        </div>
+        <p style="margin:0;">Arrive 10 minutes early to warm up.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "View signup",
+    }),
+    text:
+      `Open Play in 2 hours\n\n` +
+      `Your seat at ${ctx.sessionTitle} is coming up.\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\n\n` +
+      `View: ${link}\n`,
+  };
+}
+

@@ -38,6 +38,32 @@ export const bookingStatusEnum = pgEnum("booking_status", [
   "no_show",
   "expired",
   "refunded",
+  // Shadow row that blocks the court while an open-play session is published.
+  // Always paired with bookings.open_play_session_id and a zero-money booking.
+  "open_play",
+]);
+
+export const openPlaySessionStatusEnum = pgEnum("open_play_session_status", [
+  "draft",
+  "published",
+  "cancelled",
+  "completed",
+]);
+
+export const openPlaySignupStatusEnum = pgEnum("open_play_signup_status", [
+  "pending_payment",
+  "payment_submitted",
+  "confirmed",
+  "cancelled",
+  "expired",
+  "refunded",
+]);
+
+export const skillLevelEnum = pgEnum("skill_level", [
+  "any",
+  "beginner",
+  "intermediate",
+  "advanced",
 ]);
 
 export const paymentStatusEnum = pgEnum("payment_status", [

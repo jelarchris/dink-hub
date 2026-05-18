@@ -4,6 +4,7 @@ export {
   MAX_RECEIPT_BYTES,
   uploadReceipt,
   uploadInvoiceReceipt,
+  uploadSignupReceipt,
   getReceiptSignedUrl,
   type ReceiptUploadError,
   type ReceiptUploadResult,

@@ -142,6 +142,23 @@ export default async function EditVenuePage({
         </div>
       )}
 
+      {activeCourts.length > 0 && (
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between">
+            <SectionLabel>Open Play</SectionLabel>
+            <Link
+              href={`/owner/venues/${venue.id}/open-play`}
+              className={buttonVariants({ size: "sm", variant: "outline" })}
+            >
+              Manage sessions
+            </Link>
+          </div>
+          <p className="text-xs text-[var(--color-fg-muted)]">
+            Host drop-in sessions where players sign up individually and pay their own share via GCash.
+          </p>
+        </div>
+      )}
+
       <div className="mt-5">
         <SectionLabel className="mb-2 block">Venue details</SectionLabel>
         <VenueForm action={updateVenueAction} mode="edit" initial={venue} />

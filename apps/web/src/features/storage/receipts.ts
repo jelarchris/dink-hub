@@ -95,6 +95,18 @@ export async function uploadInvoiceReceipt(args: {
 }
 
 /**
+ * Validates and uploads a player's GCash receipt for an open-play signup.
+ * Stored under an `open-play/` prefix so signed-URL policies can be reasoned
+ * about separately from bookings.
+ */
+export async function uploadSignupReceipt(args: {
+  signupId: string;
+  file: File;
+}): Promise<{ ok: true; data: ReceiptUploadResult } | { ok: false; error: ReceiptUploadError }> {
+  return uploadReceiptToPath(`open-play/${args.signupId}`, args.file);
+}
+
+/**
  * Returns a signed URL for an authorized viewer (venue owner / admin).
  * 5 minute TTL. Authorization MUST be checked by caller before invoking.
  */

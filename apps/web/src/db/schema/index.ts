@@ -19,9 +19,12 @@ import {
   genderEnum,
   ledgerAccountEnum,
   ledgerDirectionEnum,
+  openPlaySessionStatusEnum,
+  openPlaySignupStatusEnum,
   ownerInvoiceStatusEnum,
   paymentStatusEnum,
   payoutStatusEnum,
+  skillLevelEnum,
   userRoleEnum,
   venueStatusEnum,
   voucherDiscountTypeEnum,
@@ -205,6 +208,9 @@ export const bookings = pgTable("bookings", {
   discountCentavos: bigint("discount_centavos", { mode: "bigint" }).notNull().default(0n),
   // Per-booking notification email override. NULL = use profiles.email.
   contactEmail: text("contact_email"),
+  // Set when this row is a SHADOW booking that physically blocks a court for
+  // a published open-play session. NULL for ordinary player bookings.
+  openPlaySessionId: uuid("open_play_session_id"),
 });
 
 // ----------------------------------------------------------------------------
@@ -494,3 +500,88 @@ export type Voucher = typeof vouchers.$inferSelect;
 export type NewVoucher = typeof vouchers.$inferInsert;
 export type VoucherRedemption = typeof voucherRedemptions.$inferSelect;
 export type NewVoucherRedemption = typeof voucherRedemptions.$inferInsert;
+
+// ----------------------------------------------------------------------------
+// open_play_sessions — owner-published events on a court at a fixed time.
+// A "shadow" bookings row (status='open_play') is inserted alongside each
+// PUBLISHED session to physically block the court via the existing EXCLUDE.
+// ----------------------------------------------------------------------------
+export const openPlaySessions = pgTable("open_play_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  venueId: uuid("venue_id").notNull().references(() => venues.id),
+  courtId: uuid("court_id").notNull().references(() => courts.id),
+  hostProfileId: uuid("host_profile_id").notNull().references(() => profiles.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  skillLevel: skillLevelEnum("skill_level").notNull().default("any"),
+  capacity: smallint("capacity").notNull(),
+  pricePerPlayerCentavos: bigint("price_per_player_centavos", { mode: "bigint" }).notNull(),
+  systemFeePerPlayerCentavos: bigint("system_fee_per_player_centavos", { mode: "bigint" }).notNull(),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  endAt: timestamp("end_at", { withTimezone: true }).notNull(),
+  shadowBookingId: uuid("shadow_booking_id").references(() => bookings.id),
+  status: openPlaySessionStatusEnum("status").notNull().default("draft"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: uuid("cancelled_by").references(() => profiles.id),
+  cancellationReason: text("cancellation_reason"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+// ----------------------------------------------------------------------------
+// open_play_signups — one per player who joins a session.
+// Capacity is DB-enforced via the ops_check_capacity() trigger.
+// ----------------------------------------------------------------------------
+export const openPlaySignups = pgTable("open_play_signups", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: uuid("session_id").notNull().references(() => openPlaySessions.id),
+  playerId: uuid("player_id").notNull().references(() => profiles.id),
+  status: openPlaySignupStatusEnum("status").notNull().default("pending_payment"),
+  courtFeeCentavos: bigint("court_fee_centavos", { mode: "bigint" }).notNull(),
+  systemFeeCentavos: bigint("system_fee_centavos", { mode: "bigint" }).notNull(),
+  totalCentavos: bigint("total_centavos", { mode: "bigint" })
+    .notNull()
+    .generatedAlwaysAs(sql`court_fee_centavos + system_fee_centavos`),
+  contactEmail: text("contact_email"),
+  cancellableUntil: timestamp("cancellable_until", { withTimezone: true }).notNull(),
+  paymentDueAt: timestamp("payment_due_at", { withTimezone: true }).notNull(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: uuid("cancelled_by").references(() => profiles.id),
+  cancellationReason: text("cancellation_reason"),
+  reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ----------------------------------------------------------------------------
+// open_play_signup_payments — mirrors `payments` for signup receipts.
+// Kept isolated so the booking payment lifecycle is untouched.
+// ----------------------------------------------------------------------------
+export const openPlaySignupPayments = pgTable("open_play_signup_payments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  signupId: uuid("signup_id").notNull().unique().references(() => openPlaySignups.id),
+  receiptImagePath: text("receipt_image_path").notNull(),
+  receiptHash: text("receipt_hash").notNull(),
+  amountCentavos: bigint("amount_centavos", { mode: "bigint" }).notNull(),
+  gcashReferenceNumber: text("gcash_reference_number"),
+  status: paymentStatusEnum("status").notNull().default("submitted"),
+  submittedBy: uuid("submitted_by").notNull().references(() => profiles.id),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  verifiedBy: uuid("verified_by").references(() => profiles.id),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type OpenPlaySession = typeof openPlaySessions.$inferSelect;
+export type NewOpenPlaySession = typeof openPlaySessions.$inferInsert;
+export type OpenPlaySignup = typeof openPlaySignups.$inferSelect;
+export type NewOpenPlaySignup = typeof openPlaySignups.$inferInsert;
+export type OpenPlaySignupPayment = typeof openPlaySignupPayments.$inferSelect;
+export type NewOpenPlaySignupPayment = typeof openPlaySignupPayments.$inferInsert;
