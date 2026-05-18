@@ -34,6 +34,7 @@ export {
 } from "./service";
 export {
   countActiveSignups,
+  expirePendingSignups,
   findSessionById,
   findSessionWithVenue,
   findSignupById,

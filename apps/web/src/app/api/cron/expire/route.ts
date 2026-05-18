@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { captureException } from "@/lib/observability";
 import { expireUnpaidBookings, releaseExpiredHolds } from "@/features/booking/service";
+import { expirePendingSignups } from "@/features/open-play";
 
 /**
  * Cron route — runs every minute via Vercel Cron (see vercel.json).
@@ -34,15 +35,17 @@ export async function GET(req: Request) {
 
   const startedAt = Date.now();
   try {
-    const [holds, bookings] = await Promise.all([
+    const [holds, bookings, openPlaySignups] = await Promise.all([
       releaseExpiredHolds(),
       expireUnpaidBookings(),
+      expirePendingSignups(),
     ]);
     return NextResponse.json({
       ok: true,
       durationMs: Date.now() - startedAt,
       holds,
       bookings,
+      openPlaySignups,
     });
   } catch (err) {
     captureException(err, { scope: "cron.expire" });

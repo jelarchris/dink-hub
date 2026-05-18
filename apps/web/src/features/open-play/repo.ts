@@ -29,6 +29,17 @@ import {
  * service layer. Optional `exec` parameter lets callers compose inside a tx.
  */
 
+/**
+ * SQL fragment that identifies signups currently occupying a slot.
+ *
+ * A signup occupies a slot when it is NOT cancelled / expired AND, if it is
+ * still `pending_payment`, its 15-min payment window has not yet lapsed.
+ * Filtering on `payment_due_at` here means the displayed `activeSignupCount`
+ * is always correct, even if the every-minute cron hasn't run yet to flip the
+ * row to `expired` in the DB. Defence in depth alongside `expirePendingSignups`.
+ */
+const activeSignupWhere = sql`${openPlaySignups.status} not in ('cancelled', 'expired') and not (${openPlaySignups.status} = 'pending_payment' and ${openPlaySignups.paymentDueAt} <= now())`;
+
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // ----------------------------------------------------------------------------
@@ -213,7 +224,7 @@ export async function listPublishedSessions(
           sessionIds.map((id) => sql`${id}::uuid`),
           sql`, `,
         )})`,
-        sql`${openPlaySignups.status} not in ('cancelled', 'expired')`,
+        activeSignupWhere,
       ),
     )
     .groupBy(openPlaySignups.sessionId);
@@ -297,7 +308,7 @@ export async function listSessionsByVenue(
           sessionIds.map((id) => sql`${id}::uuid`),
           sql`, `,
         )})`,
-        sql`${openPlaySignups.status} not in ('cancelled', 'expired')`,
+        activeSignupWhere,
       ),
     )
     .groupBy(openPlaySignups.sessionId);
@@ -350,7 +361,7 @@ export async function listSessionsByOwner(
           sessionIds.map((id) => sql`${id}::uuid`),
           sql`, `,
         )})`,
-        sql`${openPlaySignups.status} not in ('cancelled', 'expired')`,
+        activeSignupWhere,
       ),
     )
     .groupBy(openPlaySignups.sessionId);
@@ -401,7 +412,7 @@ export async function countActiveSignups(
     .where(
       and(
         eq(openPlaySignups.sessionId, sessionId),
-        sql`${openPlaySignups.status} not in ('cancelled', 'expired')`,
+        activeSignupWhere,
       ),
     );
   return Number(rows[0]?.c ?? 0);
