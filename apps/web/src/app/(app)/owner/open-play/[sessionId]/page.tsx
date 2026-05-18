@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Calendar, MapPin, Trophy, Users } from "lucide-react";
+import { Calendar, ExternalLink, MapPin, Trophy, Users } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CopyButton } from "@/components/ui/copy-button";
+import { buttonVariants } from "@/components/ui/button";
 import { PageHeader, SectionLabel } from "@/components/ui/page-header";
+import { cn } from "@/lib/cn";
 import { formatDateTimeManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
 import {
@@ -171,13 +174,30 @@ export default async function OwnerOpenPlaySessionPage({
                 <CardTitle className="text-base">Share</CardTitle>
                 <CardDescription>Send this link to invite players directly.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Link
-                  href={`/open-play/${session.id}`}
-                  className="inline-flex text-sm text-[var(--color-brand-700)] hover:underline"
-                >
-                  /open-play/{session.id.slice(0, 8)}…
-                </Link>
+              <CardContent className="space-y-2">
+                {(() => {
+                  const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
+                  const path = `/open-play/${session.id}`;
+                  const fullUrl = `${base}${path}`;
+                  return (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <code className="min-w-0 flex-1 truncate rounded-[var(--radius-sm)] border border-[var(--color-border-default)] bg-[var(--color-bg-subtle)] px-2 py-1.5 font-mono text-xs text-[var(--color-fg)]">
+                          {fullUrl || path}
+                        </code>
+                        <CopyButton value={fullUrl || path} label="share link" size="sm" />
+                      </div>
+                      <Link
+                        href={path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full")}
+                      >
+                        <ExternalLink className="size-3.5" /> Preview public page
+                      </Link>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}

@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { cancelSignupAction } from "@/features/open-play/actions";
 import type { ActionResult } from "@/features/auth";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ export function CancelSignupButton({ signupId }: { signupId: string }) {
 
   useEffect(() => {
     if (state?.ok) {
+      toast.success("Signup cancelled.");
       startTransition(() => router.refresh());
     }
   }, [state, router]);

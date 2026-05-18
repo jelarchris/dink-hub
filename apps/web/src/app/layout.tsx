@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { RecoveryHashRedirect } from "@/components/recovery-hash-redirect";
 import { PostHogProvider } from "@/components/posthog-provider";
@@ -49,6 +50,12 @@ export default function RootLayout({
         />
         <RecoveryHashRedirect />
         <PostHogProvider>{children}</PostHogProvider>
+        <Toaster
+          position="top-center"
+          richColors
+          closeButton
+          toastOptions={{ duration: 3500 }}
+        />
       </body>
     </html>
   );

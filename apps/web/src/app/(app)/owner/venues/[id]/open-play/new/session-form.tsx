@@ -187,7 +187,12 @@ export function SessionForm({ venueId, courts }: SessionFormProps) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id="startAt" label="Start (venue local time)" error={err("startAt")}>
+        <FormField
+          id="startAt"
+          label="Start (venue local time)"
+          hint="Asia/Manila time — what players will see on the listing."
+          error={err("startAt")}
+        >
           {({ id, describedBy, invalid }) => (
             <Input
               id={id}

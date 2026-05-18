@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-05-18 (later 3)
+
+### Polish — Open Play feedback & share UX
+
+- Added `sonner` toast notifications for the four owner/player open-play actions that previously refreshed the page silently: publish session, cancel session, verify payment, reject payment, and cancel signup. Each emits a one-line success toast (top-center, 3.5s, rich colors) so users get explicit confirmation that the server action landed.
+- `<Toaster />` mounted once in the root layout — single instance covers the whole app.
+- Owner session detail share card overhauled: instead of a small inline link, the published-session card now shows the full URL in a monospace code box with a `CopyButton`, plus a full-width "Preview public page" outline button (`buttonVariants`) that opens the listing in a new tab. Pattern matches the GCash-number block on the open-play pay page.
+- Session creation form gains a helper hint on the **Start** field — "Asia/Manila time — what players will see on the listing." — to prevent the timezone confusion that bit us when browser-local differs from venue-local.
+- Files (modified):
+  - `apps/web/src/app/layout.tsx` (mount `<Toaster />`)
+  - `apps/web/src/app/(app)/owner/open-play/[sessionId]/owner-actions.tsx` (toasts on 4 actions)
+  - `apps/web/src/app/(app)/owner/open-play/[sessionId]/page.tsx` (share card redesign)
+  - `apps/web/src/app/(app)/me/open-play/cancel-signup-button.tsx` (toast on cancel)
+  - `apps/web/src/app/(app)/owner/venues/[id]/open-play/new/session-form.tsx` (Manila hint)
+- Dependencies: added `sonner@2.0.7` to `apps/web` (~5KB, shadcn-recommended toast primitive).
+
 ## 2026-05-18 (later 2)
 
 ### Removed — Launch promo (replaced by vouchers)

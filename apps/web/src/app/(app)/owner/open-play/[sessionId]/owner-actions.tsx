@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Send, X } from "lucide-react";
+import { toast } from "sonner";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -22,7 +23,10 @@ export function PublishButton({ sessionId }: { sessionId: string }) {
   const [state, action] = useActionState<ActionResult | null, FormData>(
     async (prev, form) => {
       const res = await publishSessionAction(prev, form);
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        toast.success("Session published — players can now join.");
+        router.refresh();
+      }
       return res;
     },
     null,
@@ -47,6 +51,7 @@ export function CancelSessionButton({ sessionId }: { sessionId: string }) {
       const res = await cancelSessionAction(prev, form);
       if (res.ok) {
         setOpen(false);
+        toast.success("Session cancelled — players have been notified.");
         router.refresh();
       }
       return res;
@@ -96,7 +101,10 @@ export function VerifyPaymentButton({ paymentId }: { paymentId: string }) {
   const [state, action] = useActionState<ActionResult | null, FormData>(
     async (prev, form) => {
       const res = await verifySignupPaymentAction(prev, form);
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        toast.success("Payment verified — signup confirmed.");
+        router.refresh();
+      }
       return res;
     },
     null,
@@ -119,6 +127,7 @@ export function RejectPaymentButton({ paymentId }: { paymentId: string }) {
       const res = await rejectSignupPaymentAction(prev, form);
       if (res.ok) {
         setOpen(false);
+        toast.success("Payment rejected — player notified to resubmit.");
         router.refresh();
       }
       return res;
