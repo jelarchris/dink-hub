@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-05-18 (later 5)
+
+### Feature — "Enable location" prompt + distance sort on /venues and /open-play
+
+- Slim inline pill on both `/venues` and `/open-play` invites the user to share their location and re-sorts results by distance. Designed to be small (single line on desktop, wraps on mobile), so it never pushes the grid below the fold.
+- Two visual states:
+  - **Idle:** rounded-full pill with brand-gradient background, MapPin badge, headline ("See courts/sessions nearest you"), inline Enable button + dismiss `×`. Errors (permission denied / timeout / generic) replace the headline in red and the button becomes "Retry".
+  - **Active:** compact brand-tinted pill ("Sorted by distance from you") with a Clear link that strips `?lat&lng` from the URL.
+- Distance computed with the haversine formula in JS (no PostGIS yet — fine at launch-market scale). When `near` is supplied, repos widen the DB fetch to a larger pool (up to 100–200 rows), compute distance for every row, sort ascending with nulls last, then slice back to the user-visible limit.
+- Per-card distance pill (`850 m` / `2.3 km` / `14 km`) appears next to the city on each result card so the "Sorted by distance" claim is visually concrete.
+- URL is the source of truth (`?lat=&lng=`) so the lens is shareable / bookmarkable / preserved across other filter changes (city, sort, query).
+- Coordinates cached in `sessionStorage` for 1h so enabling on `/venues` carries over to `/open-play` automatically (no second permission prompt needed within the same browser session).
+- Dismissal persisted in `localStorage` per-scope (`dinkhub-location-prompt:venues:dismissed` / `:open-play:dismissed`) so a user who hides the prompt on one surface still sees it on the other.
+- Validation: ignores out-of-range lat/lng (lat ∉ [-90,90] or lng ∉ [-180,180]); silently drops malformed URLs rather than 500-ing.
+- A11y: respects `prefers-reduced-motion` (no animation added); buttons have accessible labels; `aria-live="polite"` on the error message; geolocation requested with `enableHighAccuracy: false`, 8s timeout, 5-min stale OK.
+- Files:
+  - `apps/web/src/lib/distance.ts` (new — `haversineKm`, `formatDistanceKm`)
+  - `apps/web/src/components/location-prompt.tsx` (new client island)
+  - `apps/web/src/features/venues/repo.ts` (added `near` option + `distanceKm` field)
+  - `apps/web/src/features/open-play/repo.ts` (added `near` option + `distanceKm` field on `SessionListItem`)
+  - `apps/web/src/app/(app)/venues/page.tsx` (parse + pass `near`, mount prompt, show distance on cards, preserve `lat/lng` across filter nav)
+  - `apps/web/src/app/(app)/open-play/page.tsx` (parse + pass `near`, mount prompt, show distance on cards)
+- Verified: `pnpm --filter web typecheck` ✓, `pnpm --filter web lint` ✓.
+
 ## 2026-05-18 (later 4)
 
 ### Feature — Animated launch announcement modal

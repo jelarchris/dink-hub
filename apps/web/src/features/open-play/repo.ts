@@ -1,6 +1,7 @@
 import "server-only";
 import { and, count, desc, eq, gt, gte, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/db/client";
+import { haversineKm } from "@/lib/distance";
 import {
   bookings,
   courtClosures,
@@ -154,17 +155,23 @@ export interface SessionListItem {
   venue: Pick<Venue, "id" | "name" | "slug" | "city" | "province" | "coverImageUrl">;
   court: Pick<Court, "id" | "name">;
   activeSignupCount: number;
+  /** Kilometres from the requested origin (when `near` is supplied). */
+  distanceKm: number | null;
 }
 
 /**
  * Public list — upcoming PUBLISHED sessions, ordered by start time.
+ * When `near` is supplied, results are re-sorted by ascending distance from
+ * that origin (sessions with no venue coords sink to the bottom).
  */
 export async function listPublishedSessions(
-  args: { fromAt?: Date; limit?: number } = {},
+  args: { fromAt?: Date; limit?: number; near?: { lat: number; lng: number } } = {},
   exec: Executor = db,
 ): Promise<SessionListItem[]> {
   const from = args.fromAt ?? new Date();
   const limit = Math.min(args.limit ?? 50, 100);
+  // Distance sort happens in JS; widen the DB fetch so the top-N stays stable.
+  const dbLimit = args.near ? Math.min(Math.max(limit, 100), 200) : limit;
 
   const rows = await exec
     .select({
@@ -176,6 +183,8 @@ export async function listPublishedSessions(
         city: venues.city,
         province: venues.province,
         coverImageUrl: venues.coverImageUrl,
+        latitude: venues.latitude,
+        longitude: venues.longitude,
       },
       court: { id: courts.id, name: courts.name },
     })
@@ -190,7 +199,7 @@ export async function listPublishedSessions(
       ),
     )
     .orderBy(openPlaySessions.startAt)
-    .limit(limit);
+    .limit(dbLimit);
 
   if (rows.length === 0) return [];
 
@@ -210,12 +219,40 @@ export async function listPublishedSessions(
     .groupBy(openPlaySignups.sessionId);
   const countMap = new Map(counts.map((c) => [c.sessionId, Number(c.c)]));
 
-  return rows.map((r) => ({
-    session: r.session,
-    venue: r.venue,
-    court: r.court,
-    activeSignupCount: countMap.get(r.session.id) ?? 0,
-  }));
+  const items: SessionListItem[] = rows.map((r) => {
+    const lat = r.venue.latitude !== null ? Number(r.venue.latitude) : null;
+    const lng = r.venue.longitude !== null ? Number(r.venue.longitude) : null;
+    const distanceKm =
+      args.near && lat !== null && lng !== null
+        ? haversineKm(args.near.lat, args.near.lng, lat, lng)
+        : null;
+    return {
+      session: r.session,
+      venue: {
+        id: r.venue.id,
+        name: r.venue.name,
+        slug: r.venue.slug,
+        city: r.venue.city,
+        province: r.venue.province,
+        coverImageUrl: r.venue.coverImageUrl,
+      },
+      court: r.court,
+      activeSignupCount: countMap.get(r.session.id) ?? 0,
+      distanceKm,
+    };
+  });
+
+  if (args.near) {
+    items.sort((a, b) => {
+      if (a.distanceKm === null && b.distanceKm === null) return 0;
+      if (a.distanceKm === null) return 1;
+      if (b.distanceKm === null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
+    return items.slice(0, limit);
+  }
+
+  return items;
 }
 
 /**
@@ -271,6 +308,7 @@ export async function listSessionsByVenue(
     venue: r.venue,
     court: r.court,
     activeSignupCount: countMap.get(r.session.id) ?? 0,
+    distanceKm: null,
   }));
 }
 
@@ -323,6 +361,7 @@ export async function listSessionsByOwner(
     venue: r.venue,
     court: r.court,
     activeSignupCount: countMap.get(r.session.id) ?? 0,
+    distanceKm: null,
   }));
 }
 

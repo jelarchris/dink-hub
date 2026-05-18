@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
+import { LocationPrompt } from "@/components/location-prompt";
 import { formatDateTimeManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
+import { formatDistanceKm } from "@/lib/distance";
 import { listPublishedSessions, type SessionListItem } from "@/features/open-play";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +26,32 @@ const skillLabel: Record<string, string> = {
   advanced: "Advanced",
 };
 
-export default function PublicOpenPlayPage() {
+function pickString(v: string | string[] | undefined): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+function parseNear(
+  sp: Record<string, string | string[] | undefined>,
+): { lat: number; lng: number } | null {
+  const latStr = pickString(sp.lat);
+  const lngStr = pickString(sp.lng);
+  if (!latStr || !lngStr) return null;
+  const lat = Number(latStr);
+  const lng = Number(lngStr);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function PublicOpenPlayPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const near = parseNear(sp);
+
   return (
     <Container className="max-w-6xl py-3 sm:py-4">
       <PageHeader
@@ -33,15 +60,17 @@ export default function PublicOpenPlayPage() {
         subtitle="Browse upcoming Open Play sessions hosted by venues. Pay in GCash and you're in."
       />
 
+      <LocationPrompt scope="open-play" active={near !== null} />
+
       <Suspense fallback={<SessionsSkeleton />}>
-        <SessionsList />
+        <SessionsList near={near} />
       </Suspense>
     </Container>
   );
 }
 
-async function SessionsList() {
-  const sessions = await listPublishedSessions({});
+async function SessionsList({ near }: { near: { lat: number; lng: number } | null }) {
+  const sessions = await listPublishedSessions(near ? { near } : {});
 
   if (sessions.length === 0) {
     return (
@@ -71,7 +100,7 @@ async function SessionsList() {
 }
 
 function SessionCard({ item }: { item: SessionListItem }) {
-  const { session, venue, court, activeSignupCount } = item;
+  const { session, venue, court, activeSignupCount, distanceKm } = item;
   const pct = Math.min(100, Math.round((activeSignupCount / session.capacity) * 100));
   const spotsLeft = Math.max(0, session.capacity - activeSignupCount);
   const totalPrice = session.pricePerPlayerCentavos + session.systemFeePerPlayerCentavos;
@@ -87,9 +116,16 @@ function SessionCard({ item }: { item: SessionListItem }) {
             <h3 className="truncate text-base font-semibold group-hover:text-[var(--color-brand-700)]">
               {session.title}
             </h3>
-            <p className="mt-0.5 truncate text-xs text-[var(--color-fg-muted)]">
-              <MapPin className="-mt-0.5 mr-0.5 inline size-3" />
-              {venue.name} · {venue.city}
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-[var(--color-fg-muted)]">
+              <span className="inline-flex min-w-0 items-center">
+                <MapPin className="-mt-0.5 mr-0.5 inline size-3" />
+                <span className="truncate">{venue.name} · {venue.city}</span>
+              </span>
+              {distanceKm !== null && (
+                <span className="shrink-0 rounded-full bg-[var(--color-brand-50)] px-1.5 py-px text-[10px] font-semibold text-[var(--color-brand-700)]">
+                  {formatDistanceKm(distanceKm)}
+                </span>
+              )}
             </p>
           </div>
           <Badge variant={spotsLeft === 0 ? "danger" : "success"}>

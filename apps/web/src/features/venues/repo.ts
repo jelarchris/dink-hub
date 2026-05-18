@@ -3,6 +3,7 @@ import { and, asc, desc, eq, ilike, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { courts, reviews, venues, type Court, type Venue } from "@/db/schema";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
+import { haversineKm } from "@/lib/distance";
 import { type AvailabilityFilter } from "./availability";
 
 export type VenueSort = "name" | "price_asc" | "rating_desc";
@@ -28,6 +29,8 @@ export interface VenueListItem {
   minHourlyRateCentavos: bigint | null;
   avgRating: number | null;
   reviewCount: number;
+  /** Kilometres from the requested origin (when `near` is supplied). */
+  distanceKm: number | null;
 }
 
 export interface ListActiveVenuesOptions {
@@ -37,8 +40,11 @@ export interface ListActiveVenuesOptions {
   query?: string;
   /** Exact city match. */
   city?: string;
-  /** Default: name asc. */
+  /** Default: name asc. Overridden by `near` when supplied. */
   sort?: VenueSort;
+  /** Origin point. When set, results are sorted by ascending distance and
+   *  every item carries a `distanceKm`. Venues with no lat/lng sink to the end. */
+  near?: { lat: number; lng: number };
 }
 
 export async function listActiveVenues(opts: ListActiveVenuesOptions): Promise<VenueListItem[]> {
@@ -93,6 +99,8 @@ export async function listActiveVenues(opts: ListActiveVenuesOptions): Promise<V
       coverImageUrl: venues.coverImageUrl,
       coverImagePath: venues.coverImagePath,
       description: venues.description,
+      latitude: venues.latitude,
+      longitude: venues.longitude,
       courtCount: sql<number>`count(${courts.id})::int`,
       minHourlyRateCentavos: sql<string | null>`min(${courts.hourlyRateCentavos})::text`,
       avgRating: ratingAgg,
@@ -106,25 +114,51 @@ export async function listActiveVenues(opts: ListActiveVenuesOptions): Promise<V
     .where(and(...wheres))
     .groupBy(venues.id)
     .orderBy(...orderBy)
-    .limit(opts.limit)
+    // When sorting by distance we re-sort in JS; fetch a wider pool to keep
+    // the top-N stable. Negligible cost at launch-market scale.
+    .limit(opts.near ? Math.max(opts.limit, 100) : opts.limit)
     .offset(opts.offset ?? 0);
 
-  return rows.map((r) => ({
-    venue: {
-      id: r.id,
-      name: r.name,
-      slug: r.slug,
-      city: r.city,
-      province: r.province,
-      addressLine: r.addressLine,
-      coverImageUrl: venueMediaPublicUrl(r.coverImagePath) ?? r.coverImageUrl,
-      description: r.description,
-    },
-    courtCount: r.courtCount,
-    minHourlyRateCentavos: r.minHourlyRateCentavos !== null ? BigInt(r.minHourlyRateCentavos) : null,
-    avgRating: r.avgRating !== null ? Number(r.avgRating) : null,
-    reviewCount: r.reviewCount,
-  }));
+  const mapped: VenueListItem[] = rows.map((r) => {
+    const lat = r.latitude !== null ? Number(r.latitude) : null;
+    const lng = r.longitude !== null ? Number(r.longitude) : null;
+    const distanceKm =
+      opts.near && lat !== null && lng !== null
+        ? haversineKm(opts.near.lat, opts.near.lng, lat, lng)
+        : null;
+    return {
+      venue: {
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        city: r.city,
+        province: r.province,
+        addressLine: r.addressLine,
+        coverImageUrl: venueMediaPublicUrl(r.coverImagePath) ?? r.coverImageUrl,
+        description: r.description,
+      },
+      courtCount: r.courtCount,
+      minHourlyRateCentavos:
+        r.minHourlyRateCentavos !== null ? BigInt(r.minHourlyRateCentavos) : null,
+      avgRating: r.avgRating !== null ? Number(r.avgRating) : null,
+      reviewCount: r.reviewCount,
+      distanceKm,
+    };
+  });
+
+  if (opts.near) {
+    // Distance ordering overrides whichever `sort` was passed.
+    // Null distances (venue missing coords) sink to the bottom.
+    mapped.sort((a, b) => {
+      if (a.distanceKm === null && b.distanceKm === null) return 0;
+      if (a.distanceKm === null) return 1;
+      if (b.distanceKm === null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
+    return mapped.slice(0, opts.limit);
+  }
+
+  return mapped;
 }
 
 export interface CityOption {

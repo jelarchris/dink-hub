@@ -4,6 +4,7 @@ import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { StarRating } from "@/components/ui/star-rating";
+import { LocationPrompt } from "@/components/location-prompt";
 import {
   getVenueAvailabilityMap,
   listActiveVenueCities,
@@ -20,6 +21,7 @@ import {
   type TimeOfDay,
 } from "@/features/venues/availability";
 import { formatPHP } from "@/lib/money";
+import { formatDistanceKm } from "@/lib/distance";
 import { cn } from "@/lib/cn";
 import { AvailabilityFilterBar } from "./availability-filter";
 
@@ -50,6 +52,9 @@ interface FilterState {
   sh?: string | undefined;
   eh?: string | undefined;
   dur?: string | undefined;
+  // Location (preserved so changing city/sort doesn't drop the "near me" lens)
+  lat?: string | undefined;
+  lng?: string | undefined;
 }
 
 function buildQuery(current: FilterState, patch: FilterState): string {
@@ -62,8 +67,25 @@ function buildQuery(current: FilterState, patch: FilterState): string {
   if (next.sh) params.set("sh", next.sh);
   if (next.eh) params.set("eh", next.eh);
   if (next.dur) params.set("dur", next.dur);
+  if (next.lat) params.set("lat", next.lat);
+  if (next.lng) params.set("lng", next.lng);
   const qs = params.toString();
   return qs ? `/venues?${qs}` : "/venues";
+}
+
+/** Parse `?lat=&lng=` into a validated origin (or null). Silently rejects
+ *  out-of-range numbers — a bad URL shouldn't break the page. */
+function parseNear(
+  sp: Record<string, string | string[] | undefined>,
+): { lat: number; lng: number } | null {
+  const latStr = pickString(sp.lat);
+  const lngStr = pickString(sp.lng);
+  if (!latStr || !lngStr) return null;
+  const lat = Number(latStr);
+  const lng = Number(lngStr);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
 }
 
 /** Validates and parses availability URL params. Returns null if absent or invalid.
@@ -114,6 +136,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
   const sort: VenueSort =
     sortRaw === "price_asc" || sortRaw === "rating_desc" ? sortRaw : "name";
   const availability = resolveAvailabilityFilter(sp);
+  const near = parseNear(sp);
 
   // Compute today in Manila timezone server-side to avoid hydration mismatch
   // in the client AvailabilityFilterBar component.
@@ -125,6 +148,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
       ...(q ? { query: q } : {}),
       ...(city ? { city } : {}),
       sort,
+      ...(near ? { near } : {}),
     }),
     listActiveVenueCities(),
   ]);
@@ -149,6 +173,9 @@ export default async function VenuesPage({ searchParams }: PageProps) {
           eh: String(availability.endH),
           dur: String(availability.durationMin),
         }
+      : {}),
+    ...(near
+      ? { lat: near.lat.toFixed(6), lng: near.lng.toFixed(6) }
       : {}),
   };
   const hasActiveFilter =
@@ -263,6 +290,8 @@ export default async function VenuesPage({ searchParams }: PageProps) {
             : {})}
         />
 
+        <LocationPrompt scope="venues" active={near !== null} />
+
         {venueList.length === 0 ? (
           <EmptyState
             icon={hasActiveFilter ? <Search /> : <Trophy />}
@@ -369,6 +398,11 @@ export default async function VenuesPage({ searchParams }: PageProps) {
                         <span className="truncate">
                           {v.venue.city}, {v.venue.province}
                         </span>
+                        {v.distanceKm !== null && (
+                          <span className="shrink-0 rounded-full bg-[var(--color-brand-50)] px-1.5 py-px text-[10px] font-semibold text-[var(--color-brand-700)]">
+                            {formatDistanceKm(v.distanceKm)}
+                          </span>
+                        )}
                       </span>
                       {v.reviewCount > 0 && v.avgRating !== null && (
                         <span className="inline-flex shrink-0 items-center gap-1">
