@@ -58,7 +58,13 @@ function unwrap(err: unknown): ActionResult<never> {
     return { ok: false, code: err.code, message: err.message };
   }
   captureException(err, { scope: "open-play.action" });
-  return fail("Something went wrong. Please try again.");
+  console.error("[open-play.action] unhandled error:", err);
+  // Surface the real cause so we can diagnose unexpected failures
+  // (DB constraint violations, RLS denials, network errors, etc.) instead of
+  // the opaque "Something went wrong" message. Owner-only actions — safe to show.
+  const detail =
+    err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return fail(`Something went wrong: ${detail}`);
 }
 
 function dateFromForm(value: FormDataEntryValue | null): Date | null {
