@@ -19,7 +19,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 
 import { listActiveVenues, getMarketplaceStats } from "@/features/venues";
+import { listPublishedSessions, type SessionListItem } from "@/features/open-play";
 import { formatPHP } from "@/lib/money";
+import { formatDateTimeManila } from "@/lib/date";
 import { getSessionUser } from "@/server/session";
 
 // Counters and venue snapshot are dynamic — re-render every request so the
@@ -27,10 +29,11 @@ import { getSessionUser } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [user, stats, venues] = await Promise.all([
+  const [user, stats, venues, openPlaySessions] = await Promise.all([
     getSessionUser(),
     getMarketplaceStats(),
     listActiveVenues({ limit: 6 }),
+    listPublishedSessions({ limit: 3 }),
   ]);
 
   // Logged-in users land on their role-specific dashboard.
@@ -43,6 +46,7 @@ export default async function HomePage() {
       <Hero />
       <StatsBar stats={stats} />
       <FeaturedVenues venues={venues} />
+      <OpenPlayLiveSection sessions={openPlaySessions} />
       <HowItWorks />
       <ForOwnersBand />
       <Features />
@@ -295,6 +299,111 @@ function VenueCard({ item }: { item: FeaturedVenue }) {
 }
 
 // ---------------------------------------------------------------------------
+// Open Play (live)
+// ---------------------------------------------------------------------------
+
+function OpenPlayLiveSection({ sessions }: { sessions: SessionListItem[] }) {
+  return (
+    <section
+      className="border-t border-[var(--color-border-default)] bg-[var(--color-bg)] px-4 py-12 sm:px-6 lg:px-8 lg:py-16"
+      aria-labelledby="openplay-heading"
+    >
+      <Container>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <Badge variant="success" className="mb-3">
+              <Zap aria-hidden="true" className="size-3" />
+              Now live
+            </Badge>
+            <h2
+              id="openplay-heading"
+              className="text-balance text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl"
+            >
+              Drop in to Open Play
+            </h2>
+            <p className="mt-2 text-pretty text-sm text-[var(--color-fg-muted)] sm:text-base">
+              No group needed. Browse scheduled sessions, pay via GCash, and show
+              up to play with other locals.
+            </p>
+          </div>
+          <Link
+            href="/open-play"
+            className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}
+          >
+            Browse all sessions
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+
+        {sessions.length === 0 ? (
+          <div className="mt-8 rounded-[var(--radius-xl)] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-bg-subtle)] p-8 text-center">
+            <Users className="mx-auto mb-2 size-8 text-[var(--color-fg-subtle)]" aria-hidden="true" />
+            <p className="font-medium text-[var(--color-fg-muted)]">
+              No upcoming sessions just yet
+            </p>
+            <p className="mt-1 text-sm text-[var(--color-fg-subtle)]">
+              Check back soon — venues post new sessions every week.
+            </p>
+          </div>
+        ) : (
+          <ul role="list" className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {sessions.map((item) => (
+              <OpenPlayPreviewCard key={item.session.id} item={item} />
+            ))}
+          </ul>
+        )}
+      </Container>
+    </section>
+  );
+}
+
+function OpenPlayPreviewCard({ item }: { item: SessionListItem }) {
+  const { session, venue, court, activeSignupCount } = item;
+  const spotsLeft = Math.max(0, session.capacity - activeSignupCount);
+  const total = session.pricePerPlayerCentavos + session.systemFeePerPlayerCentavos;
+
+  return (
+    <li>
+      <Link
+        href={`/open-play/${session.id}`}
+        className="group flex h-full flex-col rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4 transition hover:border-[var(--color-brand-500)] hover:shadow-[var(--shadow-md)]"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-semibold group-hover:text-[var(--color-brand-700)]">
+              {session.title}
+            </h3>
+            <p className="mt-0.5 truncate text-xs text-[var(--color-fg-muted)]">
+              <MapPin aria-hidden="true" className="-mt-0.5 mr-0.5 inline size-3" />
+              {venue.name} · {venue.city}
+            </p>
+          </div>
+          <Badge variant={spotsLeft === 0 ? "danger" : "success"}>
+            {spotsLeft === 0 ? "Full" : `${spotsLeft} left`}
+          </Badge>
+        </div>
+        <dl className="mt-3 space-y-1 text-xs text-[var(--color-fg-muted)]">
+          <div className="flex items-center gap-1.5">
+            <Calendar aria-hidden="true" className="size-3.5" />
+            <dt className="sr-only">When</dt>
+            <dd>{formatDateTimeManila(session.startAt)}</dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Users aria-hidden="true" className="size-3.5" />
+            <dt className="sr-only">Court</dt>
+            <dd>{court.name}</dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-sm font-semibold text-[var(--color-fg)]">
+          {formatPHP(total)}
+          <span className="ml-1 text-xs font-normal text-[var(--color-fg-muted)]">/ player</span>
+        </p>
+      </Link>
+    </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // How it works
 // ---------------------------------------------------------------------------
 
@@ -442,13 +551,8 @@ function OpenPlayTeaser() {
 
         <ul
           role="list"
-          className="mx-auto mt-8 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          className="mx-auto mt-8 grid max-w-3xl gap-4 sm:grid-cols-2"
         >
-          <RoadmapCard
-            icon={<Users />}
-            title="Open Play"
-            description="Drop in to scheduled sessions at your local court. No group needed — just show up and meet other players."
-          />
           <RoadmapCard
             icon={<Zap />}
             title="Game Management"

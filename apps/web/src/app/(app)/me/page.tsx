@@ -10,6 +10,7 @@ import {
   Search,
   Star,
   Trophy,
+  Users,
   Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -220,6 +221,13 @@ function QuickActionsSection({ recentVenueSlug }: { recentVenueSlug: string | nu
       sub: "Browse all venues",
       href: "/venues",
       color: "text-[var(--color-brand-600)] bg-[var(--color-brand-100)]",
+    },
+    {
+      icon: Users,
+      label: "Open Play",
+      sub: "Drop-in sessions",
+      href: "/open-play",
+      color: "text-violet-600 bg-violet-100",
     },
     {
       icon: CalendarDays,
