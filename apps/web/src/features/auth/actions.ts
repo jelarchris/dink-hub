@@ -45,7 +45,7 @@ function s(form: FormData, key: string): string {
  * limiter by stripping forwarding headers — they would all share the same
  * bucket.
  */
-async function preflightAuthGate(_form: FormData): Promise<ActionResult<never> | null> {
+async function preflightAuthGate(): Promise<ActionResult<never> | null> {
   const h = await headers();
   const ip = getClientIp(h);
   const rl = await checkRateLimit(limiters.auth, `auth:${ip ?? "unknown"}`);
@@ -56,7 +56,7 @@ async function preflightAuthGate(_form: FormData): Promise<ActionResult<never> |
 }
 
 export async function signUpAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const gate = await preflightAuthGate(form);
+  const gate = await preflightAuthGate();
   if (gate) return gate;
   try {
     const role = s(form, "role");
@@ -76,7 +76,7 @@ export async function signUpAction(_prev: ActionResult | null, form: FormData): 
 }
 
 export async function signInAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const gate = await preflightAuthGate(form);
+  const gate = await preflightAuthGate();
   if (gate) return gate;
   let redirectTo: string | null = null;
   try {
@@ -102,7 +102,7 @@ export async function requestPasswordResetAction(
   _prev: ActionResult | null,
   form: FormData,
 ): Promise<ActionResult> {
-  const gate = await preflightAuthGate(form);
+  const gate = await preflightAuthGate();
   if (gate) return gate;
   try {
     await authService.requestPasswordReset({ email: s(form, "email") });
