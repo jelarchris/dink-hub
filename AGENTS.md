@@ -106,6 +106,9 @@ Vercel auto-aliases `dinkhub.ph`.
 - Header has `backdrop-blur` → creates containing block for `position: fixed` descendants. Mobile drawer MUST be portaled to `<body>`.
 - Receipt upload: rate-limited 5/min/user. Turnstile was REMOVED 2026-05-14 — do not re-add without user request.
 - Mobile menu locks body scroll via `position: fixed`. The `Navbar` has a `visibilitychange` listener that force-clears stale locks on tab return (alt-tab freeze fix, commit `b19b182`).
+- `next/og` (Satori): every multi-child container needs `display: "flex"`; no `gap` (use margin); no grid; no CSS custom properties (inline brand hex colors). `runtime = "nodejs"` is required when the route uses `qrcode` or `Buffer`.
+- `exactOptionalPropertyTypes: true` forbids `{ key: maybeUndefined }`. Use spread: `...(value ? { key: value } : {})`.
+- Owner availability poster lives at `/api/og/availability/[slug]` + composer at `/owner/venues/[id]/share`. Public image (booking-page data is already public). FB sharing uses the web Sharer dialog (`https://www.facebook.com/sharer/sharer.php?u=...`) — do NOT add Pages API / OAuth without explicit ask (Meta App Review burden).
 
 ## Update protocol
 

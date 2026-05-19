@@ -1,5 +1,24 @@
 ﻿# Changelog
 
+## 2026-05-20
+
+### Added — Owner "Share availability" poster (FB / IG / link card)
+
+- **Goal:** give venue owners a one-tap way to promote open courts to their own Facebook page, groups, and Messenger without us building a Pages-API integration (which would need Meta App Review).
+- **How:** server-rendered branded image at `/api/og/availability/[slug]` (Satori via `next/og`, `runtime = "nodejs"`) + composer at `/owner/venues/[id]/share`. Image embeds court name, the day's open ranges with rates, hero court photo, DinkHub wordmark, and a QR that resolves to the deep-link booking page (`/venues/<slug>/book?date=&court=`). Three sizes: IG Story (1080×1350), IG Square (1080×1080), FB / link preview (1200×630).
+- **Sharing flow:** Download image → Facebook share dialog opens with the deep link pre-filled → owner attaches the downloaded image inside the dialog. No tokens, no OAuth, works for any FB page or group the owner already manages. Caption + booking-link copy chips included.
+- **Files:**
+  - `apps/web/src/features/share/service.ts` — Manila-tz availability computation (24h boolean array, merges consecutive open hours, collects rates per range via `getRateForHour`). Wrapped with React `cache()`.
+  - `apps/web/src/features/share/index.ts` — public barrel.
+  - `apps/web/src/app/api/og/availability/[slug]/route.tsx` — Satori image route with three layout components, Inter 400/700/900 from Google Fonts CDN (`cache: "force-cache"`), QR via `qrcode@1.5.4`, brand hex palette inlined (Satori can't resolve CSS vars). Cache headers: 1m browser, 5m s-maxage, 10m SWR.
+  - `apps/web/src/app/(app)/owner/venues/[id]/share/page.tsx` — server page; reuses owner auth gate from `getVenueWithCourtsForOwner`. Requires `venue.status === "active"` and ≥1 active court.
+  - `apps/web/src/app/(app)/owner/venues/[id]/share/share-client.tsx` — composer with date chips (next 7 days + free-form picker), court chips, format tabs, live `<img>` preview, refresh button (nonce cache-bust), Download / Share-to-Facebook / Copy-caption / Copy-link actions. Inline `FacebookIcon` SVG since `lucide-react` has no Facebook icon.
+  - `apps/web/src/app/(app)/owner/venues/[id]/page.tsx` — gradient "Share availability" CTA card on the owner venue page (only when venue is live + has active courts).
+- **Dependencies:** `qrcode@^1.5.4`, `@types/qrcode@^1.5.6` (transitively safe; pure JS, no native bindings).
+- **Auth posture:** the image route is intentionally public — the underlying data is what the booking page already shows. Rate-limit can be added if a hot venue gets scraped.
+- **Hard-won:** Satori is strict — every multi-child container must have `display: "flex"`, no `gap` (use margin), no grid, no CSS custom properties. `exactOptionalPropertyTypes` requires `...(value ? { key: value } : {})` spreading instead of passing `key: maybeUndefined` directly.
+- Commit: `9a3bda8` → production https://dinkhub.ph
+
 ## 2026-05-19
 
 ### Fixed — "Application error: a client-side exception has occurred"
