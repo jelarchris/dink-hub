@@ -1,5 +1,21 @@
 ﻿# Changelog
 
+## 2026-05-19
+
+### Fixed — "Application error: a client-side exception has occurred"
+
+- **Symptom:** intermittent generic error page that disappears on refresh. Could appear on any route.
+- **Root cause:** classic Next.js stale-chunk issue after a Vercel deploy — the user's already-loaded HTML references JS chunks (by content hash) from the previous build. When the page tries to load a chunk Vercel has already replaced, webpack throws `ChunkLoadError`. With no route-level error boundary in `(app)`, the failure bubbled to `global-error.tsx` which rendered Next's stark default `NextError` message.
+- **Fix:**
+  - New `apps/web/src/app/(app)/error.tsx` route-level boundary that:
+    - Detects `ChunkLoadError` (and the four other names browsers use for it) and triggers exactly one hard reload, gated by a `sessionStorage` flag so it cannot loop if the reload itself fails. User sees a calm "Updating to the latest version…" spinner instead of an error.
+    - For real runtime errors, renders a branded recovery card with `Try again` (calls `reset()`) and `Go home` buttons, plus the Sentry digest reference for support correlation.
+    - Pipes every non-chunk error to Sentry tagged `boundary: "app-segment"` with the digest in `extra`.
+  - Rewrote `apps/web/src/app/global-error.tsx` (root-layout-failure fallback) from the stark `NextError` widget to an inline-styled friendly card with `Try again` / `Go home`. Inline styles because the root layout has failed → no Tailwind tokens / fonts available.
+- Files:
+  - `apps/web/src/app/(app)/error.tsx` (new)
+  - `apps/web/src/app/global-error.tsx` (rewritten)
+
 ## 2026-05-18 (later 8)
 
 ### Chore ΓÇö Remove Cloudflare Turnstile / CAPTCHA from all flows
