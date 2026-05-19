@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ExternalLink, Plus } from "lucide-react";
+import { ExternalLink, Plus, Share2 } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -90,6 +90,32 @@ export default async function EditVenuePage({
       />
 
       <VenuePublishCard venue={venue} courtCount={activeCourts.length} />
+
+      {venue.status === "active" && activeCourts.length > 0 && (
+        <div className="mt-3">
+          <Link
+            href={`/owner/venues/${venue.id}/share`}
+            className="group flex items-center justify-between rounded-xl border border-[var(--color-brand-500)]/30 bg-gradient-to-r from-[var(--color-brand-500)]/10 via-[var(--color-accent-500)]/10 to-[var(--color-accent-500)]/5 px-4 py-3 transition hover:border-[var(--color-brand-500)]/60"
+          >
+            <div className="flex items-center gap-3">
+              <span className="inline-flex size-9 items-center justify-center rounded-full bg-[var(--color-brand-600)] text-white shadow-sm">
+                <Share2 className="size-4" />
+              </span>
+              <div>
+                <div className="text-sm font-semibold text-[var(--color-fg)]">
+                  Share availability
+                </div>
+                <div className="text-xs text-[var(--color-fg-muted)]">
+                  Post a branded poster of open times to Facebook or Messenger.
+                </div>
+              </div>
+            </div>
+            <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-brand-700)] group-hover:underline">
+              Open
+            </span>
+          </Link>
+        </div>
+      )}
 
       <div className="mt-5">
         <div className="mb-2 flex items-center justify-between">
