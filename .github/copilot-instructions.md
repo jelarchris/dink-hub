@@ -1,6 +1,8 @@
 # DinkHub — Copilot Project Instructions
 
-> Pickleball court booking marketplace for the Philippines (launch market: Agusan del Sur).
+> **READ FIRST every session:** [AGENTS.md](../AGENTS.md) (portable session memory + invariants) and [CHANGELOG.md](../CHANGELOG.md) (what already shipped — do NOT re-propose). These files travel with the repo so any agent on any machine has full context.
+
+> Pickleball court booking marketplace for the Philippines.
 > Manual GCash payments. Single transfer to venue, system fee deducted from weekly payout.
 
 ---

@@ -1,0 +1,117 @@
+# AGENTS.md — read this first
+
+> This file is the **portable session memory** for DinkHub. Any AI agent (Copilot, Claude, Cursor) on any machine should read it before suggesting code or features. It replaces local-only Copilot memory which does NOT sync across laptops.
+
+---
+
+## Project at a glance
+
+- **What:** Pickleball court booking marketplace for the Philippines.
+- **Live:** https://dinkhub.ph
+- **Repo root:** monorepo, app at `apps/web/` (Next.js 15 App Router, React 19, TypeScript strict)
+- **Stack:** Tailwind v4 + shadcn/ui, Supabase Postgres 15 + RLS, Drizzle ORM, Zod, Resend, Sentry, PostHog, Cloudflare Turnstile, Upstash Redis rate limits.
+- **Hosting:** Vercel. Single Supabase project: `uffuyavfpvoendvpvypy` (labelled "dink-hub-dev" but powers prod).
+- **Package manager:** pnpm workspaces.
+
+## Required reading before ANY recommendation
+
+1. **`CHANGELOG.md`** at repo root — what shipped. Do NOT re-propose anything listed there.
+2. **`.github/copilot-instructions.md`** — architectural rules (RLS-everywhere, money in `bigint` centavos, Manila tz, no `any`, no `useEffect` for data fetching, etc.).
+3. **`.github/instructions/*.instructions.md`** — scoped rules (auto-applied via `applyTo` globs but worth scanning).
+
+## Critical invariants (NEVER violate)
+
+- **Money:** `bigint` centavos (PHP). Never `float`/`number`. Use `formatPHP()` from `@/lib/money`.
+- **Time:** `timestamptz` UTC in DB. Display in `Asia/Manila` via `Intl.DateTimeFormat({ timeZone: "Asia/Manila" })`. No DST in PH.
+- **RLS:** every table. Default deny. Same migration as table creation.
+- **Service role key:** server-only. Never in `'use client'` files.
+- **Booking double-booking prevention:** PostgreSQL `EXCLUDE USING gist` constraint on `bookings(court_id, tstzrange(start_at, end_at))`. App-level checks are defense-in-depth only.
+- **Migrations:** forward-only. Never edit a committed migration; write a new one.
+- **SMS:** rejected by user (2026-05-13). Email-only via Resend. Do NOT propose Semaphore/Twilio/PhilSMS.
+- **`"use server"` files:** can ONLY export async functions. No `export type`, no `export const`, no type re-exports. Violations surface as opaque 500s in prod.
+- **Client components:** import server actions DIRECTLY from `@/features/<f>/actions`, NEVER from feature `index.ts` barrel (Webpack: `Can't resolve 'tls'`).
+- **Badge variants:** `success | warning | info | danger | neutral`. No `brand`, no `open`, no `submitted`.
+
+## Marketing copy rules (locked)
+
+- Zero fee/commission/charge language on `/` and `/host`.
+- Player-facing: "Pay only what you see — no surprises, no hidden charges."
+- Owner-facing: "Free to list" is the hook; pricing details ONLY inside checkout, invoices, admin/ledger, owner dashboard.
+- Geography: platform-agnostic ("near you", "Philippines"). No Agusan del Sur references anywhere on marketing pages.
+
+## Validation pipeline (before every commit)
+
+```powershell
+cd apps/web; pnpm exec tsc --noEmit
+cd apps/web; pnpm exec eslint . --max-warnings 0
+cd apps/web; pnpm exec next build
+```
+
+Husky pre-commit runs `eslint --fix` + typecheck. The `dinkhub-validation` skill encapsulates this.
+
+## Deploy
+
+```powershell
+git add -A; git commit -m "..."; git push origin main
+vercel --prod --yes
+```
+
+Vercel auto-aliases `dinkhub.ph`.
+
+## QA accounts
+
+- Owner: `qa+owner-20260513-ca95d5@dinkhub.ph` / `DhTest-VmlqUi_Bpi169a`
+- QA booking URL: https://dinkhub.ph/venues/qa-dinkhub-court-20260513-ca95d5/book
+
+## Vercel env vars (confirmed correct as of 2026-05-14)
+
+- `NEXT_PUBLIC_APP_URL=https://dinkhub.ph`
+- `NEXT_PUBLIC_APP_ENV=production`
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAADMm5cmBKxtkNfck`
+- `TURNSTILE_SECRET_KEY` (set)
+- All Supabase, Sentry, Resend, PostHog, Upstash, Resend keys set.
+
+## What's NOT shipped yet (real next-slice candidates)
+
+| Gap | Why it matters |
+|---|---|
+| Rate bands (per-court hourly pricing) | Migration + Drizzle + venue editor + slot picker + booking fee calc |
+| Booking confirmation email polish + ICS attachment | Today it's text-y |
+| Receipt SLA UX ("we'll review within 1h" + nudge owner if stale) | Player sits in limbo |
+| Session reminder email (T-2h) | Big no-show reduction lever. Email-only |
+| PostHog dashboard verification | Wired commit `dbdd14a` but firing not confirmed |
+| Player-initiated refund flow | Owner-initiated exists; player has no path |
+| Payout dry-run preview in `/admin/payouts` | Reduce risk before "Mark paid" |
+| SEO JSON-LD (`LocalBusiness`, `Event`) per venue | Free organic traffic |
+| Listing wizard (multi-step new-venue form) | Owners drop off on dense form today |
+| Bulk schedule editor for owners | Owner pain point as venues grow |
+| Availability filter Slice B | Court-count badges + custom time slider |
+| Open Play match-making | Differentiator. 2-3 sessions |
+| Tournament management | Bigger venture. 3+ sessions |
+| Auth pages UX polish | Low priority |
+
+## Hard-won facts (don't relearn these)
+
+- ONE Supabase project only. No separate prod DB.
+- Vercel Hobby caps cron to once/day → use GitHub Actions for sub-daily AND weekly crons. `CRON_SECRET` repo secret = Vercel `CRON_SECRET` env.
+- Asia/Manila is fixed UTC+8, no DST → `+ 8h` arithmetic is safe in `computePriorWeekPeriod`.
+- Drizzle generated columns: `bigint("total_centavos", { mode: "bigint" }).notNull().generatedAlwaysAs(sql\`fees_centavos + carryover_centavos\`)` — do NOT pass it on insert.
+- `onConflictDoNothing` returns empty array on conflict → re-SELECT to fetch existing row.
+- Booking status enum: only `confirmed` owes a fee. `pending_payment`/`payment_submitted`/`cancelled`/`expired`/`refunded` do NOT.
+- `bookings.systemFeeCentavos` is the snapshot. Aggregate by `start_at` falling in period (not `created_at`).
+- `owner_invoices` has NO direct INSERT/UPDATE RLS policy — all writes via service-role server actions/cron. Intentional.
+- Unique constraint `owner_invoices_unique_receipt UNIQUE (id, receipt_hash)` is the idempotency key for receipt re-uploads.
+- No `@/lib/logger` module — use `console.info` or `captureException` from `@/lib/observability`.
+- `lucide-react` has NO `Facebook` icon — use inline SVG path.
+- Header has `backdrop-blur` → creates containing block for `position: fixed` descendants. Mobile drawer MUST be portaled to `<body>`.
+- Receipt upload: rate-limited 5/min/user. Turnstile was REMOVED 2026-05-14 — do not re-add without user request.
+- Mobile menu locks body scroll via `position: fixed`. The `Navbar` has a `visibilitychange` listener that force-clears stale locks on tab return (alt-tab freeze fix, commit `b19b182`).
+
+## Update protocol
+
+After every merged slice:
+1. Add an entry to top of `CHANGELOG.md` (date, commit SHA, scope, summary).
+2. If a NEW invariant or hard-won fact emerges, add it to the relevant section of this file.
+3. Commit both in the same PR as the change.
+
+**Stale `CHANGELOG.md` = duplicate AI recommendations = wasted work.**
