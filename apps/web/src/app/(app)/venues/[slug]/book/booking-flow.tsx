@@ -629,9 +629,11 @@ export function BookingFlow({
                 pickedEndMs !== null &&
                 slotStartMs >= pickedStartMs &&
                 slotStartMs < pickedEndMs;
-              const isClosed = !available && courtRanges.some(
+              const isPast = !available && slotStartMs <= now;
+              const isClosed = !available && !isPast && courtRanges.some(
                 (r) => r.kind === "closure" && r.start < slotEndMs && r.end > slotStartMs,
               );
+              const unavailableLabel = isPast ? "Past" : isClosed ? "Closed" : "Booked";
               return (
                 <button
                   key={iso}
@@ -659,7 +661,7 @@ export function BookingFlow({
                         : "text-[var(--color-fg-subtle)]",
                     )}
                   >
-                    {available || isPicked ? formatPHP(getPriceForSlot(s.getTime())) : isClosed ? "Closed" : "Booked"}
+                    {available || isPicked ? formatPHP(getPriceForSlot(s.getTime())) : unavailableLabel}
                   </span>
                 </button>
               );
