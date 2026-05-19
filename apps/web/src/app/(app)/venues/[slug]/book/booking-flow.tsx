@@ -629,11 +629,26 @@ export function BookingFlow({
                 pickedEndMs !== null &&
                 slotStartMs >= pickedStartMs &&
                 slotStartMs < pickedEndMs;
-              const isPast = !available && slotStartMs <= now;
-              const isClosed = !available && !isPast && courtRanges.some(
+              // Reason a slot is unavailable, in priority order:
+              //   1. Booking / hold actually overlaps -> "Booked" (stays sticky
+              //      even after the slot's time has passed, so history reads
+              //      truthfully).
+              //   2. Court closure overlaps -> "Closed".
+              //   3. Slot is simply in the past with no booking/closure -> "Past".
+              const overlapsBookingOrHold = !available && courtRanges.some(
+                (r) => (r.kind === "booking" || r.kind === "hold") && r.start < slotEndMs && r.end > slotStartMs,
+              );
+              const overlapsClosure = !available && !overlapsBookingOrHold && courtRanges.some(
                 (r) => r.kind === "closure" && r.start < slotEndMs && r.end > slotStartMs,
               );
-              const unavailableLabel = isPast ? "Past" : isClosed ? "Closed" : "Booked";
+              const isPast = !available && !overlapsBookingOrHold && !overlapsClosure && slotStartMs <= now;
+              const unavailableLabel = overlapsBookingOrHold
+                ? "Booked"
+                : overlapsClosure
+                  ? "Closed"
+                  : isPast
+                    ? "Past"
+                    : "Booked";
               return (
                 <button
                   key={iso}
