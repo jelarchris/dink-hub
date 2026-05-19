@@ -2,7 +2,8 @@
 
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { getRateForHour } from "@/lib/court-rate";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Check,
@@ -50,6 +51,8 @@ export interface BookingFlowProps {
   playerName: string;
   playerEmail: string;
   playerPhone: string;
+  /** When false, Continue redirects to sign-up with current pick preserved in URL. */
+  isAuthenticated: boolean;
   days: ReadonlyArray<{ isoDate: string; label: string; isToday: boolean }>;
   courts: ReadonlyArray<{
     id: string;
@@ -82,20 +85,69 @@ export function BookingFlow({
   playerName,
   playerEmail,
   playerPhone,
+  isAuthenticated,
   days,
   courts,
   occupancy,
 }: BookingFlowProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  // Snapshot URL params once on mount — used to restore picker state after a
+  // guest returns from /sign-up. We intentionally do NOT depend on
+  // searchParams reactively; later we router.replace() to clean the URL.
+  const initialFromUrl = useMemo(
+    () => ({
+      court: searchParams.get("court"),
+      date: searchParams.get("date"),
+      start: searchParams.get("start"),
+      count: searchParams.get("count"),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Slot picker state
   // ---------------------------------------------------------------------------
-  const [selectedCourtId, setSelectedCourtId] = useState<string>(courts[0]!.id);
-  const [selectedDateIso, setSelectedDateIso] = useState<string>(days[0]!.isoDate);
-  const [pickedStartIso, setPickedStartIso] = useState<string | null>(null);
-  const [pickedCount, setPickedCount] = useState<number>(0);
+  const [selectedCourtId, setSelectedCourtId] = useState<string>(() => {
+    const c = initialFromUrl.court;
+    return c && courts.some((x) => x.id === c) ? c : courts[0]!.id;
+  });
+  const [selectedDateIso, setSelectedDateIso] = useState<string>(() => {
+    const d = initialFromUrl.date;
+    return d && days.some((x) => x.isoDate === d) ? d : days[0]!.isoDate;
+  });
+  // Lazy initialisers: if the URL carried a previously picked slot (set by the
+  // guest auth gate before sign-up), restore it ONLY if every slot is still
+  // available on the now-selected court+date. Otherwise start empty.
+  const [restoredPick] = useState<{ startIso: string; count: number } | null>(() => {
+    const { start: startStr, count: countStr, court: courtFromUrl } = initialFromUrl;
+    if (!startStr || !countStr) return null;
+    const startMs = new Date(startStr).getTime();
+    if (!Number.isFinite(startMs)) return null;
+    const count = Math.min(Math.max(Number.parseInt(countStr, 10) || 0, 1), MAX_SLOTS);
+    if (count === 0) return null;
+    const courtId =
+      courtFromUrl && courts.some((x) => x.id === courtFromUrl) ? courtFromUrl : courts[0]!.id;
+    const nowMs = Date.now();
+    for (const r of occupancy) {
+      if (r.courtId !== courtId) continue;
+      const rs = new Date(r.startAtIso).getTime();
+      const re = new Date(r.endAtIso).getTime();
+      for (let i = 0; i < count; i++) {
+        const s = startMs + i * SLOT_MINUTES * 60_000;
+        const e = s + SLOT_MINUTES * 60_000;
+        if (s <= nowMs) return null;
+        if (rs < e && re > s) return null;
+      }
+    }
+    return { startIso: new Date(startMs).toISOString(), count };
+  });
+  const [pickedStartIso, setPickedStartIso] = useState<string | null>(restoredPick?.startIso ?? null);
+  const [pickedCount, setPickedCount] = useState<number>(restoredPick?.count ?? 0);
 
   // ---------------------------------------------------------------------------
   // Modal flow state
@@ -240,6 +292,19 @@ export function BookingFlow({
     return map;
   }, [occupancy]);
 
+  // ---------------------------------------------------------------------------
+  // After mount, if the URL carried restore params, strip the query string so
+  // reloads don't carry stale picker state. The actual restoration happened
+  // synchronously in the useState initialisers above.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const hadAny =
+      initialFromUrl.court || initialFromUrl.date || initialFromUrl.start || initialFromUrl.count;
+    if (!hadAny) return;
+    router.replace(`/venues/${venueSlug}/book`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const slots = useMemo(
     () =>
       generateDaySlotsManila({
@@ -379,6 +444,27 @@ export function BookingFlow({
   function openModal(): void {
     setStep("step1");
     setTimerSeconds(TIMER_START);
+  }
+
+  /**
+   * Guest gate: unauthenticated users hitting Continue are sent to /sign-up
+   * with their current selection preserved in the `next` URL. After signup
+   * (or sign-in) they land back here and the picker auto-restores the slot.
+   */
+  function handleContinue(): void {
+    if (!canContinue || !pickedStartIso) return;
+    if (isAuthenticated) {
+      openModal();
+      return;
+    }
+    const qs = new URLSearchParams({
+      court: selectedCourtId,
+      date: selectedDateIso,
+      start: pickedStartIso,
+      count: String(pickedCount),
+    });
+    const returnTo = `${pathname}?${qs.toString()}`;
+    router.push(`/sign-up?next=${encodeURIComponent(returnTo)}`);
   }
 
   function closeModal(): void {
@@ -605,6 +691,24 @@ export function BookingFlow({
                     </span>{" "}
                     est. total
                   </div>
+                  {!isAuthenticated && (
+                    <div className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">
+                      Create an account next to confirm ·{" "}
+                      <Link
+                        href={`/sign-in?next=${encodeURIComponent(
+                          `${pathname}?${new URLSearchParams({
+                            court: selectedCourtId,
+                            date: selectedDateIso,
+                            start: pickedStartIso ?? "",
+                            count: String(pickedCount),
+                          }).toString()}`,
+                        )}`}
+                        className="font-medium text-[var(--color-brand-600)] hover:underline"
+                      >
+                        Sign in
+                      </Link>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-[var(--color-fg-muted)]">Pick a time to continue</div>
@@ -613,7 +717,7 @@ export function BookingFlow({
             <button
               type="button"
               disabled={!canContinue}
-              onClick={openModal}
+              onClick={handleContinue}
               className={cn(
                 "inline-flex h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-5 text-sm font-semibold transition-colors",
                 canContinue

@@ -60,12 +60,17 @@ export async function signUpAction(_prev: ActionResult | null, form: FormData): 
   if (gate) return gate;
   try {
     const role = s(form, "role");
-    const result = await authService.signUp({
-      displayName: s(form, "displayName"),
-      email: s(form, "email"),
-      password: s(form, "password"),
-      role: role === "venue_owner" ? "venue_owner" : "player",
-    });
+    const nextRaw = s(form, "next");
+    const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : undefined;
+    const result = await authService.signUp(
+      {
+        displayName: s(form, "displayName"),
+        email: s(form, "email"),
+        password: s(form, "password"),
+        role: role === "venue_owner" ? "venue_owner" : "player",
+      },
+      next ? { next } : undefined,
+    );
     if (!result.needsConfirmation) {
       revalidatePath("/", "layout");
     }

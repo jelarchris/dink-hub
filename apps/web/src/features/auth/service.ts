@@ -40,7 +40,10 @@ function mapSupabaseError(message: string, status: number | undefined): AuthErro
   return new AuthError("unknown", "Something went wrong. Please try again.");
 }
 
-export async function signUp(input: SignUpInput): Promise<{ userId: string; needsConfirmation: boolean }> {
+export async function signUp(
+  input: SignUpInput,
+  opts?: { next?: string },
+): Promise<{ userId: string; needsConfirmation: boolean }> {
   const parsed = signUpInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new AuthError("validation_failed", "Please check the form", parsed.error.flatten().fieldErrors);
@@ -51,7 +54,16 @@ export async function signUp(input: SignUpInput): Promise<{ userId: string; need
   // confirmation link. Without this, Supabase falls back to its dashboard
   // "Site URL" which may be wrong (e.g. localhost) and the verification link
   // lands on the wrong host. Always pin it to our canonical app URL.
-  const emailRedirectTo = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/sign-in`;
+  // If a same-origin `next` path was supplied (e.g. signup originated from the
+  // booking flow), forward it so the post-confirmation /sign-in lands the user
+  // back on the page they came from.
+  const safeNext =
+    opts?.next && opts.next.startsWith("/") && !opts.next.startsWith("//")
+      ? opts.next
+      : null;
+  const emailRedirectTo = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/sign-in${
+    safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""
+  }`;
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,

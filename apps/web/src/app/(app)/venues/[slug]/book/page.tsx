@@ -73,6 +73,7 @@ export default async function BookCourtPage({
         playerName={player?.displayName ?? ""}
         playerEmail={player?.email ?? ""}
         playerPhone={player?.phoneE164 ?? ""}
+        isAuthenticated={Boolean(player)}
         days={days.map((d) => ({ isoDate: d.isoDate, label: d.label, isToday: d.isToday }))}
         courts={courts.map((c) => {
           const rateBandsForCourt = allRateBands.find((r) => r.courtId === c.id)?.bands ?? [];

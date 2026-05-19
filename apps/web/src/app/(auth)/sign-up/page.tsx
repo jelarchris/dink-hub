@@ -16,6 +16,8 @@ export default function SignUpPage() {
   const params = useSearchParams();
   const role: Role = params.get("role") === "venue_owner" ? "venue_owner" : "player";
   const isOwner = role === "venue_owner";
+  const nextParam = params.get("next") ?? "";
+  const next = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "";
   const [state, formAction] = useActionState<ActionResult | null, FormData>(
     signUpAction,
     null,
@@ -29,6 +31,9 @@ export default function SignUpPage() {
     success && (state.data as { needsConfirmation: boolean }).needsConfirmation;
 
   if (success) {
+    const signInHref = next ? `/sign-in?next=${encodeURIComponent(next)}` : "/sign-in";
+    const continueHref = next || "/venues";
+    const continueLabel = next ? "Continue to your booking" : "Browse courts";
     return (
       <div className="space-y-4">
         <header className="space-y-1">
@@ -36,13 +41,13 @@ export default function SignUpPage() {
           <h1 className="text-2xl font-bold tracking-tight">You&apos;re in</h1>
           <p className="text-sm text-[var(--color-fg-muted)]">
             {needsConfirmation
-              ? "Check your email to confirm your account, then sign in."
+              ? "Check your email to confirm your account, then sign in to finish your booking."
               : "Account created. Let's find you a court."}
           </p>
         </header>
-        <Link href={needsConfirmation ? "/sign-in" : "/venues"}>
+        <Link href={needsConfirmation ? signInHref : continueHref}>
           <Button size="lg" className="w-full">
-            {needsConfirmation ? "Go to sign in" : "Browse courts"}
+            {needsConfirmation ? "Go to sign in" : continueLabel}
           </Button>
         </Link>
       </div>
@@ -57,9 +62,11 @@ export default function SignUpPage() {
         </p>
         <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
         <p className="text-sm text-[var(--color-fg-muted)]">
-          {isOwner
-            ? "List your courts and start taking bookings. Free to sign up."
-            : "Find and book pickleball courts near you. Always free."}
+          {next
+            ? "You're one step away from confirming your booking. Create your account to continue."
+            : isOwner
+              ? "List your courts and start taking bookings. Free to sign up."
+              : "Find and book pickleball courts near you. Always free."}
         </p>
       </header>
 
@@ -67,6 +74,7 @@ export default function SignUpPage() {
         {formError && <Alert variant="danger">{formError}</Alert>}
 
         <input type="hidden" name="role" value={role} />
+        {next && <input type="hidden" name="next" value={next} />}
 
         <FormField
           id="displayName"
@@ -142,7 +150,10 @@ export default function SignUpPage() {
 
         <p className="text-center text-sm text-[var(--color-fg-muted)]">
           Already have an account?{" "}
-          <Link href="/sign-in" className="font-medium text-[var(--color-brand-600)] hover:underline">
+          <Link
+            href={next ? `/sign-in?next=${encodeURIComponent(next)}` : "/sign-in"}
+            className="font-medium text-[var(--color-brand-600)] hover:underline"
+          >
             Sign in
           </Link>
         </p>
