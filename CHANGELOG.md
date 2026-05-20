@@ -1,5 +1,21 @@
 ﻿# Changelog
 
+## 2026-05-22 (latest) — Polish
+
+### Fix — Venues page: merge duplicate city chips (commit `1126f1a`)
+
+- **City filter chips on `/venues` collapsed to one per city, case-insensitively.** Owners entered cities as free-text so the same place appeared with different casing ("Cabadbaran City" vs "CABADBARAN CITY") and rendered as two separate chips. `listActiveVenueCities` now groups by `lower(city)` and returns a title-cased label (`min(city)` sample → `toTitleCase`). `listActiveVenues` city filter switched from `eq(city, x)` to `lower(city) = lower(x)` so URL params match regardless of casing. The active chip detector also title-cases the incoming `?city=` param so an inbound link with old casing still highlights the chip.
+- **Card display normalised.** Venue cards on `/venues` now go through `toTitleCase` for both `city` and `province`, eliminating the visual contradiction where the chip said "Cabadbaran City" but the card said "CABADBARAN CITY".
+- **New `@/lib/casing` util.** Shared `toTitleCase(input)` helper — conservative (only uppercases the first letter of each whitespace/hyphen token, leaves separators alone).
+- **Hard-won fact:** user-entered city/province values arrive in mixed casing. Group by `lower(city)` server-side and pass display labels through `toTitleCase`.
+- **Files:** `apps/web/src/features/venues/repo.ts`, `apps/web/src/app/(app)/venues/page.tsx`, `apps/web/src/lib/casing.ts` (new).
+
+### Feat — Court form: explicit Indoor/Outdoor radio (commit `efbc3c4`)
+
+- **Replaced the lone "Indoor court" checkbox with a segmented Indoor/Outdoor radio.** The checkbox quietly defaulted Outdoor to a falsy state and there was no visible toggle for outdoor — owners couldn't tell the field even existed. New pill bar in `court-form.tsx` is a `role="radiogroup"` with two `<label>` pills wrapping `sr-only` radios (`name="isIndoor"` values `"true"` / `"false"`), `Home` icon for Indoor, `Sun` icon for Outdoor. Active pill is brand-700 with white text via `has-[input:checked]:`. Defaults: existing courts pre-select based on `initial.isIndoor === true`; new courts default to Outdoor.
+- **Zod schema untouched.** `isIndoor` already accepted `"on" | "true" | "false" | undefined` and transformed to a strict boolean, so the new `"false"` value flows through without migration.
+- **Files:** `apps/web/src/app/(app)/owner/venues/[id]/courts/court-form.tsx`.
+
 ## 2026-05-22 (later)
 
 ### Feat — Owner schedule grid view (player-picker style)

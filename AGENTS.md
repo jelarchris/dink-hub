@@ -95,6 +95,7 @@ Vercel auto-aliases `dinkhub.ph`.
 
 - React 19 `react-hooks/purity` lint forbids `Date.now()` inside Server Component render functions (even though it'd run on the server). Compute `now` in the page handler and pass it in as a prop.
 - `getOwnerGridData(args)` (`features/bookings-view/repo.ts`) takes `courtId` as OPTIONAL and falls back to the first active court internally. Don't do two-pass lookups from the page — pass the requested court id with the `exactOptionalPropertyTypes` spread `...(id !== undefined ? { courtId: id } : {})` and let the repo resolve. Returns `null` only when the venue isn't owned.
+- User-entered place names (`venues.city`, `venues.province`) arrive in mixed casing (e.g. "Cabadbaran City" vs "CABADBARAN CITY"). Group by `lower(city)` server-side and normalise display via `toTitleCase` from `@/lib/casing`. `listActiveVenueCities` already does this; `listActiveVenues` filters with `lower(city) = lower(x)`.
 
 - ONE Supabase project only. No separate prod DB.
 - Vercel Hobby caps cron to once/day → use GitHub Actions for sub-daily AND weekly crons. `CRON_SECRET` repo secret = Vercel `CRON_SECRET` env.
