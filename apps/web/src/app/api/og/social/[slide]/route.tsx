@@ -47,12 +47,14 @@ const SLIDE_IDS = [
   "trust",
   "cta",
   "owner-pitch",
+  "howto-book",
 ] as const;
 type SlideId = (typeof SLIDE_IDS)[number];
 
 // Per-slide canvas size. Default 1080x1080; owner-pitch is a tall sales sheet.
 const SLIDE_DIMS: Partial<Record<SlideId, { width: number; height: number }>> = {
   "owner-pitch": { width: 1080, height: 1620 },
+  "howto-book": { width: 1080, height: 1920 },
 };
 
 const paramsSchema = z.object({ slide: z.enum(SLIDE_IDS) });
@@ -1846,6 +1848,351 @@ function SlideOwnerPitch(): React.ReactElement {
   );
 }
 
+// ─── how-to-book (1080×1920 vertical instructional poster) ─────────────────
+function SlideHowtoBook(): React.ReactElement {
+  const findSteps: Array<{ n: string; title: string; body: string }> = [
+    {
+      n: "1",
+      title: "VISIT",
+      body: "Go to dinkhub.ph or open the app on your phone.",
+    },
+    {
+      n: "2",
+      title: "SEARCH",
+      body: "Browse venues near you or search by city name.",
+    },
+    {
+      n: "3",
+      title: "PICK",
+      body: "Tap a venue to see live availability and rates.",
+    },
+  ];
+  const bookSteps: Array<{ n: string; title: string; body: string }> = [
+    {
+      n: "1",
+      title: "CHOOSE SLOT",
+      body: "Pick your date, court, and number of hours.",
+    },
+    {
+      n: "2",
+      title: "PAY GCASH",
+      body: "Send the exact amount to the venue's GCash number.",
+    },
+    {
+      n: "3",
+      title: "UPLOAD",
+      body: "Snap your receipt and upload. Confirmation in minutes.",
+    },
+  ];
+  const benefits: Array<{ icon: string; title: string; body: string }> = [
+    {
+      icon: "OK",
+      title: "INSTANT CONFIRMATION",
+      body: "Receipt verified, court locked, email sent.",
+    },
+    {
+      icon: "1:1",
+      title: "NO DOUBLE-BOOKING",
+      body: "Two players can't claim the same hour. Guaranteed.",
+    },
+    {
+      icon: "REM",
+      title: "EMAIL REMINDERS",
+      body: "We remind you before your game. No more no-shows.",
+    },
+  ];
+
+  return (
+    <Frame width={1080} height={1920}>
+      <Header />
+
+      {/* Title block */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 36,
+          gap: 14,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            fontSize: 76,
+            fontWeight: 900,
+            lineHeight: 0.96,
+            letterSpacing: -2,
+            color: C.ink,
+            textTransform: "uppercase",
+          }}
+        >
+          HOW TO BOOK
+        </div>
+        <div
+          style={{
+            display: "flex",
+            fontSize: 76,
+            fontWeight: 900,
+            lineHeight: 0.96,
+            letterSpacing: -2,
+            color: C.neon,
+            textTransform: "uppercase",
+          }}
+        >
+          A COURT ON DINKHUB
+        </div>
+        <div
+          style={{
+            display: "flex",
+            marginTop: 10,
+            fontSize: 22,
+            fontWeight: 700,
+            letterSpacing: 4,
+            color: C.inkMuted,
+            textTransform: "uppercase",
+          }}
+        >
+          Easy steps · Instant booking · More pickleball
+        </div>
+      </div>
+
+      {/* Section 1 banner */}
+      <SectionBanner num="1" label="FIND YOUR COURT" topMargin={56} />
+
+      <StepRow steps={findSteps} />
+
+      {/* Section 2 banner */}
+      <SectionBanner num="2" label="BOOK & PAY" topMargin={48} />
+
+      <StepRow steps={bookSteps} />
+
+      {/* Benefits panel */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 56,
+          padding: 28,
+          borderRadius: 18,
+          backgroundColor: C.card,
+          border: `1.5px solid ${C.neonSoft}`,
+          gap: 18,
+        }}
+      >
+        {benefits.map((b) => (
+          <div
+            key={b.title}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 18,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                backgroundColor: C.neon,
+                color: C.bg,
+                fontSize: 18,
+                fontWeight: 900,
+                letterSpacing: 1,
+              }}
+            >
+              {b.icon}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 22,
+                  fontWeight: 900,
+                  color: C.ink,
+                  letterSpacing: -0.3,
+                }}
+              >
+                {b.title}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 18,
+                  color: C.inkMuted,
+                  marginTop: 2,
+                }}
+              >
+                {b.body}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: "auto",
+          paddingTop: 32,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            fontSize: 26,
+            fontWeight: 900,
+            color: C.ink,
+            letterSpacing: -0.5,
+          }}
+        >
+          dinkhub.ph
+        </div>
+        <div
+          style={{
+            display: "flex",
+            fontSize: 18,
+            fontWeight: 700,
+            letterSpacing: 4,
+            color: C.neon,
+            textTransform: "uppercase",
+          }}
+        >
+          PLAY · BOOK · ENJOY
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+function SectionBanner({
+  num,
+  label,
+  topMargin,
+}: {
+  num: string;
+  label: string;
+  topMargin: number;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        marginTop: topMargin,
+        marginBottom: 22,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 56,
+          height: 56,
+          borderRadius: 14,
+          backgroundColor: C.neon,
+          color: C.bg,
+          fontSize: 30,
+          fontWeight: 900,
+        }}
+      >
+        {num}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          fontSize: 36,
+          fontWeight: 900,
+          color: C.ink,
+          letterSpacing: -0.5,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function StepRow({
+  steps,
+}: {
+  steps: Array<{ n: string; title: string; body: string }>;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 18 }}>
+      {steps.map((s) => (
+        <div
+          key={s.n}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            padding: 22,
+            borderRadius: 16,
+            backgroundColor: C.card,
+            border: `1.5px solid ${C.neonSoft}`,
+            minHeight: 220,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 44,
+              height: 44,
+              borderRadius: 999,
+              backgroundColor: C.neonSoft,
+              color: C.neon,
+              fontSize: 22,
+              fontWeight: 900,
+              marginBottom: 14,
+            }}
+          >
+            {s.n}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 24,
+              fontWeight: 900,
+              color: C.ink,
+              letterSpacing: -0.3,
+              marginBottom: 8,
+            }}
+          >
+            {s.title}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 17,
+              color: C.inkMuted,
+              lineHeight: 1.35,
+            }}
+          >
+            {s.body}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── frame wrapper ──────────────────────────────────────────────────────────
 function Frame({
   children,
@@ -1907,6 +2254,7 @@ const RENDERERS: Record<SlideId, () => React.ReactElement> = {
   trust: SlideTrust,
   cta: SlideCta,
   "owner-pitch": SlideOwnerPitch,
+  "howto-book": SlideHowtoBook,
 };
 
 export async function GET(
