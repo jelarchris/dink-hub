@@ -23,6 +23,7 @@ import {
 import { formatPHP } from "@/lib/money";
 import { formatDistanceKm } from "@/lib/distance";
 import { cn } from "@/lib/cn";
+import { toTitleCase } from "@/lib/casing";
 import { AvailabilityFilterBar } from "./availability-filter";
 
 export const dynamic = "force-dynamic";
@@ -131,7 +132,10 @@ function resolveAvailabilityFilter(
 export default async function VenuesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const q = pickString(sp.q)?.trim() || undefined;
-  const city = pickString(sp.city)?.trim() || undefined;
+  const city = (() => {
+    const raw = pickString(sp.city)?.trim();
+    return raw ? toTitleCase(raw) : undefined;
+  })();
   const sortRaw = pickString(sp.sort);
   const sort: VenueSort =
     sortRaw === "price_asc" || sortRaw === "rating_desc" ? sortRaw : "name";
