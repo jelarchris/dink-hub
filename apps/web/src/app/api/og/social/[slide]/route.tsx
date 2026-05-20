@@ -46,8 +46,14 @@ const SLIDE_IDS = [
   "auto-move",
   "trust",
   "cta",
+  "owner-pitch",
 ] as const;
 type SlideId = (typeof SLIDE_IDS)[number];
+
+// Per-slide canvas size. Default 1080x1080; owner-pitch is a tall sales sheet.
+const SLIDE_DIMS: Partial<Record<SlideId, { width: number; height: number }>> = {
+  "owner-pitch": { width: 1080, height: 1620 },
+};
 
 const paramsSchema = z.object({ slide: z.enum(SLIDE_IDS) });
 
@@ -1397,21 +1403,452 @@ function SlideCta(): React.ReactElement {
   );
 }
 
+// ─── owner pitch (tall 1080×1620 sales sheet) ───────────────────────────────
+function PitchRow({ pain, fix }: { pain: string; fix: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "stretch",
+        gap: 14,
+        width: "100%",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          flex: 1,
+          padding: "14px 18px",
+          borderRadius: 12,
+          backgroundColor: "rgba(255,255,255,0.04)",
+          border: `1px solid ${C.cardEdge}`,
+          fontSize: 19,
+          color: C.inkMuted,
+          lineHeight: 1.3,
+        }}
+      >
+        <span style={{ display: "flex", marginRight: 12, color: "#F87171" }}>
+          ✕
+        </span>
+        <span style={{ display: "flex", flex: 1 }}>{pain}</span>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          color: C.inkSubtle,
+          fontSize: 22,
+        }}
+      >
+        →
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          flex: 1,
+          padding: "14px 18px",
+          borderRadius: 12,
+          backgroundColor: C.neonSoft,
+          border: `1.5px solid ${C.neon}`,
+          fontSize: 19,
+          color: C.ink,
+          fontWeight: 600,
+          lineHeight: 1.3,
+        }}
+      >
+        <span style={{ display: "flex", marginRight: 12, color: C.neon, fontWeight: 900 }}>
+          ✓
+        </span>
+        <span style={{ display: "flex", flex: 1 }}>{fix}</span>
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        fontSize: 16,
+        letterSpacing: 5,
+        color: C.neon,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        marginBottom: 14,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SlideOwnerPitch(): React.ReactElement {
+  const pains: Array<{ pain: string; fix: string }> = [
+    {
+      pain: "50 Messenger threads to track",
+      fix: "One dashboard, every booking visible",
+    },
+    {
+      pain: "Manually checking GCash receipts",
+      fix: "Receipts upload & auto-verify",
+    },
+    {
+      pain: "Double-bookings & angry players",
+      fix: "Database-enforced — impossible to double-book",
+    },
+    {
+      pain: "Calculating weekly earnings by hand",
+      fix: "Weekly statement, ready to forward",
+    },
+    {
+      pain: "Repairs = manual refunds & chaos",
+      fix: "Auto-reschedule players to your other courts",
+    },
+  ];
+
+  const getList = [
+    "Free public venue page with photos & map",
+    "Per-court hourly rates + weekly schedule editor",
+    "Open Play sessions with one-tap sign-up",
+    "Auto email confirmations & 2-hour reminders",
+    "Owner mobile dashboard — today, this week, ratings",
+    "Closure auto-move (your players keep their slot)",
+  ];
+
+  return (
+    <Frame height={1620}>
+      <Header />
+
+      {/* Headline */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 36,
+          gap: 14,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            color: C.neon,
+            fontSize: 18,
+            fontWeight: 700,
+            letterSpacing: 6,
+            textTransform: "uppercase",
+          }}
+        >
+          For Pickleball Court Owners
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            fontSize: 76,
+            fontWeight: 900,
+            color: C.ink,
+            lineHeight: 0.96,
+            letterSpacing: -2,
+            textTransform: "uppercase",
+          }}
+        >
+          <span style={{ display: "flex" }}>STOP RUNNING</span>
+          <span style={{ display: "flex" }}>YOUR COURT FROM</span>
+          <span style={{ display: "flex", color: C.neon }}>MESSENGER.</span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            fontSize: 22,
+            color: C.inkMuted,
+            lineHeight: 1.35,
+            maxWidth: 880,
+            marginTop: 4,
+          }}
+        >
+          List on DinkHub. Start taking online bookings today — keep your
+          rates, your rules, and every peso you earn.
+        </div>
+      </div>
+
+      {/* Pain vs Fix */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 40,
+          width: "100%",
+        }}
+      >
+        <SectionLabel>What you stop doing → What we do for you</SectionLabel>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            width: "100%",
+          }}
+        >
+          {pains.map((p) => (
+            <PitchRow key={p.pain} pain={p.pain} fix={p.fix} />
+          ))}
+        </div>
+      </div>
+
+      {/* What you get */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 36,
+          width: "100%",
+        }}
+      >
+        <SectionLabel>What you get</SectionLabel>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          {[0, 2, 4].map((start) => (
+            <div key={start} style={{ display: "flex", gap: 12, width: "100%" }}>
+              {getList.slice(start, start + 2).map((t) => (
+                <div
+                  key={t}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flex: 1,
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    backgroundColor: "rgba(255,255,255,0.03)",
+                    border: `1px solid ${C.cardEdge}`,
+                    fontSize: 17,
+                    color: C.ink,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  <span style={{ display: "flex", marginRight: 10, color: C.neon, fontWeight: 900 }}>
+                    ✓
+                  </span>
+                  <span style={{ display: "flex", flex: 1 }}>{t}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Offer banner */}
+      <div
+        style={{
+          display: "flex",
+          marginTop: 36,
+          padding: "20px 28px",
+          borderRadius: 16,
+          backgroundColor: C.neon,
+          color: C.bg,
+          width: "100%",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 14,
+              letterSpacing: 4,
+              fontWeight: 700,
+            }}
+          >
+            LAUNCH OFFER
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 32,
+              fontWeight: 900,
+              letterSpacing: -1,
+              marginTop: 2,
+            }}
+          >
+            FREE TO LIST · 0% PLATFORM FEE
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 18,
+              fontWeight: 600,
+              marginTop: 2,
+            }}
+          >
+            for your first 2 months
+          </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+          }}
+        >
+          <div style={{ display: "flex", fontSize: 14, letterSpacing: 3, fontWeight: 700 }}>
+            LIVE IN
+          </div>
+          <div style={{ display: "flex", fontSize: 44, fontWeight: 900, letterSpacing: -1 }}>
+            10 MIN
+          </div>
+        </div>
+      </div>
+
+      {/* 3 steps */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 30,
+          width: "100%",
+        }}
+      >
+        <SectionLabel>How it works</SectionLabel>
+        <div style={{ display: "flex", gap: 12, width: "100%" }}>
+          {[
+            { n: "01", t: "Sign up", b: "Create your owner account in 60 seconds" },
+            { n: "02", t: "Add your venue", b: "Courts, hours, hourly rates" },
+            { n: "03", t: "Share & earn", b: "Post your booking link — done" },
+          ].map((s) => (
+            <div
+              key={s.n}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+                padding: 18,
+                borderRadius: 14,
+                backgroundColor: C.card,
+                border: `1.5px solid ${C.neonSoft}`,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 13,
+                  letterSpacing: 3,
+                  color: C.neon,
+                  fontWeight: 700,
+                }}
+              >
+                {s.n}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 22,
+                  fontWeight: 900,
+                  color: C.ink,
+                  marginTop: 6,
+                }}
+              >
+                {s.t}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 15,
+                  color: C.inkMuted,
+                  marginTop: 4,
+                  lineHeight: 1.3,
+                }}
+              >
+                {s.b}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA bar */}
+      <div
+        style={{
+          display: "flex",
+          marginTop: "auto",
+          paddingTop: 28,
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 30,
+              fontWeight: 900,
+              color: C.ink,
+              letterSpacing: -0.5,
+            }}
+          >
+            List your venue today.
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 18,
+              color: C.inkSubtle,
+              letterSpacing: 4,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              marginTop: 4,
+            }}
+          >
+            dinkhub.ph/host
+          </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "20px 32px",
+            borderRadius: 999,
+            backgroundColor: C.neon,
+            color: C.bg,
+            fontSize: 22,
+            fontWeight: 900,
+            letterSpacing: -0.5,
+          }}
+        >
+          Get started  →
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
 // ─── frame wrapper ──────────────────────────────────────────────────────────
 function Frame({
   children,
   center,
+  height,
+  width,
 }: {
   children: React.ReactNode;
   center?: boolean;
+  height?: number;
+  width?: number;
 }) {
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        width: SIZE,
-        height: SIZE,
+        width: width ?? SIZE,
+        height: height ?? SIZE,
         backgroundColor: C.bg,
         backgroundImage: `radial-gradient(circle at 80% 10%, rgba(52,211,153,0.08), transparent 50%)`,
         padding: PADDING,
@@ -1453,6 +1890,7 @@ const RENDERERS: Record<SlideId, () => React.ReactElement> = {
   "auto-move": SlideAutoMove,
   trust: SlideTrust,
   cta: SlideCta,
+  "owner-pitch": SlideOwnerPitch,
 };
 
 export async function GET(
@@ -1476,10 +1914,11 @@ export async function GET(
   }
 
   const node = RENDERERS[parsed.data.slide]();
+  const dim = SLIDE_DIMS[parsed.data.slide] ?? { width: SIZE, height: SIZE };
 
   return new ImageResponse(node, {
-    width: SIZE,
-    height: SIZE,
+    width: dim.width,
+    height: dim.height,
     ...(fonts ? { fonts } : {}),
     headers: {
       "cache-control":
