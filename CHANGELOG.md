@@ -1,5 +1,10 @@
 ﻿# Changelog
 
+## 2026-05-22 — Open Play: skip "Finish your payment" alert (commit `7635340`)
+
+### Fix — Pending-payment signups auto-redirect to /pay
+- `apps/web/src/app/(app)/open-play/[id]/page.tsx` — if the current user has a signup in `pending_payment` status, the session detail page now `redirect()`s straight to `/open-play/signups/[id]/pay`. Previously revisiting the session (e.g. via the OPEN PLAY tile on the booking picker) showed the "Finish your payment / Pay now" alert as an extra hop. Confirmed signups still see the session details normally.
+
 ## 2026-05-22 — Open Play polish: readable tile + clearer reserve-and-pay CTA (commit `83fc792`)
 
 ### Fix — Picker tile contrast, shimmer placement, and join-page reserve+pay flow
