@@ -54,7 +54,7 @@ type SlideId = (typeof SLIDE_IDS)[number];
 // Per-slide canvas size. Default 1080x1080; owner-pitch is a tall sales sheet.
 const SLIDE_DIMS: Partial<Record<SlideId, { width: number; height: number }>> = {
   "owner-pitch": { width: 1080, height: 1620 },
-  "howto-book": { width: 1080, height: 1920 },
+  "howto-book": { width: 1920, height: 1080 },
 };
 
 const paramsSchema = z.object({ slide: z.enum(SLIDE_IDS) });
