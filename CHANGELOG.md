@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## 2026-05-21 (later)
+
+### Polish — Availability poster: per-hour chips, bigger QR, "Scan or tap to book"
+
+- **Per-hour slot chips.** Was: one merged pill per range (e.g. `6 AM – 10 PM`). Now: one pill per 1-hour slot (`6–7 AM`, `7–8 AM`, …, `11 PM–12 AM`), so the poster shows exactly how the booking grid is bookable. `expandHourlySlots` flattens `ShareSlotRange[]` to per-hour labels via `formatHourSlotLabel(h)` (en-dash, period-collapse when both ends share AM/PM).
+- **Manual row chunking via `SlotGrid`.** Satori's `flexWrap: "wrap"` is unreliable for variable-width pills inside nested flex containers — chips kept overflowing the right edge even with explicit width, `flexShrink: 0`, and no wrapper divs. Replaced with a column-of-rows: `chunk(labels, perRow)` → each row a flex row of pills with per-pill `marginRight` (last child trimmed). Caps at 12 (FB / portrait, 4 per row) and 8–12 (square, 4 per row) with a green `+N more` indicator pill.
+- **Bigger, scannable QR.** FB 200px, IG-portrait 180px, IG-square 150px (was 90–100). Card padding, eyebrow size, URL size, and gap all scale with QR size. URL allows wrapping (`lineHeight: 1.2`) — Satori's `whiteSpace: nowrap + textOverflow: ellipsis` does not actually clip.
+- **CTA copy.** Eyebrow above QR now reads `SCAN OR TAP TO BOOK` (uppercase, `0.1em` letter-spacing) instead of `SCAN TO BOOK`.
+- **Files:** `apps/web/src/app/api/og/availability/[slug]/route.tsx` (only).
+- **Hard-won (added to `AGENTS.md`):** Satori `flexWrap: "wrap"` is unreliable for variable-width children in nested flex containers — chunk into rows manually. Text ellipsis is also unreliable — prefer wrapping with `lineHeight`.
+
 ## 2026-05-21
 
 ### Fixed — Owner availability poster returned HTTP 500 in production (couldn't preview or download)

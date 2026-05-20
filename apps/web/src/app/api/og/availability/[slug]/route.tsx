@@ -3,8 +3,6 @@ import QRCode from "qrcode";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import {
-  formatHourLabel,
-  formatRangeLabel,
   getShareCardData,
   type ShareCardData,
   type ShareSlotRange,
@@ -329,6 +327,7 @@ function SlotPill({
       style={{
         display: "flex",
         alignItems: "center",
+        flexShrink: 0,
         padding: `${14 * scale}px ${22 * scale}px`,
         borderRadius: 999,
         background: "#ffffff",
@@ -375,17 +374,23 @@ function QrBlock({
   shortUrl: string;
   size: number;
 }) {
+  // Scale typography + spacing with QR size so the block reads well at any scale.
+  const padding = Math.max(12, Math.round(size * 0.07));
+  const eyebrowSize = Math.max(18, Math.round(size * 0.11));
+  const urlSize = Math.max(22, Math.round(size * 0.13));
+  const gap = Math.max(20, Math.round(size * 0.12));
+  const maxUrlWidth = Math.max(280, Math.round(size * 2.2));
   return (
     <div style={{ display: "flex", alignItems: "center" }}>
       {qrDataUrl && (
         <div
           style={{
             display: "flex",
-            padding: 12,
+            padding,
             background: "#ffffff",
-            borderRadius: 16,
-            border: `1px solid ${COLORS.border}`,
-            boxShadow: `0 6px 18px ${COLORS.cardShadow}`,
+            borderRadius: 20,
+            border: `2px solid ${COLORS.brand}`,
+            boxShadow: `0 10px 28px ${COLORS.cardShadow}`,
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -394,32 +399,32 @@ function QrBlock({
       )}
       <div
         style={{
-          marginLeft: 20,
+          marginLeft: gap,
           display: "flex",
           flexDirection: "column",
         }}
       >
         <span
           style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: COLORS.inkMuted,
-            letterSpacing: "0.08em",
+            fontSize: eyebrowSize,
+            fontWeight: 800,
+            color: COLORS.brandDark,
+            letterSpacing: "0.1em",
             textTransform: "uppercase",
+            display: "flex",
           }}
         >
-          Scan to book
+          Scan or tap to book
         </span>
         <span
           style={{
             marginTop: 6,
-            fontSize: 22,
-            fontWeight: 700,
+            fontSize: urlSize,
+            fontWeight: 800,
             color: COLORS.ink,
-            maxWidth: 360,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            maxWidth: maxUrlWidth,
+            lineHeight: 1.2,
+            display: "flex",
           }}
         >
           {shortUrl}
@@ -427,6 +432,89 @@ function QrBlock({
       </div>
     </div>
   );
+}
+
+// Expand merged ranges into hourly chips ("6\u20137 AM"). Caller decides cap.
+function expandHourlySlots(ranges: ShareSlotRange[]): string[] {
+  const out: string[] = [];
+  for (const r of ranges) {
+    for (let h = r.startHour; h < r.endHour; h++) out.push(formatHourSlotLabel(h));
+  }
+  return out;
+}
+
+// Chunk an array into N-sized rows so we can manually lay them out (Satori's
+// flex-wrap is unreliable for variable-width pill rows inside nested flex).
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function SlotGrid({
+  labels,
+  perRow,
+  scale,
+  extraCount,
+}: {
+  labels: string[];
+  perRow: number;
+  scale: number;
+  extraCount: number;
+}) {
+  const rows = chunk(labels, perRow);
+  const gap = Math.max(6, Math.round(12 * scale));
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {rows.map((row, ri) => (
+        <div
+          key={ri}
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            marginTop: ri === 0 ? 0 : gap,
+          }}
+        >
+          {row.map((label, ci) => (
+            <div key={`${label}-${ci}`} style={{ display: "flex", marginRight: ci === row.length - 1 ? 0 : gap }}>
+              <SlotPill label={label} scale={scale} />
+            </div>
+          ))}
+        </div>
+      ))}
+      {extraCount > 0 && (
+        <div style={{ display: "flex", marginTop: gap }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: `${10 * scale}px ${18 * scale}px`,
+              borderRadius: 999,
+              background: COLORS.brand,
+              color: "#ffffff",
+              fontWeight: 900,
+              fontSize: 24 * scale,
+            }}
+          >
+            +{extraCount} more
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// "6\u20137 AM", "11 AM\u201312 PM", "11 PM\u201312 AM". Hyphen is U+2013.
+function formatHourSlotLabel(startHour: number): string {
+  const start = ((startHour % 24) + 24) % 24;
+  const end = (start + 1) % 24;
+  const startPeriod = start < 12 ? "AM" : "PM";
+  const endPeriod = end === 0 || end < 12 ? "AM" : "PM";
+  const startDisplay = start % 12 === 0 ? 12 : start % 12;
+  const endDisplay = end % 12 === 0 ? 12 : end % 12;
+  return startPeriod === endPeriod
+    ? `${startDisplay}\u2013${endDisplay} ${endPeriod}`
+    : `${startDisplay} ${startPeriod}\u2013${endDisplay} ${endPeriod}`;
 }
 
 // Inter's Google Fonts TTF does not include U+20B1 (₱). Render as "PHP " in
@@ -617,41 +705,45 @@ function IgPortrait({ data, extras }: { data: ShareCardData; extras: RenderExtra
           </div>
         </div>
 
-        {/* Slot pills */}
+        {/* Hourly slot chips */}
         <div
           style={{
-            marginTop: 32,
+            marginTop: 28,
             display: "flex",
-            flexWrap: "wrap",
             flex: 1,
-            alignContent: "flex-start",
+            alignItems: "flex-start",
           }}
         >
           {data.fullyUnavailable ? (
             <div style={{ display: "flex", width: "100%", marginTop: 24 }}>
               <FullyBookedBanner scale={1.1} />
             </div>
-          ) : (
-            ranges.map((r) => (
-              <div key={r.startHour} style={{ display: "flex", marginRight: 14, marginBottom: 14 }}>
-                <SlotPill label={formatRangeLabel(r)} />
-              </div>
-            ))
-          )}
+          ) : (() => {
+            const slots = expandHourlySlots(ranges);
+            const cap = 12;
+            return (
+              <SlotGrid
+                labels={slots.slice(0, cap)}
+                perRow={4}
+                scale={0.7}
+                extraCount={Math.max(0, slots.length - cap)}
+              />
+            );
+          })()}
         </div>
 
         {/* Footer: QR + wordmark */}
         <div
           style={{
-            marginTop: 24,
+            marginTop: 20,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             borderTop: `1px solid ${COLORS.border}`,
-            paddingTop: 28,
+            paddingTop: 24,
           }}
         >
-          <QrBlock qrDataUrl={extras.qrDataUrl} shortUrl={extras.shortUrl} size={140} />
+          <QrBlock qrDataUrl={extras.qrDataUrl} shortUrl={extras.shortUrl} size={200} />
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
             <BrandWordmark size={42} />
             <span
@@ -817,22 +909,26 @@ function IgSquare({ data, extras }: { data: ShareCardData; extras: RenderExtras 
           style={{
             marginTop: 22,
             display: "flex",
-            flexWrap: "wrap",
             flex: 1,
-            alignContent: "flex-start",
+            alignItems: "flex-start",
           }}
         >
           {data.fullyUnavailable ? (
             <div style={{ display: "flex", width: "100%", marginTop: 18 }}>
               <FullyBookedBanner />
             </div>
-          ) : (
-            ranges.map((r) => (
-              <div key={r.startHour} style={{ display: "flex", marginRight: 12, marginBottom: 12 }}>
-                <SlotPill label={formatRangeLabel(r)} scale={0.85} />
-              </div>
-            ))
-          )}
+          ) : (() => {
+            const slots = expandHourlySlots(ranges);
+            const cap = 12;
+            return (
+              <SlotGrid
+                labels={slots.slice(0, cap)}
+                perRow={4}
+                scale={0.82}
+                extraCount={Math.max(0, slots.length - cap)}
+              />
+            );
+          })()}
         </div>
 
         <div
@@ -845,7 +941,7 @@ function IgSquare({ data, extras }: { data: ShareCardData; extras: RenderExtras 
             paddingTop: 22,
           }}
         >
-          <QrBlock qrDataUrl={extras.qrDataUrl} shortUrl={extras.shortUrl} size={120} />
+          <QrBlock qrDataUrl={extras.qrDataUrl} shortUrl={extras.shortUrl} size={180} />
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
             <BrandWordmark size={36} />
             <span style={{ marginTop: 6, fontSize: 16, color: COLORS.inkMuted, fontWeight: 600 }}>
@@ -998,38 +1094,26 @@ function FbLandscape({ data, extras }: { data: ShareCardData; extras: RenderExtr
           style={{
             marginTop: 22,
             display: "flex",
-            flexWrap: "wrap",
             flex: 1,
-            alignContent: "flex-start",
+            alignItems: "flex-start",
           }}
         >
           {data.fullyUnavailable ? (
             <div style={{ display: "flex", width: "100%", marginTop: 12 }}>
               <FullyBookedBanner />
             </div>
-          ) : (
-            ranges.slice(0, 6).map((r) => (
-              <div key={r.startHour} style={{ display: "flex", marginRight: 10, marginBottom: 10 }}>
-                <SlotPill label={formatRangeLabel(r)} scale={0.7} />
-              </div>
-            ))
-          )}
-          {!data.fullyUnavailable && ranges.length > 6 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "12px 18px",
-                borderRadius: 999,
-                background: COLORS.brand,
-                color: "#ffffff",
-                fontWeight: 800,
-                fontSize: 22,
-              }}
-            >
-              +{ranges.length - 6} more
-            </div>
-          )}
+          ) : (() => {
+            const slots = expandHourlySlots(ranges);
+            const cap = 9;
+            return (
+              <SlotGrid
+                labels={slots.slice(0, cap)}
+                perRow={3}
+                scale={0.7}
+                extraCount={Math.max(0, slots.length - cap)}
+              />
+            );
+          })()}
         </div>
 
         <div
@@ -1041,12 +1125,9 @@ function FbLandscape({ data, extras }: { data: ShareCardData; extras: RenderExtr
             paddingTop: 18,
           }}
         >
-          <QrBlock qrDataUrl={extras.qrDataUrl} shortUrl={extras.shortUrl} size={100} />
+          <QrBlock qrDataUrl={extras.qrDataUrl} shortUrl={extras.shortUrl} size={150} />
         </div>
       </div>
     </div>
   );
 }
-
-// Keep the unused import detector happy without removing the helper.
-void formatHourLabel;
