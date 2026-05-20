@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
@@ -53,6 +53,7 @@ export function SessionForm({ venueId, courts }: SessionFormProps) {
     createSessionAction,
     null,
   );
+  const [selectedCount, setSelectedCount] = useState(courts.length);
 
   const fieldErrors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
   const topError = state && !state.ok && !state.fieldErrors ? state.message : undefined;
@@ -113,26 +114,33 @@ export function SessionForm({ venueId, courts }: SessionFormProps) {
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           id="courtId"
-          label="Courts"
+          label={
+            courts.length === 1
+              ? "Courts"
+              : `Courts (${selectedCount} of ${courts.length} selected)`
+          }
           hint={
             courts.length === 1
               ? "Only one court available — auto-selected."
-              : "Select one or more courts to reserve for this session."
+              : "All courts pre-selected. Untick any court you DON'T want for this session."
           }
           error={err("courtIds") ?? err("courtId")}
         >
           {() => (
             <div className="flex flex-wrap gap-2">
-              {courts.map((c, i) => (
+              {courts.map((c) => (
                 <label
                   key={c.id}
-                  className="group relative inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium text-[var(--color-fg)] transition-colors hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)] has-[input:checked]:border-[var(--color-brand-500)] has-[input:checked]:bg-[var(--color-brand-50)] has-[input:checked]:text-[var(--color-brand-700)] has-[input:checked]:ring-2 has-[input:checked]:ring-[var(--color-brand-500)]"
+                  className="group relative inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-md)] border-2 border-[var(--color-border-default)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium text-[var(--color-fg)] transition-colors hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)] has-[input:checked]:border-[var(--color-brand-500)] has-[input:checked]:bg-[var(--color-brand-50)] has-[input:checked]:text-[var(--color-brand-700)]"
                 >
                   <input
                     type="checkbox"
                     name="courtId"
                     value={c.id}
-                    defaultChecked={courts.length === 1 || i === 0}
+                    defaultChecked
+                    onChange={(e) =>
+                      setSelectedCount((n) => n + (e.target.checked ? 1 : -1))
+                    }
                     className="sr-only"
                   />
                   <span aria-hidden="true" className="flex size-4 items-center justify-center rounded border border-[var(--color-border-default)] bg-[var(--color-bg)] text-[var(--color-brand-700)] group-has-[input:checked]:border-[var(--color-brand-500)] group-has-[input:checked]:bg-[var(--color-brand-500)] group-has-[input:checked]:text-white">

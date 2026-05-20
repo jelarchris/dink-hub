@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import { Trophy, Zap } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
@@ -24,7 +23,6 @@ export function JoinForm({
   totalCentavos,
   defaultContactEmail,
 }: JoinFormProps) {
-  const router = useRouter();
   const [state, formAction] = useActionState<ActionResult<{ signupId: string }> | null, FormData>(
     joinSessionAction,
     null,
@@ -32,12 +30,8 @@ export function JoinForm({
 
   const fieldErrors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
   const topError = state && !state.ok && !state.fieldErrors ? state.message : undefined;
-
-  useEffect(() => {
-    if (state?.ok && state.data?.signupId) {
-      router.push(`/open-play/signups/${state.data.signupId}/pay`);
-    }
-  }, [state, router]);
+  // On success the server action redirects to the pay screen, so this client
+  // never observes a success state. No client-side navigation needed.
 
   return (
     <form action={formAction} className="space-y-3 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4">

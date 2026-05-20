@@ -2,6 +2,7 @@
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { type ActionResult } from "@/features/auth";
 import { getCurrentUser } from "@/features/auth/service";
@@ -294,17 +295,21 @@ export async function joinSessionAction(
     };
   }
 
+  let signupId: string;
   try {
     const signup = await joinSession(parsed.data);
+    signupId = signup.id;
     after(async () => {
       await notifyOpenPlayJoinPending(signup.id);
     });
     revalidatePath(`/open-play/${parsed.data.sessionId}`);
     revalidatePath(`/me/open-play`);
-    return { ok: true, data: { signupId: signup.id } };
   } catch (err) {
     return unwrap(err);
   }
+  // Server-side redirect: takes the user STRAIGHT to the GCash receipt form.
+  // `redirect()` throws NEXT_REDIRECT — must be outside try/catch above.
+  redirect(`/open-play/signups/${signupId}/pay`);
 }
 
 export async function cancelSignupAction(
