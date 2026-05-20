@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Receipt,
   Settings,
+  Share2,
   ShieldCheck,
   Store,
   TrendingUp,
@@ -145,6 +146,14 @@ export default async function OwnerDashboard({
   const totalCourts = visibleVenues.reduce((total, item) => total + item.courtCount, 0);
   const showVenueFilter = venueList.length > 1;
   const hasActionItems = pendingCount > 0 || venueHealth.needsWork > 0 || stats.noShowsThisWeek > 0;
+
+  const shareableVenues = visibleVenues.filter(
+    (item) => item.venue.status === "active" && item.activeCourtCount > 0,
+  );
+  const shareHref =
+    shareableVenues.length === 1 && shareableVenues[0]
+      ? `/owner/venues/${shareableVenues[0].venue.id}/share`
+      : "/owner/venues";
 
   return (
     <Container className="py-3 sm:py-4">
@@ -336,6 +345,18 @@ export default async function OwnerDashboard({
             subtitle="Courts, hours, GCash"
             badge={venueHealth.needsWork > 0 ? `${venueHealth.needsWork} to fix` : undefined}
           />
+          {shareableVenues.length > 0 && (
+            <QuickAction
+              href={shareHref}
+              icon={<Share2 className="size-4" />}
+              title="Share availability"
+              subtitle={
+                shareableVenues.length === 1
+                  ? "Post a branded poster"
+                  : `Pick from ${shareableVenues.length} venues`
+              }
+            />
+          )}
           <QuickAction
             href="/owner/open-play"
             icon={<Trophy className="size-4" />}

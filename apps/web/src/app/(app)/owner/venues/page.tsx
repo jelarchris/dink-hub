@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, MapPin, Plus } from "lucide-react";
+import { Building2, MapPin, Plus, Share2 } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -58,9 +58,13 @@ export default async function OwnerVenuesPage() {
         />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map(({ venue, courtCount }) => (
+          {items.map(({ venue, courtCount, activeCourtCount }) => (
             <li key={venue.id}>
-              <VenueRow venue={venue} courtCount={courtCount} />
+              <VenueRow
+                venue={venue}
+                courtCount={courtCount}
+                shareable={venue.status === "active" && activeCourtCount > 0}
+              />
             </li>
           ))}
         </ul>
@@ -69,37 +73,57 @@ export default async function OwnerVenuesPage() {
   );
 }
 
-function VenueRow({ venue, courtCount }: { venue: Venue; courtCount: number }) {
+function VenueRow({
+  venue,
+  courtCount,
+  shareable,
+}: {
+  venue: Venue;
+  courtCount: number;
+  shareable: boolean;
+}) {
   const img = venueMediaPublicUrl(venue.coverImagePath) ?? venue.coverImageUrl;
   return (
-    <Link
-      href={`/owner/venues/${venue.id}`}
-      className="group block overflow-hidden rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
-    >
-      <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-brand-100)] to-[var(--color-bg-muted)]">
-        {img && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={img} alt={venue.name} className="h-full w-full object-cover" />
-        )}
-        <span className="absolute right-2 top-2">
-          <StatusBadge status={venue.status} />
-        </span>
-      </div>
-      <div className="mt-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <h3 className="truncate text-sm font-semibold leading-tight group-hover:text-[var(--color-brand-700)]">
-            {venue.name}
-          </h3>
-          <span className="shrink-0 text-[10px] uppercase text-[var(--color-fg-muted)]">
-            {courtCount} court{courtCount === 1 ? "" : "s"}
+    <div className="group relative">
+      <Link
+        href={`/owner/venues/${venue.id}`}
+        className="block overflow-hidden rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
+      >
+        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-brand-100)] to-[var(--color-bg-muted)]">
+          {img && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={img} alt={venue.name} className="h-full w-full object-cover" />
+          )}
+          <span className="absolute right-2 top-2">
+            <StatusBadge status={venue.status} />
           </span>
         </div>
-        <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--color-fg-muted)]">
-          <MapPin className="size-3" />
-          <span className="truncate">{venue.city}, {venue.province}</span>
-        </p>
-      </div>
-    </Link>
+        <div className="mt-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="truncate text-sm font-semibold leading-tight group-hover:text-[var(--color-brand-700)]">
+              {venue.name}
+            </h3>
+            <span className="shrink-0 text-[10px] uppercase text-[var(--color-fg-muted)]">
+              {courtCount} court{courtCount === 1 ? "" : "s"}
+            </span>
+          </div>
+          <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--color-fg-muted)]">
+            <MapPin className="size-3" />
+            <span className="truncate">{venue.city}, {venue.province}</span>
+          </p>
+        </div>
+      </Link>
+      {shareable && (
+        <Link
+          href={`/owner/venues/${venue.id}/share`}
+          aria-label={`Share availability for ${venue.name}`}
+          title="Share availability"
+          className="absolute left-2 top-2 inline-flex size-8 items-center justify-center rounded-full bg-white/95 text-[var(--color-brand-700)] shadow-sm ring-1 ring-black/5 backdrop-blur transition hover:bg-white hover:text-[var(--color-brand-800)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]"
+        >
+          <Share2 className="size-4" />
+        </Link>
+      )}
+    </div>
   );
 }
 

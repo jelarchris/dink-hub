@@ -71,6 +71,7 @@ async function loadVenueOwned(venueId: string, ownerId: string): Promise<Venue> 
 export interface OwnerVenueListItem {
   venue: Venue;
   courtCount: number;
+  activeCourtCount: number;
 }
 
 export async function listVenuesForOwner(ownerId: string): Promise<OwnerVenueListItem[]> {
@@ -78,13 +79,18 @@ export async function listVenuesForOwner(ownerId: string): Promise<OwnerVenueLis
     .select({
       venue: venues,
       courtCount: sql<number>`count(${courts.id}) filter (where ${courts.deletedAt} is null)::int`,
+      activeCourtCount: sql<number>`count(${courts.id}) filter (where ${courts.deletedAt} is null and ${courts.isActive} = true)::int`,
     })
     .from(venues)
     .leftJoin(courts, eq(courts.venueId, venues.id))
     .where(and(eq(venues.ownerId, ownerId), isNull(venues.deletedAt)))
     .groupBy(venues.id)
     .orderBy(desc(venues.createdAt));
-  return rows.map((r) => ({ venue: r.venue, courtCount: r.courtCount }));
+  return rows.map((r) => ({
+    venue: r.venue,
+    courtCount: r.courtCount,
+    activeCourtCount: r.activeCourtCount,
+  }));
 }
 
 export async function getVenueWithCourtsForOwner(
