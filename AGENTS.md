@@ -93,6 +93,7 @@ Vercel auto-aliases `dinkhub.ph`.
 
 ## Hard-won facts (don't relearn these)
 
+- Closure auto-move (`closeBookingsForRange` with `autoReschedule:true`) iterates sibling courts inside a nested `tx.transaction(async sp => ...)` SAVEPOINT — `23P01` continues to next sibling, `23505` (`bookings_one_active_rebook_per_parent`) breaks the loop entirely. Auto-moved child gets `cancellableUntil = now+24h` (not 15min) so player has time to react after waking up. `bookingRescheduledByOwnerEmail` switches to "Court change" wording when `oldCourtName` is set AND old/new times are equal — used by `notifyBookingAutoMoved`. Parent is always cancelled; child appears confirmed at same time on new court.
 - Closure flow writes BOTH `bookings` force-cancellations AND `court_closures` rows in one tx — closure rows are intentional historical evidence, do not GC.
 - Booking page `?rebook=<bookingId>` enters free-rebook mode: same venue, same duration, parent fees snapshot, status=`confirmed`, no payment. DB partial unique idx `bookings_one_active_rebook_per_parent` is the authoritative double-claim guard. Free-rebook categories: `venue_closure | weather | court_unavailable`.
 - BookingError code for EXCLUDE GiST constraint hit is `slot_not_available` (NOT `slot_unavailable`); 23505 → `booking_wrong_status`.
