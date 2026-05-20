@@ -93,6 +93,9 @@ Vercel auto-aliases `dinkhub.ph`.
 
 ## Hard-won facts (don't relearn these)
 
+- React 19 `react-hooks/purity` lint forbids `Date.now()` inside Server Component render functions (even though it'd run on the server). Compute `now` in the page handler and pass it in as a prop.
+- `getOwnerGridData(args)` (`features/bookings-view/repo.ts`) takes `courtId` as OPTIONAL and falls back to the first active court internally. Don't do two-pass lookups from the page — pass the requested court id with the `exactOptionalPropertyTypes` spread `...(id !== undefined ? { courtId: id } : {})` and let the repo resolve. Returns `null` only when the venue isn't owned.
+
 - ONE Supabase project only. No separate prod DB.
 - Vercel Hobby caps cron to once/day → use GitHub Actions for sub-daily AND weekly crons. `CRON_SECRET` repo secret = Vercel `CRON_SECRET` env.
 - Asia/Manila is fixed UTC+8, no DST → `+ 8h` arithmetic is safe in `computePriorWeekPeriod`.

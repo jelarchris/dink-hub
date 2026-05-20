@@ -1,5 +1,15 @@
 ﻿# Changelog
 
+## 2026-05-22 (later)
+
+### Feat — Owner schedule grid view (player-picker style)
+
+- **`/owner/bookings?view=grid` ships as a second view on the schedule page.** Direct answer to "I want it the same as the player slot picker." Above the status tabs there's now an Agenda ↔ Grid toggle. Grid mode renders the player slot-picker visual: a horizontal 14-day date strip (2-line chips: WED / 20 / MAY), a per-court tab row (when the venue has >1 active court), then a stacked column of hourly tiles for the selected court+day showing open / past / closed / booked states. Booked tiles fill the whole booking span (first hour shows player first name, continuations show "↑ cont'd"). Bottom strip summarises booked hours, utilisation %, and confirmed revenue.
+- **Tone-driven tiles, not generic chips.** Confirmed = filled brand-700 with white text. Pending = warning-50/300. Refunded = muted strike. Open play = info. Past = neutral subtle. Closed = dashed danger. Open = white with brand hover ring.
+- **New repo function `getOwnerGridData`.** Re-verifies venue ownership server-side, loads active courts ordered by name, picks the requested court (or falls back to the first), pulls bookings (overlap window, excluding `cancelled / no_show / expired`) and `court_closures` (excluding soft-deleted). Returns `null` only when the venue isn't owned. `courtId` arg is optional with internal fallback — caller never has to do a two-pass lookup.
+- **Dashboard tile retargeted.** `/owner` Schedule quick-action now links to `/owner/bookings?view=grid` ("Hourly grid by court") since the grid is what the user actually asked for.
+- **Files:** `apps/web/src/features/bookings-view/repo.ts`, `apps/web/src/features/bookings-view/index.ts`, `apps/web/src/app/(app)/owner/bookings/page.tsx`, `apps/web/src/app/(app)/owner/page.tsx`.
+
 ## 2026-05-22
 
 ### Feat — Owner schedule view (day-grouped agenda + tap-to-contact)

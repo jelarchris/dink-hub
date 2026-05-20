@@ -3,6 +3,7 @@ import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lt, or, sql } from
 import { db } from "@/db/client";
 import {
   bookings,
+  courtClosures,
   courts,
   payments,
   profiles,
@@ -585,5 +586,157 @@ export async function listBookingsForOwner(args: {
       },
     })),
     nextCursor,
+  };
+}
+
+// ============================================================================
+// Owner — single-day grid view (date + venue + court → hourly cells)
+// ============================================================================
+
+export interface OwnerGridCourt {
+  id: string;
+  name: string;
+  openHour: number;
+  closeHour: number;
+  hourlyRateCentavos: bigint;
+}
+
+export interface OwnerGridBooking {
+  id: string;
+  status: Booking["status"];
+  startAt: Date;
+  endAt: Date;
+  totalCentavos: bigint;
+  playerDisplayName: string;
+  playerEmail: string;
+  playerPhoneE164: string | null;
+}
+
+export interface OwnerGridClosure {
+  id: string;
+  startAt: Date;
+  endAt: Date;
+  reason: string | null;
+}
+
+export interface OwnerGridData {
+  venue: Pick<Venue, "id" | "name" | "slug">;
+  courts: OwnerGridCourt[];
+  /** Bookings that overlap the requested day, scoped to the selected court. */
+  bookings: OwnerGridBooking[];
+  /** Closures that overlap the requested day, scoped to the selected court. */
+  closures: OwnerGridClosure[];
+}
+
+/**
+ * Loads everything the owner grid needs for one (venue, court, day) tuple.
+ *
+ * - Ownership is re-checked at the venue level — never trust the URL.
+ * - `dayStart`/`dayEnd` are pre-computed UTC instants for the Manila day range.
+ *   We pull any booking/closure whose interval overlaps the window so partial-day
+ *   spans render correctly on tile boundaries.
+ * - Cancelled / no_show / expired bookings are excluded — they leave the slot open.
+ *   Refunded is included because the slot was historically taken.
+ * - If `courtId` is undefined or not part of the venue, falls back to the first
+ *   active court. Returns null only when the venue isn't owned or has no courts.
+ */
+export async function getOwnerGridData(args: {
+  ownerId: string;
+  venueId: string;
+  courtId?: string | undefined;
+  dayStartUtc: Date;
+  dayEndUtc: Date;
+}): Promise<OwnerGridData | null> {
+  // 1. Verify venue ownership.
+  const venueRows = await db
+    .select({ id: venues.id, name: venues.name, slug: venues.slug })
+    .from(venues)
+    .where(
+      and(
+        eq(venues.id, args.venueId),
+        eq(venues.ownerId, args.ownerId),
+        isNull(venues.deletedAt),
+      ),
+    )
+    .limit(1);
+  const venue = venueRows[0];
+  if (!venue) return null;
+
+  // 2. Active courts in display order.
+  const courtRows = await db
+    .select({
+      id: courts.id,
+      name: courts.name,
+      openHour: courts.openHour,
+      closeHour: courts.closeHour,
+      hourlyRateCentavos: courts.hourlyRateCentavos,
+    })
+    .from(courts)
+    .where(
+      and(
+        eq(courts.venueId, venue.id),
+        eq(courts.isActive, true),
+        isNull(courts.deletedAt),
+      ),
+    )
+    .orderBy(asc(courts.name));
+
+  if (courtRows.length === 0) {
+    return { venue, courts: [], bookings: [], closures: [] };
+  }
+
+  // Resolve to a real court: requested if owned, else first.
+  const selectedCourtId =
+    args.courtId && courtRows.some((c) => c.id === args.courtId)
+      ? args.courtId
+      : courtRows[0]!.id;
+
+  // 3. Bookings overlapping [dayStart, dayEnd) for the selected court.
+  const bookingRows = await db
+    .select({
+      id: bookings.id,
+      status: bookings.status,
+      startAt: bookings.startAt,
+      endAt: bookings.endAt,
+      totalCentavos: bookings.totalCentavos,
+      playerDisplayName: profiles.displayName,
+      playerEmail: profiles.email,
+      playerPhoneE164: profiles.phoneE164,
+    })
+    .from(bookings)
+    .innerJoin(profiles, eq(profiles.id, bookings.playerId))
+    .where(
+      and(
+        eq(bookings.courtId, selectedCourtId),
+        lt(bookings.startAt, args.dayEndUtc),
+        gt(bookings.endAt, args.dayStartUtc),
+        sql`${bookings.status} not in ('cancelled','no_show','expired')`,
+      ),
+    )
+    .orderBy(asc(bookings.startAt));
+
+  // 4. Closures overlapping the same window.
+  const closureRows = await db
+    .select({
+      id: courtClosures.id,
+      startAt: courtClosures.startAt,
+      endAt: courtClosures.endAt,
+      reason: courtClosures.reason,
+    })
+    .from(courtClosures)
+    .where(
+      and(
+        eq(courtClosures.courtId, selectedCourtId),
+        lt(courtClosures.startAt, args.dayEndUtc),
+        gt(courtClosures.endAt, args.dayStartUtc),
+        isNull(courtClosures.deletedAt),
+      ),
+    );
+
+  return {
+    venue,
+    courts: courtRows,
+    bookings: bookingRows,
+    closures: closureRows,
   };
 }

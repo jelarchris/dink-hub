@@ -2,6 +2,7 @@ export {
   findBookingDetailForPlayer,
   findBookingForOwner,
   findPaymentByIdForOwner,
+  getOwnerGridData,
   getPlayerDashboardData,
   listBookingsForOwner,
   listBookingsForPlayer,
@@ -13,6 +14,10 @@ export {
   type OwnerBookingDetail,
   type OwnerBookingListItem,
   type OwnerBookingStatusFilter,
+  type OwnerGridBooking,
+  type OwnerGridClosure,
+  type OwnerGridCourt,
+  type OwnerGridData,
   type PendingPaymentRow,
   type PlayerDashboardData,
 } from "./repo";
