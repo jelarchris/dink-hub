@@ -273,29 +273,29 @@ label {
   animation: modal-enter 0.22s ease-out;
 }
 
-/* Open Play picker tile: shimmer overlay (motion-safe only). */
+/* Open Play picker tile: shimmer top edge (motion-safe only). */
 @keyframes op-shimmer-sweep {
   0% {
-    transform: translateX(-100%);
+    background-position: -100% 0;
   }
   100% {
-    transform: translateX(100%);
+    background-position: 200% 0;
   }
 }
 
 @keyframes op-tile-pulse {
   0%,
   100% {
-    box-shadow: 0 4px 16px -6px rgba(139, 92, 246, 0.35);
+    box-shadow: 0 6px 18px -6px rgba(124, 58, 237, 0.55);
   }
   50% {
-    box-shadow: 0 6px 22px -4px rgba(217, 70, 239, 0.5);
+    box-shadow: 0 10px 24px -6px rgba(217, 70, 239, 0.65);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .motion-safe\:op-shimmer {
-    animation: op-shimmer-sweep 2.6s ease-in-out infinite;
+    animation: op-shimmer-sweep 2.4s linear infinite;
   }
   .op-tile {
     animation: op-tile-pulse 3.2s ease-in-out infinite;

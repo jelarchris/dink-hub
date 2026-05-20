@@ -141,6 +141,7 @@ export default async function PublicOpenPlayDetailPage({
               ) : (
                 <JoinForm
                   sessionId={session.id}
+                  sessionTitle={session.title}
                   totalCentavos={totalPrice}
                   defaultContactEmail={user.email ?? ""}
                 />

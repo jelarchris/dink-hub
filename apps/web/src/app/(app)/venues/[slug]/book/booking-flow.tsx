@@ -23,7 +23,6 @@ import { previewVoucherAction } from "@/features/vouchers/actions";
 import type { ActionResult } from "@/features/auth";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -704,52 +703,55 @@ export function BookingFlow({
                       }}
                       style={{ gridColumn: `span ${span} / span ${span}` }}
                       className={cn(
-                        "op-tile group relative overflow-hidden rounded-[var(--radius-md)] border px-3 py-3 text-left transition active:scale-[0.98]",
-                        "border-violet-300/60 dark:border-violet-400/30",
-                        "bg-[linear-gradient(110deg,rgba(139,92,246,0.18),rgba(217,70,239,0.14)_40%,rgba(99,102,241,0.18))]",
-                        "ring-2 ring-violet-400/40 hover:ring-violet-500/60",
-                        "shadow-[0_4px_16px_-6px_rgba(139,92,246,0.35)] hover:shadow-[0_6px_22px_-6px_rgba(139,92,246,0.5)]",
-                        disabled && "cursor-not-allowed opacity-60",
+                        "op-tile group relative overflow-hidden rounded-[var(--radius-md)] px-3 py-3 text-left transition active:scale-[0.98]",
+                        "bg-gradient-to-br from-violet-700 via-violet-600 to-fuchsia-600",
+                        "text-white shadow-[0_6px_18px_-6px_rgba(124,58,237,0.55)]",
+                        "ring-2 ring-violet-400/60 hover:ring-fuchsia-300/80",
+                        "hover:shadow-[0_10px_24px_-6px_rgba(217,70,239,0.6)]",
+                        disabled && "cursor-not-allowed opacity-70",
                       )}
                       title={op.title}
                     >
+                      {/* animated top edge — readable; never overlays text */}
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute inset-0 motion-safe:op-shimmer bg-[linear-gradient(110deg,transparent_30%,rgba(255,255,255,0.45)_50%,transparent_70%)] [background-size:200%_100%] mix-blend-overlay"
+                        className="pointer-events-none absolute inset-x-0 top-0 h-[3px] motion-safe:op-shimmer bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.95),transparent)] [background-size:50%_100%]"
                       />
                       <div className="relative flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-600/90 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white shadow">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/95 px-1.5 py-px text-[10px] font-extrabold uppercase tracking-wide text-violet-700 shadow-sm">
                           <Zap className="size-3" /> Open Play
                         </span>
-                        <Badge
-                          variant={isFull ? "danger" : "success"}
-                          className="text-[10px]"
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-bold",
+                            isFull
+                              ? "bg-red-500 text-white"
+                              : "bg-emerald-400 text-emerald-950",
+                          )}
                         >
                           {isFull ? "Full" : `${spotsLeft} spots`}
-                        </Badge>
-                      </div>
-                      <div className="relative mt-1.5 truncate text-sm font-bold leading-tight text-violet-950 dark:text-violet-50">
-                        {op.title}
-                      </div>
-                      <div className="relative mt-0.5 text-[11px] font-semibold text-violet-900/80 dark:text-violet-100/80">
-                        {formatTimeManila(new Date(op.start))}–{formatTimeManila(new Date(op.end))}
-                        <span className="ml-1 text-violet-900/60 dark:text-violet-100/60">
-                          ({durationHours}h)
                         </span>
                       </div>
-                      <div className="relative mt-2 h-1 w-full overflow-hidden rounded-full bg-violet-200/50 dark:bg-violet-900/40">
+                      <div className="relative mt-1.5 truncate text-sm font-bold leading-tight text-white drop-shadow-sm">
+                        {op.title}
+                      </div>
+                      <div className="relative mt-0.5 text-[11px] font-semibold text-white/90">
+                        {formatTimeManila(new Date(op.start))}–{formatTimeManila(new Date(op.end))}
+                        <span className="ml-1 text-white/70">({durationHours}h)</span>
+                      </div>
+                      <div className="relative mt-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
                         <div
-                          className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-[width]"
+                          className="h-full bg-gradient-to-r from-fuchsia-300 to-amber-300 transition-[width]"
                           style={{
                             width: `${Math.min(100, Math.round((op.activeSignupCount / op.capacity) * 100))}%`,
                           }}
                         />
                       </div>
                       <div className="relative mt-1.5 flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-violet-700 dark:text-violet-200">
+                        <span className="font-bold text-white">
                           {formatPHP(op.pricePerPlayerCentavos)}/player
                         </span>
-                        <span className="font-semibold text-violet-700 dark:text-violet-200 group-hover:underline">
+                        <span className="font-bold text-white group-hover:underline">
                           Reserve →
                         </span>
                       </div>
