@@ -56,20 +56,36 @@ const COLORS = {
   cardShadow: "rgba(15, 23, 42, 0.12)",
 } as const;
 
-// Inter from jsdelivr's @fontsource mirror — stable, versioned URLs (Google
-// Fonts' direct woff2 paths rotate with rebuilds and 404 unexpectedly).
+// Satori only supports TTF/OTF (rejects woff2 with "Unsupported OpenType
+// signature wOF2"). Google Fonts' CSS endpoint normally serves woff2, but
+// with an ancient User-Agent it falls back to TTF — the canonical Vercel OG
+// recipe. The intermediate gstatic font URLs rotate, but the CSS endpoint
+// itself is stable.
+async function fetchGoogleFontTtf(family: string, weight: 400 | 700 | 900): Promise<ArrayBuffer> {
+  const cssUrl = `https://fonts.googleapis.com/css?family=${encodeURIComponent(family)}:${weight}`;
+  const cssRes = await fetch(cssUrl, {
+    headers: {
+      // Wget UA causes Google Fonts to return a src: url(...) ending in .ttf
+      // (the IE6 trick returns a /l/font?kit= blob with no extension).
+      "User-Agent": "Wget/1.20.3 (linux-gnu)",
+    },
+    cache: "force-cache",
+  });
+  if (!cssRes.ok) throw new Error(`Font CSS fetch failed (${cssRes.status})`);
+  const css = await cssRes.text();
+  const match = /src:\s*url\((https:\/\/[^)]+\.ttf)\)/.exec(css);
+  if (!match?.[1]) throw new Error(`No TTF URL found in CSS for ${family} ${weight}`);
+  const fontRes = await fetch(match[1], { cache: "force-cache" });
+  if (!fontRes.ok) throw new Error(`Font TTF fetch failed (${fontRes.status})`);
+  return fontRes.arrayBuffer();
+}
+
 async function loadFonts(): Promise<Array<{ name: string; data: ArrayBuffer; weight: 400 | 700 | 900; style: "normal" }>> {
-  const urls = {
-    400: "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/files/inter-latin-400-normal.woff2",
-    700: "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/files/inter-latin-700-normal.woff2",
-    900: "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/files/inter-latin-900-normal.woff2",
-  } as const;
-  const fetchFont = async (url: string): Promise<ArrayBuffer> => {
-    const res = await fetch(url, { cache: "force-cache" });
-    if (!res.ok) throw new Error(`Font fetch failed (${res.status}) for ${url}`);
-    return res.arrayBuffer();
-  };
-  const [r400, r700, r900] = await Promise.all([fetchFont(urls[400]), fetchFont(urls[700]), fetchFont(urls[900])]);
+  const [r400, r700, r900] = await Promise.all([
+    fetchGoogleFontTtf("Inter", 400),
+    fetchGoogleFontTtf("Inter", 700),
+    fetchGoogleFontTtf("Inter", 900),
+  ]);
   return [
     { name: "Inter", data: r400, weight: 400, style: "normal" },
     { name: "Inter", data: r700, weight: 700, style: "normal" },
@@ -240,51 +256,60 @@ function BrandWordmark({ size }: { size: number }) {
 }
 
 function HeroBackdrop({
-  coverUrl,
   children,
   borderRadius,
 }: {
-  coverUrl: string | null;
   children?: React.ReactNode;
   borderRadius?: number;
 }) {
+  // Brand gradient unconditionally. Satori's image fetching is fragile across
+  // formats (WebP/AVIF) and signed URLs, so we don't rely on the venue cover
+  // here — the brand-gradient hero always looks crisp and stays on-brand.
   return (
     <div
       style={{
         position: "absolute",
-        inset: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: "100%",
+        height: "100%",
         display: "flex",
-        background: coverUrl
-          ? "#0a0a0a"
-          : `linear-gradient(135deg, ${COLORS.brandDark} 0%, ${COLORS.brand} 50%, ${COLORS.accent} 100%)`,
+        backgroundColor: COLORS.brandDark,
+        backgroundImage: `linear-gradient(135deg, ${COLORS.brandDark} 0%, ${COLORS.brand} 50%, ${COLORS.accent} 100%)`,
         borderRadius: borderRadius ?? 0,
         overflow: "hidden",
       }}
     >
-      {coverUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={coverUrl}
-          alt=""
-          width={1600}
-          height={1600}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
-        />
-      )}
-      {/* Dark gradient overlay for legibility */}
+      {/* Subtle radial highlight for depth */}
       <div
         style={{
           position: "absolute",
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: "100%",
+          height: "100%",
           display: "flex",
-          background:
-            "linear-gradient(180deg, rgba(10,10,10,0.55) 0%, rgba(10,10,10,0.15) 35%, rgba(10,10,10,0.0) 60%, rgba(10,10,10,0.85) 100%)",
+          backgroundImage:
+            "radial-gradient(ellipse at top right, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 55%)",
+        }}
+      />
+      {/* Bottom darken for caption legibility */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          backgroundImage:
+            "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.45) 100%)",
         }}
       />
       {children}
@@ -404,17 +429,21 @@ function QrBlock({
   );
 }
 
+// Inter's Google Fonts TTF does not include U+20B1 (₱). Render as "PHP " in
+// OG images to avoid tofu boxes — formatPHP() is unchanged everywhere else.
+function formatPesoForOg(centavos: bigint): string {
+  return formatPHP(centavos).replace(/\u20B1/g, "PHP ");
+}
+
 function priceSummary(data: ShareCardData): string {
-  // Distinct rates across all open ranges. If single rate -> "₱150 / hour".
-  // If multiple -> "₱150 – ₱200 / hour".
   const all = data.available.flatMap((r) => r.rates);
   if (all.length === 0) {
-    return `${formatPHP(data.court.baseHourlyRateCentavos)} / hour`;
+    return `${formatPesoForOg(data.court.baseHourlyRateCentavos)} / hour`;
   }
   const min = all.reduce((a, b) => (a < b ? a : b));
   const max = all.reduce((a, b) => (a > b ? a : b));
-  if (min === max) return `${formatPHP(min)} / hour`;
-  return `${formatPHP(min)}\u2009\u2013\u2009${formatPHP(max)} / hour`;
+  if (min === max) return `${formatPesoForOg(min)} / hour`;
+  return `${formatPesoForOg(min)}\u2009\u2013\u2009${formatPesoForOg(max)} / hour`;
 }
 
 function rangesOrFallback(data: ShareCardData): ShareSlotRange[] {
@@ -441,7 +470,7 @@ function IgPortrait({ data, extras }: { data: ShareCardData; extras: RenderExtra
     >
       {/* Hero (top 52%) */}
       <div style={{ position: "relative", width: 1080, height: 700, display: "flex" }}>
-        <HeroBackdrop coverUrl={data.venue.coverImageUrl} />
+        <HeroBackdrop />
         {/* Top-left brand + kicker */}
         <div
           style={{
@@ -482,13 +511,13 @@ function IgPortrait({ data, extras }: { data: ShareCardData; extras: RenderExtra
             Open Courts
           </div>
         </div>
-        {/* Bottom-left venue name + city overlay */}
+        {/* Venue name + city overlay (positioned above the card overlap) */}
         <div
           style={{
             position: "absolute",
             left: 56,
             right: 56,
-            bottom: 56,
+            bottom: 200,
             display: "flex",
             flexDirection: "column",
             color: "#ffffff",
@@ -662,7 +691,7 @@ function IgSquare({ data, extras }: { data: ShareCardData; extras: RenderExtras 
       }}
     >
       <div style={{ position: "relative", width: 1080, height: 520, display: "flex" }}>
-        <HeroBackdrop coverUrl={data.venue.coverImageUrl} />
+        <HeroBackdrop />
         <div
           style={{
             position: "absolute",
@@ -698,7 +727,7 @@ function IgSquare({ data, extras }: { data: ShareCardData; extras: RenderExtras 
             position: "absolute",
             left: 48,
             right: 48,
-            bottom: 44,
+            bottom: 140,
             display: "flex",
             flexDirection: "column",
             color: "#ffffff",
@@ -848,7 +877,7 @@ function FbLandscape({ data, extras }: { data: ShareCardData; extras: RenderExtr
     >
       {/* Left hero (50%) */}
       <div style={{ position: "relative", width: 600, height: 630, display: "flex" }}>
-        <HeroBackdrop coverUrl={data.venue.coverImageUrl} />
+        <HeroBackdrop />
         <div
           style={{
             position: "absolute",

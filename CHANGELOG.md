@@ -1,5 +1,24 @@
 ﻿# Changelog
 
+## 2026-05-21
+
+### Fixed — Owner availability poster returned HTTP 500 in production (couldn't preview or download)
+
+- **Symptom:** all three formats of `/api/og/availability/[slug]` returned 500 with an HTML error body. Share-page download saved an HTML file masquerading as `.png`; preview `<img>` was broken.
+- **Root cause:** Satori (the engine behind `next/og`) **rejects woff2** with `Unsupported OpenType signature wOF2`. The previous font loader pulled woff2 from `@fontsource` / direct Google Fonts WOFF2 CDN, so every render threw before producing pixels.
+- **Fix:**
+  - Font loader rewrites the Google Fonts CSS endpoint request with `User-Agent: Wget/1.20.3 (linux-gnu)` — that UA causes Google to return `src: url(...ttf)` instead of opaque `/l/font?kit=` blobs. We parse the `.ttf` URL out of the CSS and feed the TTF buffer to Satori. Wrapped in `Promise.allSettled` so a CDN hiccup degrades to system font instead of 500.
+  - `formatPesoForOg(centavos)` replaces `\u20B1` with `"PHP "` only inside the OG route, because Inter v20 from Google Fonts has no glyph for ₱ and was rendering tofu boxes. `formatPHP` from `@/lib/money` is unchanged everywhere else.
+  - `HeroBackdrop` no longer attempts to fetch the venue cover photo (remote images in Satori are unreliable — content-type/CORS/WebP issues). Hero now paints the brand gradient (`brandDark → brand → accent`) with a radial highlight and bottom-darken overlay. All absolute layers use explicit `top/left/right/bottom: 0` + `width/height: 100%` because Satori zero-sizes `inset: 0` containers whose only children are also absolute. Gradients use `backgroundImage` (separate from `backgroundColor`).
+  - IgPortrait + IgSquare venue-title blocks pushed up (`bottom: 200` and `bottom: 140` respectively) so they no longer collide with the white info card.
+  - `ImageResponse(...)` wrapped in try/catch reporting to Sentry with scope `og:availability` and slug/format extras.
+- **Files:** `apps/web/src/app/api/og/availability/[slug]/route.tsx` (only this file).
+- **Hard-won (added to `AGENTS.md`):**
+  - Satori **does not support woff2** — always feed TTF/OTF.
+  - Google Fonts CSS endpoint with `User-Agent: Wget/1.20.3 (linux-gnu)` returns clean `src: url(...ttf)` URLs; with a browser UA you get `/l/font?kit=` blobs that aren't fonts.
+  - Satori CSS quirks: prefer explicit `top/left/right/bottom: 0` + `width:"100%",height:"100%"` over `inset: 0`; use `backgroundImage` (not `background` shorthand) for gradients; avoid remote raster images when a CSS gradient will do.
+  - Inter (Google Fonts v20) has no ₱ glyph — replace with `"PHP "` in any Satori-rendered context.
+
 ## 2026-05-20
 
 ### Added — Owner "Share availability" poster (FB / IG / link card)
