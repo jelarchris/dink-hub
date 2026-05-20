@@ -366,11 +366,26 @@ function OpenPlayPreviewCard({ item }: { item: SessionListItem }) {
     <li>
       <Link
         href={`/open-play/${session.id}`}
-        className="group flex h-full flex-col rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4 transition hover:border-[var(--color-brand-500)] hover:shadow-[var(--shadow-md)]"
+        className="group relative flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border border-violet-200/70 bg-[var(--color-bg)] p-4 pt-5 shadow-[0_8px_24px_-12px_rgba(124,58,237,0.35)] transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:shadow-[0_14px_30px_-10px_rgba(124,58,237,0.55)]"
       >
+        {/* Solid violet→fuchsia→amber edge that brands the card as Open Play */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-fuchsia-500 to-amber-400"
+        />
+        {/* Hover-only shimmer sweep across the edge — calm at rest, alive on intent */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.95),transparent)] bg-[length:50%_100%] bg-repeat-x opacity-0 transition-opacity duration-300 group-hover:opacity-100 motion-safe:group-hover:[animation:op-shimmer-sweep_1.6s_linear_infinite]"
+        />
+
+        <div className="mb-2 inline-flex w-fit items-center gap-1 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-1.5 py-px text-[10px] font-extrabold uppercase tracking-wide text-white shadow-sm">
+          <Zap aria-hidden="true" className="size-3" /> Open Play
+        </div>
+
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold group-hover:text-[var(--color-brand-700)]">
+            <h3 className="truncate text-base font-semibold group-hover:text-violet-700">
               {session.title}
             </h3>
             <p className="mt-0.5 truncate text-xs text-[var(--color-fg-muted)]">
