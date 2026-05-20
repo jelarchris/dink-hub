@@ -91,6 +91,8 @@ export function ClosureForm({
   const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>(initialCourtIds);
   const [category, setCategory] = useState("venue_closure");
   const [reason, setReason] = useState("");
+  // Default ON — prefer to keep players playing. Owner can opt out per closure.
+  const [autoReschedule, setAutoReschedule] = useState(true);
 
   const fromIso = manilaInputToIso(fromLocal);
   const untilIso = manilaInputToIso(untilLocal);
@@ -107,11 +109,19 @@ export function ClosureForm({
 
   // Success state
   if (commitState?.ok) {
-    const { cancelledCount, skippedCount } = commitState.data;
+    const { cancelledCount, skippedCount, autoRescheduledCount } = commitState.data;
+    const movedLine =
+      autoRescheduledCount > 0
+        ? `${autoRescheduledCount} auto-moved to another court at the same time. `
+        : "";
+    const emailedLine =
+      cancelledCount > 0
+        ? `${cancelledCount} player${cancelledCount !== 1 ? "s were" : " was"} emailed${offersFreeRebook ? " a one-tap link to pick a new time" : ""}.`
+        : "";
     return (
       <Alert variant="success" title="Closure saved">
-        {cancelledCount} booking{cancelledCount !== 1 ? "s" : ""} cancelled. Players were
-        emailed{offersFreeRebook ? " with a one-tap link to pick a new time at no extra cost" : ""}.
+        {movedLine}
+        {emailedLine}
         {skippedCount > 0 && (
           <> {skippedCount} booking{skippedCount !== 1 ? "s" : ""} were modified during
           the operation and skipped — check them manually.</>
@@ -158,8 +168,13 @@ export function ClosureForm({
       <input type="hidden" name="untilAt" value={untilIso} />
       <input type="hidden" name="category" value={category} />
       <input type="hidden" name="reason" value={reason} />
+      <input type="hidden" name="autoReschedule" value={autoReschedule ? "on" : ""} />
     </>
   );
+
+  // Number of sibling courts available for auto-move (all venue courts − selected).
+  const siblingCount = courts.length - selectedCourtIds.length;
+  const canAutoReschedule = siblingCount > 0 && offersFreeRebook;
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--color-warning-300)] bg-[var(--color-warning-50)] p-4 space-y-4">
@@ -259,6 +274,27 @@ export function ClosureForm({
             />
           </div>
         </div>
+
+        {/* Auto-reschedule toggle. Hidden when no sibling court is available
+            or the category doesn't grant a free rebook (e.g. "Other"). */}
+        {courts.length > 1 && offersFreeRebook && (
+          <label
+            className="flex cursor-pointer items-start gap-2 rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-white px-3 py-2 text-sm"
+          >
+            <input
+              type="checkbox"
+              checked={autoReschedule}
+              onChange={(e) => setAutoReschedule(e.target.checked)}
+              className="mt-0.5 size-4 cursor-pointer accent-[var(--color-brand-600)]"
+            />
+            <span>
+              <span className="font-semibold">Auto-move bookings to another court at the same time when possible</span>
+              <span className="block text-xs text-[var(--color-fg-muted)] mt-0.5">
+                Bookings that can&apos;t be moved (no court free) still get the one-tap reschedule email. Players keep their original time when possible.
+              </span>
+            </span>
+          </label>
+        )}
       </div>
 
       {/* ── Step 2 — Preview ───────────────────────────────────────── */}
@@ -308,13 +344,27 @@ export function ClosureForm({
               <div className="font-semibold">
                 {preview.bookingCount === 0
                   ? "No active bookings in this window."
-                  : `${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""} will be cancelled`}
+                  : `${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""} affected`}
               </div>
               {preview.bookingCount > 0 && (
-                <div className="text-xs text-[var(--color-fg-muted)]">
-                  {offersFreeRebook
-                    ? "Each player gets an email with a one-tap link to pick a new time — same price, no payment needed. No refunds for you to process."
-                    : "Players will be emailed about the cancellation. No automatic reschedule offered for this category — handle refunds manually if needed."}
+                <div className="text-xs text-[var(--color-fg-muted)] space-y-0.5">
+                  {autoReschedule && canAutoReschedule && (
+                    <div>
+                      <strong>{preview.autoRescheduleableCount}</strong> can be auto-moved to another court at the same time.
+                    </div>
+                  )}
+                  {autoReschedule && canAutoReschedule && preview.bookingCount - preview.autoRescheduleableCount > 0 && (
+                    <div>
+                      <strong>{preview.bookingCount - preview.autoRescheduleableCount}</strong> {offersFreeRebook ? "will be emailed a one-tap link to pick a new time" : "will be emailed about the cancellation"} (no other court free).
+                    </div>
+                  )}
+                  {(!autoReschedule || !canAutoReschedule) && (
+                    <div>
+                      {offersFreeRebook
+                        ? "Each player gets an email with a one-tap link to pick a new time — same price, no payment needed. No refunds for you to process."
+                        : "Players will be emailed about the cancellation. No automatic reschedule offered for this category — handle refunds manually if needed."}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -333,17 +383,20 @@ export function ClosureForm({
 
       {/* ── Step 3 — Commit (only shown after a successful preview) ── */}
       {preview && preview.bookingCount > 0 && (
-        <form action={commitAction} className="border-t border-[var(--color-warning-200)] pt-3">
+        <form action={commitAction} className="border-t border-[var(--color-warning-200)] pt-3 space-y-2">
           {hiddenFields}
 
-          <p className="mb-2 text-xs text-[var(--color-warning-700)]">
-            {offersFreeRebook
-              ? `This cancels ${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""}. Each player gets an email with a free reschedule link — pick a new time, same price, no payment needed. No refunds to process.`
-              : `This permanently cancels ${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""}. Players will be emailed. "Other" cancellations don't include a free reschedule — handle refunds manually if needed.`}
+          <p className="text-xs text-[var(--color-warning-700)]">
+            {autoReschedule && canAutoReschedule && preview.autoRescheduleableCount > 0
+              ? `We'll auto-move ${preview.autoRescheduleableCount} booking${preview.autoRescheduleableCount !== 1 ? "s" : ""} to another court at the same time${preview.bookingCount - preview.autoRescheduleableCount > 0 ? `, and email the remaining ${preview.bookingCount - preview.autoRescheduleableCount} a one-tap reschedule link` : ""}. No refunds.`
+              : offersFreeRebook
+                ? `Each of the ${preview.bookingCount} affected player${preview.bookingCount !== 1 ? "s" : ""} gets an email with a free reschedule link — pick a new time, same price, no payment needed. No refunds to process.`
+                : `This permanently cancels ${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""}. Players will be emailed. "Other" cancellations don't include a free reschedule — handle refunds manually if needed.`}
           </p>
-          <SubmitButton variant="destructive" size="sm" pendingLabel="Closing…">
-            Confirm closure — cancel {preview.bookingCount} booking
-            {preview.bookingCount !== 1 ? "s" : ""}
+          <SubmitButton variant="default" size="sm" pendingLabel="Closing…">
+            {autoReschedule && canAutoReschedule && preview.autoRescheduleableCount > 0
+              ? `Confirm — reschedule ${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""}`
+              : `Confirm closure — notify ${preview.bookingCount} player${preview.bookingCount !== 1 ? "s" : ""}`}
           </SubmitButton>
         </form>
       )}

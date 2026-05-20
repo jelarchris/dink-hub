@@ -1132,6 +1132,7 @@ export async function recordOwnerRefund(
 export interface ClosurePreview {
   bookingCount: number;
   totalCentavos: bigint;
+  autoRescheduleableCount: number;
 }
 
 export async function previewClosureRange(
@@ -1163,7 +1164,56 @@ export async function previewClosureRange(
   });
 
   const totalCentavos = rows.reduce((sum, r) => sum + r.totalCentavos, 0n);
-  return { bookingCount: rows.length, totalCentavos };
+
+  // When auto-reschedule is on, estimate how many bookings could move to a
+  // sibling court at the same time. This is a HINT — the truth comes from the
+  // EXCLUDE constraint at commit time, which also accounts for slot_holds and
+  // open-play shadows. We deliberately don't over-engineer the preview.
+  let autoRescheduleableCount = 0;
+  if (input.autoReschedule && rows.length > 0) {
+    const { courts: courtsT, bookings: bookingsT } = await import("@/db/schema");
+    const { and: andF, eq: eqF, inArray: inArrayF, lt: ltF, gt: gtF, isNull: isNullF, ne: neF, not: notF } = await import("drizzle-orm");
+
+    const siblingCourts = await db
+      .select({ id: courtsT.id })
+      .from(courtsT)
+      .where(
+        andF(
+          eqF(courtsT.venueId, input.venueId),
+          eqF(courtsT.isActive, true),
+          isNullF(courtsT.deletedAt),
+          notF(inArrayF(courtsT.id, input.courtIds)),
+        ),
+      );
+    const siblingIds = siblingCourts.map((c) => c.id);
+    if (siblingIds.length > 0) {
+      const CANCELLABLE = ["pending_payment", "payment_submitted", "confirmed"] as const;
+      for (const candidate of rows) {
+        const conflicts = await db
+          .select({ courtId: bookingsT.courtId })
+          .from(bookingsT)
+          .where(
+            andF(
+              inArrayF(bookingsT.courtId, siblingIds),
+              inArrayF(bookingsT.status, CANCELLABLE),
+              ltF(bookingsT.startAt, candidate.endAt),
+              gtF(bookingsT.endAt, candidate.startAt),
+              neF(bookingsT.id, candidate.id),
+            ),
+          );
+        const occupied = new Set(conflicts.map((r) => r.courtId));
+        if (siblingIds.some((id) => !occupied.has(id))) {
+          autoRescheduleableCount++;
+        }
+      }
+    }
+  }
+
+  return {
+    bookingCount: rows.length,
+    totalCentavos,
+    autoRescheduleableCount,
+  };
 }
 
 // ============================================================================
@@ -1184,13 +1234,28 @@ export async function previewClosureRange(
 export interface CloseBookingsResult {
   cancelledCount: number;
   skippedCount: number;
+  autoRescheduledCount: number;
+}
+
+export interface AutoRescheduledMove {
+  /** New booking on a sibling court (status='confirmed', rebook of parent). */
+  newBookingId: string;
+  /** Court name BEFORE the move — used in the player email. */
+  oldCourtName: string;
+  /** Original times (unchanged) — surfaced in the email's ICS replacement. */
+  oldStartAt: Date;
+  oldEndAt: Date;
 }
 
 export async function closeBookingsForRange(
   input: import("./schema").ClosureRangeInput,
-): Promise<{ result: CloseBookingsResult; cancelledBookingIds: string[] }> {
+): Promise<{
+  result: CloseBookingsResult;
+  cancelledBookingIds: string[];
+  autoRescheduledMoves: AutoRescheduledMove[];
+}> {
   const { bookings: bookingsTable, courtClosures, courts, venues } = await import("@/db/schema");
-  const { and, eq, inArray } = await import("drizzle-orm");
+  const { and, eq, inArray, isNull, not } = await import("drizzle-orm");
 
   // Re-verify ownership inside the write path (defense in depth).
   const courtRows = await db
@@ -1208,6 +1273,23 @@ export async function closeBookingsForRange(
     throw new BookingError("not_authorized", "One or more courts do not belong to your venue");
   }
 
+  // Sibling courts at the venue (active, not part of this closure). Used as
+  // candidates for same-time auto-reschedule when input.autoReschedule is on.
+  const siblingCourtRows = input.autoReschedule
+    ? await db
+        .select({ id: courts.id, name: courts.name })
+        .from(courts)
+        .where(
+          and(
+            eq(courts.venueId, input.venueId),
+            eq(courts.isActive, true),
+            isNull(courts.deletedAt),
+            not(inArray(courts.id, input.courtIds)),
+          ),
+        )
+        .orderBy(courts.name)
+    : [];
+
   const candidates = await repo.findCancellableBookingsInRange({
     courtIds: input.courtIds,
     fromAt: input.fromAt,
@@ -1215,26 +1297,51 @@ export async function closeBookingsForRange(
   });
 
   if (candidates.length === 0) {
-    return { result: { cancelledCount: 0, skippedCount: 0 }, cancelledBookingIds: [] };
+    return {
+      result: { cancelledCount: 0, skippedCount: 0, autoRescheduledCount: 0 },
+      cancelledBookingIds: [],
+      autoRescheduledMoves: [],
+    };
+  }
+
+  // Map original courtId → courtName for auto-reschedule email context.
+  const courtNameById = new Map<string, string>();
+  {
+    const allCourtNameRows = await db
+      .select({ id: courts.id, name: courts.name })
+      .from(courts)
+      .where(inArray(courts.id, input.courtIds));
+    for (const c of allCourtNameRows) courtNameById.set(c.id, c.name);
   }
 
   const noteText = `[Owner closure · ${input.category}] ${input.reason}`;
   let cancelledCount = 0;
   let skippedCount = 0;
+  let autoRescheduledCount = 0;
   const cancelledBookingIds: string[] = [];
+  const autoRescheduledMoves: AutoRescheduledMove[] = [];
 
   // Single transaction — all-or-nothing across the batch.
   await db.transaction(async (tx) => {
     const now = await repo.getDatabaseNow(tx);
-    for (const candidate of candidates) {
-      const wasConfirmed = candidate.status === "confirmed";
-      const noteExtra = wasConfirmed
-        ? "\n[Refund pending — coordinate GCash refund with player]"
-        : "";
+    const autoRescheduleCancellableUntil = addMilliseconds(now, 24 * 60 * 60_000);
+    const autoReschedulePaymentDueAt = addMilliseconds(now, 24 * 60 * 60_000);
 
+    for (const candidate of candidates) {
       // Reload within tx to get current version + notes (guard against races).
       const fresh = await tx
-        .select({ version: bookingsTable.version, notes: bookingsTable.notes })
+        .select({
+          version: bookingsTable.version,
+          notes: bookingsTable.notes,
+          playerId: bookingsTable.playerId,
+          venueId: bookingsTable.venueId,
+          courtFeeCentavos: bookingsTable.courtFeeCentavos,
+          systemFeeCentavos: bookingsTable.systemFeeCentavos,
+          discountCentavos: bookingsTable.discountCentavos,
+          voucherId: bookingsTable.voucherId,
+          voucherCodeSnapshot: bookingsTable.voucherCodeSnapshot,
+          contactEmail: bookingsTable.contactEmail,
+        })
         .from(bookingsTable)
         .where(eq(bookingsTable.id, candidate.id))
         .limit(1);
@@ -1245,6 +1352,54 @@ export async function closeBookingsForRange(
         continue;
       }
 
+      // ---- Try auto-reschedule onto a sibling court (savepoint per attempt) ----
+      let movedTo: { newBookingId: string; newCourtName: string } | null = null;
+      if (input.autoReschedule && siblingCourtRows.length > 0) {
+        for (const sibling of siblingCourtRows) {
+          try {
+            const newId = await tx.transaction(async (sp) => {
+              const inserted = await sp
+                .insert(bookingsTable)
+                .values({
+                  playerId: row.playerId,
+                  venueId: row.venueId,
+                  courtId: sibling.id,
+                  startAt: candidate.startAt,
+                  endAt: candidate.endAt,
+                  status: "confirmed",
+                  courtFeeCentavos: row.courtFeeCentavos,
+                  systemFeeCentavos: row.systemFeeCentavos,
+                  discountCentavos: row.discountCentavos,
+                  ...(row.voucherId ? { voucherId: row.voucherId } : {}),
+                  ...(row.voucherCodeSnapshot
+                    ? { voucherCodeSnapshot: row.voucherCodeSnapshot }
+                    : {}),
+                  ...(row.contactEmail ? { contactEmail: row.contactEmail } : {}),
+                  cancellableUntil: autoRescheduleCancellableUntil,
+                  paymentDueAt: autoReschedulePaymentDueAt,
+                  rebookOfId: candidate.id,
+                  notes: `Auto-moved from ${courtNameById.get(candidate.courtId) ?? candidate.courtId} due to closure (${input.category}): ${input.reason}`,
+                })
+                .returning({ id: bookingsTable.id });
+              const ins = inserted[0];
+              if (!ins) throw new Error("auto-move insert returned no row");
+              return ins.id;
+            });
+            movedTo = { newBookingId: newId, newCourtName: sibling.name };
+            break;
+          } catch (err) {
+            // 23P01 (EXCLUDE GiST) — sibling court occupied at same time. Try next.
+            // 23505 (partial unique) — parent already has an active rebook. Stop.
+            if (isPgError(err, PG_EXCLUSION_VIOLATION)) continue;
+            if (isPgError(err, PG_UNIQUE_VIOLATION)) break;
+            throw err;
+          }
+        }
+      }
+
+      const noteExtra = movedTo
+        ? `\n[Auto-moved to ${movedTo.newCourtName} · same time]`
+        : "";
       const newNotes = row.notes
         ? `${row.notes}\n\n${noteText}${noteExtra}`
         : `${noteText}${noteExtra}`;
@@ -1269,8 +1424,18 @@ export async function closeBookingsForRange(
         .returning({ id: bookingsTable.id });
 
       if (updated.length > 0 && updated[0]) {
-        cancelledCount++;
-        cancelledBookingIds.push(updated[0].id);
+        if (movedTo) {
+          autoRescheduledCount++;
+          autoRescheduledMoves.push({
+            newBookingId: movedTo.newBookingId,
+            oldCourtName: courtNameById.get(candidate.courtId) ?? "another court",
+            oldStartAt: candidate.startAt,
+            oldEndAt: candidate.endAt,
+          });
+        } else {
+          cancelledCount++;
+          cancelledBookingIds.push(updated[0].id);
+        }
       } else {
         skippedCount++;
       }
@@ -1298,7 +1463,11 @@ export async function closeBookingsForRange(
     }
   });
 
-  return { result: { cancelledCount, skippedCount }, cancelledBookingIds };
+  return {
+    result: { cancelledCount, skippedCount, autoRescheduledCount },
+    cancelledBookingIds,
+    autoRescheduledMoves,
+  };
 }
 
 // Internal helper exposed for tests only — do not import from app code.
@@ -1452,3 +1621,4 @@ export async function rebookFromClosure(
     }
   });
 }
+

@@ -585,6 +585,8 @@ export function bookingRescheduledByOwnerEmail(
     playerDisplayName: string;
     oldStartAt: Date;
     oldEndAt: Date;
+    /** When set, the email frames the change as a court move rather than a time change. */
+    oldCourtName?: string | null;
     reason?: string | null;
   },
 ) {
@@ -609,32 +611,58 @@ export function bookingRescheduledByOwnerEmail(
   const newWhen = `${fmtDt(ctx.startAt)} – ${sameDay ? fmtTime(ctx.endAt) : fmtDt(ctx.endAt)}`;
   const bookingLink = `${APP_URL}/me/bookings`;
 
+  // Detect same-time-different-court case (auto-move from venue closure).
+  const isCourtMoveOnly =
+    !!ctx.oldCourtName &&
+    ctx.oldCourtName !== ctx.courtName &&
+    ctx.oldStartAt.getTime() === ctx.startAt.getTime() &&
+    ctx.oldEndAt.getTime() === ctx.endAt.getTime();
+
   const reasonHtml = ctx.reason
     ? `<p style="margin:0 0 12px 0;font-size:14px;color:#64748b;"><strong>Reason:</strong> ${escapeHtml(ctx.reason)}</p>`
     : "";
   const reasonText = ctx.reason ? `Reason: ${ctx.reason}\n` : "";
 
-  return {
-    subject: `Your booking has been rescheduled — ${ctx.venueName}`,
-    html: shell({
-      heading: `Booking rescheduled`,
-      bodyHtml: `
-        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)},</p>
-        <p style="margin:0 0 12px 0;"><strong>${escapeHtml(ctx.venueName)}</strong> has rescheduled your booking on <strong>${escapeHtml(ctx.courtName)}</strong>.</p>
-        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+  const headingLabel = isCourtMoveOnly ? "Court change" : "Booking rescheduled";
+  const subject = isCourtMoveOnly
+    ? `Your booking moved to ${ctx.courtName} — ${ctx.venueName}`
+    : `Your booking has been rescheduled — ${ctx.venueName}`;
+
+  const introHtml = isCourtMoveOnly
+    ? `<p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)},</p>
+        <p style="margin:0 0 12px 0;"><strong>${escapeHtml(ctx.venueName)}</strong> moved your booking from <strong>${escapeHtml(ctx.oldCourtName!)}</strong> to <strong>${escapeHtml(ctx.courtName)}</strong>. Same time, same price — no payment needed.</p>`
+    : `<p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)},</p>
+        <p style="margin:0 0 12px 0;"><strong>${escapeHtml(ctx.venueName)}</strong> has rescheduled your booking on <strong>${escapeHtml(ctx.courtName)}</strong>.</p>`;
+
+  const detailsHtml = isCourtMoveOnly
+    ? `<div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(newWhen)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.oldCourtName!)} → <strong>${escapeHtml(ctx.courtName)}</strong></p>
+          <p style="margin:0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+        </div>`
+    : `<div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
           <p style="margin:0 0 6px 0;"><strong>Original:</strong> ${escapeHtml(oldWhen)}</p>
           <p style="margin:0 0 6px 0;"><strong>New time:</strong> ${escapeHtml(newWhen)}</p>
           <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
           <p style="margin:0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
-        </div>
-        ${reasonHtml}
-        <p style="margin:0 0 12px 0;">A calendar invite is attached. If the new time doesn't work for you, please reply to this email to coordinate with the venue.</p>
-      `,
-      ctaHref: bookingLink,
-      ctaLabel: "View my bookings",
-    }),
-    text:
-      `Booking rescheduled — ${ctx.venueName}\n\n` +
+        </div>`;
+
+  const closingHtml = isCourtMoveOnly
+    ? `<p style="margin:0 0 12px 0;">A calendar invite is attached. If the new court doesn't work for you, reply to this email to coordinate with the venue.</p>`
+    : `<p style="margin:0 0 12px 0;">A calendar invite is attached. If the new time doesn't work for you, please reply to this email to coordinate with the venue.</p>`;
+
+  const textBody = isCourtMoveOnly
+    ? `Court change — ${ctx.venueName}\n\n` +
+      `Hi ${ctx.playerDisplayName},\n\n` +
+      `${ctx.venueName} moved your booking from ${ctx.oldCourtName} to ${ctx.courtName}.\n` +
+      `Same time, same price — no payment needed.\n\n` +
+      `When:  ${newWhen}\n` +
+      `Court: ${ctx.oldCourtName} → ${ctx.courtName}\n` +
+      reasonText +
+      `\nA calendar invite (.ics) is attached.\n` +
+      `If the new court doesn't work, reply to this email to coordinate.\n\n` +
+      `View bookings: ${bookingLink}\n`
+    : `Booking rescheduled — ${ctx.venueName}\n\n` +
       `Hi ${ctx.playerDisplayName},\n\n` +
       `${ctx.venueName} rescheduled your booking on ${ctx.courtName}.\n\n` +
       `Original time: ${oldWhen}\n` +
@@ -642,7 +670,17 @@ export function bookingRescheduledByOwnerEmail(
       reasonText +
       `\nA calendar invite (.ics) is attached.\n` +
       `If the new time doesn't work, reply to this email to coordinate.\n\n` +
-      `View bookings: ${bookingLink}\n`,
+      `View bookings: ${bookingLink}\n`;
+
+  return {
+    subject,
+    html: shell({
+      heading: headingLabel,
+      bodyHtml: `${introHtml}${detailsHtml}${reasonHtml}${closingHtml}`,
+      ctaHref: bookingLink,
+      ctaLabel: "View my bookings",
+    }),
+    text: textBody,
   };
 }
 

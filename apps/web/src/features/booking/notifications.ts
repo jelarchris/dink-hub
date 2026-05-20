@@ -274,6 +274,7 @@ export async function notifyBookingRescheduledByOwner(
   oldStartAt: Date,
   oldEndAt: Date,
   reason?: string | null,
+  oldCourtName?: string | null,
 ): Promise<void> {
   try {
     const ctx = await loadBookingJoin(bookingId);
@@ -288,6 +289,7 @@ export async function notifyBookingRescheduledByOwner(
       playerDisplayName: ctx.playerDisplayName,
       oldStartAt,
       oldEndAt,
+      ...(oldCourtName ? { oldCourtName } : {}),
       ...(reason ? { reason } : {}),
     });
     const icsContent = buildRescheduleIcs({
@@ -307,6 +309,22 @@ export async function notifyBookingRescheduledByOwner(
   } catch (err) {
     captureException(err, { scope: "notify.booking_rescheduled_by_owner", extra: { bookingId } });
   }
+}
+
+/**
+ * Player notification for the auto-move case: same time, different court.
+ * Reuses the rescheduled-by-owner email with `oldCourtName` set so the
+ * template switches to "Court change" wording. ICS update replaces the prior
+ * calendar event (stable UID = booking ID).
+ */
+export async function notifyBookingAutoMoved(
+  newBookingId: string,
+  oldCourtName: string,
+  oldStartAt: Date,
+  oldEndAt: Date,
+  reason: string,
+): Promise<void> {
+  await notifyBookingRescheduledByOwner(newBookingId, oldStartAt, oldEndAt, reason, oldCourtName);
 }
 
 async function bookingIdFromPaymentId(paymentId: string): Promise<string | null> {

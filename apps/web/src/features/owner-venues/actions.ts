@@ -725,11 +725,17 @@ const closureFormBaseSchema = z.object({
     "other",
   ]),
   reason: z.string().min(3, "Reason must be at least 3 characters").max(500),
+  // HTML checkboxes submit "on" when checked, nothing when unchecked.
+  autoReschedule: z
+    .string()
+    .optional()
+    .transform((v) => v === "on" || v === "true"),
 });
 
 export interface ClosurePreviewData {
   bookingCount: number;
   totalCentavos: string; // bigint serialised as string for client
+  autoRescheduleableCount: number;
 }
 
 export async function previewClosureRangeAction(
@@ -748,7 +754,7 @@ export async function previewClosureRangeAction(
       fieldErrors: fieldErrorsFromZod(parsed.error),
     };
   }
-  const { venueId, courtIds, fromAt, untilAt, category, reason } = parsed.data;
+  const { venueId, courtIds, fromAt, untilAt, category, reason, autoReschedule } = parsed.data;
 
   const { previewClosureRange } = await import("@/features/booking/service");
   const { isBookingError } = await import("@/features/booking/errors");
@@ -762,12 +768,14 @@ export async function previewClosureRangeAction(
       untilAt,
       category,
       reason,
+      autoReschedule,
     });
     return {
       ok: true,
       data: {
         bookingCount: preview.bookingCount,
         totalCentavos: preview.totalCentavos.toString(),
+        autoRescheduleableCount: preview.autoRescheduleableCount,
       },
     };
   } catch (err) {
@@ -782,6 +790,7 @@ export async function previewClosureRangeAction(
 export interface CloseBookingsData {
   cancelledCount: number;
   skippedCount: number;
+  autoRescheduledCount: number;
 }
 
 export async function closeBookingsForRangeAction(
@@ -800,15 +809,21 @@ export async function closeBookingsForRangeAction(
       fieldErrors: fieldErrorsFromZod(parsed.error),
     };
   }
-  const { venueId, courtIds, fromAt, untilAt, category, reason } = parsed.data;
+  const { venueId, courtIds, fromAt, untilAt, category, reason, autoReschedule } = parsed.data;
 
   const { closeBookingsForRange } = await import("@/features/booking/service");
   const { isBookingError } = await import("@/features/booking/errors");
-  const { notifyBookingCancelledByOwner } = await import("@/features/booking/notifications");
+  const { notifyBookingCancelledByOwner, notifyBookingAutoMoved } = await import(
+    "@/features/booking/notifications"
+  );
 
   let cancelledBookingIds: string[] = [];
+  let autoRescheduledMoves: Awaited<
+    ReturnType<typeof closeBookingsForRange>
+  >["autoRescheduledMoves"] = [];
   let cancelledCount = 0;
   let skippedCount = 0;
+  let autoRescheduledCount = 0;
 
   try {
     const outcome = await closeBookingsForRange({
@@ -819,10 +834,13 @@ export async function closeBookingsForRangeAction(
       untilAt,
       category,
       reason,
+      autoReschedule,
     });
     cancelledBookingIds = outcome.cancelledBookingIds;
+    autoRescheduledMoves = outcome.autoRescheduledMoves;
     cancelledCount = outcome.result.cancelledCount;
     skippedCount = outcome.result.skippedCount;
+    autoRescheduledCount = outcome.result.autoRescheduledCount;
   } catch (err) {
     if (isBookingError(err)) {
       return { ok: false, code: err.code, message: err.message };
@@ -832,14 +850,17 @@ export async function closeBookingsForRangeAction(
   }
 
   // Best-effort — fire after tx commits, never block the response.
-  await Promise.allSettled(
-    cancelledBookingIds.map((id) => notifyBookingCancelledByOwner(id, reason)),
-  );
+  await Promise.allSettled([
+    ...cancelledBookingIds.map((id) => notifyBookingCancelledByOwner(id, reason)),
+    ...autoRescheduledMoves.map((m) =>
+      notifyBookingAutoMoved(m.newBookingId, m.oldCourtName, m.oldStartAt, m.oldEndAt, reason),
+    ),
+  ]);
 
   revalidatePath("/owner");
   revalidatePath(`/owner/venues/${venueId}`);
 
-  return { ok: true, data: { cancelledCount, skippedCount } };
+  return { ok: true, data: { cancelledCount, skippedCount, autoRescheduledCount } };
 }
 
 // ============================================================================

@@ -179,6 +179,12 @@ export const closureRangeInputSchema = z.object({
   untilAt: z.date(),
   category: cancellationCategorySchema,
   reason: z.string().min(3, "Reason must be at least 3 characters").max(500),
+  /**
+   * If true, attempt to move each affected booking to any other active court
+   * at the same venue at the same start/end before cancelling. Falls back to
+   * the cancel + email-rebook-link path on a per-booking basis.
+   */
+  autoReschedule: z.boolean().default(false),
 }).superRefine((d, ctx) => {
   if (d.untilAt.getTime() <= d.fromAt.getTime()) {
     ctx.addIssue({
