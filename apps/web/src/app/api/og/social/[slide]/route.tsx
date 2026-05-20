@@ -1848,18 +1848,18 @@ function SlideOwnerPitch(): React.ReactElement {
   );
 }
 
-// ─── how-to-book (1080×1920 vertical instructional poster) ─────────────────
+// ─── how-to-book (1920×1080 landscape instructional poster) ────────────────
 function SlideHowtoBook(): React.ReactElement {
   const findSteps: Array<{ n: string; title: string; body: string }> = [
     {
       n: "1",
       title: "VISIT",
-      body: "Go to dinkhub.ph or open the app on your phone.",
+      body: "Go to dinkhub.ph on your phone or laptop.",
     },
     {
       n: "2",
       title: "SEARCH",
-      body: "Browse venues near you or search by city name.",
+      body: "Browse venues near you or search by city.",
     },
     {
       n: "3",
@@ -1876,12 +1876,12 @@ function SlideHowtoBook(): React.ReactElement {
     {
       n: "2",
       title: "PAY GCASH",
-      body: "Send the exact amount to the venue's GCash number.",
+      body: "Send the exact amount to the venue's GCash.",
     },
     {
       n: "3",
       title: "UPLOAD",
-      body: "Snap your receipt and upload. Confirmation in minutes.",
+      body: "Snap your receipt. Auto-confirmed in minutes.",
     },
   ];
   const benefits: Array<{ icon: string; title: string; body: string }> = [
@@ -1893,99 +1893,300 @@ function SlideHowtoBook(): React.ReactElement {
     {
       icon: "1:1",
       title: "NO DOUBLE-BOOKING",
-      body: "Two players can't claim the same hour. Guaranteed.",
+      body: "Two players can't claim the same hour.",
     },
     {
       icon: "REM",
       title: "EMAIL REMINDERS",
-      body: "We remind you before your game. No more no-shows.",
+      body: "We remind you before your game. Fewer no-shows.",
     },
   ];
 
-  return (
-    <Frame width={1080} height={1920}>
-      <Header />
+  const FRAME_W = 1920;
+  const FRAME_H = 1080;
+  const PAD = 64;
+  const LEFT_W = 640;
+  const RIGHT_W = FRAME_W - PAD * 2 - LEFT_W - 48; // 1120
 
-      {/* Title block */}
+  return (
+    <Frame width={FRAME_W} height={FRAME_H}>
+      <div style={{ display: "flex", width: "100%", height: "100%", gap: 48 }}>
+        {/* ─── LEFT COLUMN ─── */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            width: LEFT_W,
+          }}
+        >
+          <Logo />
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              marginTop: 40,
+              gap: 6,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                fontSize: 78,
+                fontWeight: 900,
+                lineHeight: 0.96,
+                letterSpacing: -2,
+                color: C.ink,
+                textTransform: "uppercase",
+              }}
+            >
+              HOW TO
+            </div>
+            <div
+              style={{
+                display: "flex",
+                fontSize: 78,
+                fontWeight: 900,
+                lineHeight: 0.96,
+                letterSpacing: -2,
+                color: C.ink,
+                textTransform: "uppercase",
+              }}
+            >
+              BOOK A COURT
+            </div>
+            <div
+              style={{
+                display: "flex",
+                fontSize: 78,
+                fontWeight: 900,
+                lineHeight: 0.96,
+                letterSpacing: -2,
+                color: C.neon,
+                textTransform: "uppercase",
+              }}
+            >
+              ON DINKHUB
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              marginTop: 22,
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: 4,
+              color: C.inkMuted,
+              textTransform: "uppercase",
+            }}
+          >
+            Easy steps · Instant booking · More pickleball
+          </div>
+
+          {/* Benefits panel */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              marginTop: 36,
+              padding: 24,
+              borderRadius: 18,
+              backgroundColor: C.card,
+              border: `1.5px solid ${C.neonSoft}`,
+              gap: 16,
+              width: LEFT_W,
+            }}
+          >
+            {benefits.map((b) => (
+              <div
+                key={b.title}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 52,
+                    height: 52,
+                    borderRadius: 12,
+                    backgroundColor: C.neon,
+                    color: C.bg,
+                    fontSize: 16,
+                    fontWeight: 900,
+                  }}
+                >
+                  {b.icon}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    width: LEFT_W - 24 * 2 - 52 - 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: 22,
+                      fontWeight: 900,
+                      color: C.ink,
+                      letterSpacing: -0.3,
+                    }}
+                  >
+                    {b.title}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: 17,
+                      color: C.inkMuted,
+                      marginTop: 2,
+                    }}
+                  >
+                    {b.body}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", marginTop: "auto", paddingTop: 24 }}>
+            <div
+              style={{
+                display: "flex",
+                fontSize: 24,
+                fontWeight: 900,
+                color: C.ink,
+                letterSpacing: -0.5,
+              }}
+            >
+              dinkhub.ph
+            </div>
+          </div>
+        </div>
+
+        {/* ─── RIGHT COLUMN ─── */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            width: RIGHT_W,
+          }}
+        >
+          <HowtoSection
+            num="1"
+            label="FIND YOUR COURT"
+            steps={findSteps}
+            rowWidth={RIGHT_W}
+          />
+          <div style={{ display: "flex", height: 36 }} />
+          <HowtoSection
+            num="2"
+            label="BOOK & PAY"
+            steps={bookSteps}
+            rowWidth={RIGHT_W}
+          />
+
+          <div
+            style={{
+              display: "flex",
+              marginTop: "auto",
+              paddingTop: 24,
+              justifyContent: "flex-end",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: 4,
+                color: C.neon,
+                textTransform: "uppercase",
+              }}
+            >
+              PLAY · BOOK · ENJOY
+            </div>
+          </div>
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+function HowtoSection({
+  num,
+  label,
+  steps,
+  rowWidth,
+}: {
+  num: string;
+  label: string;
+  steps: Array<{ n: string; title: string; body: string }>;
+  rowWidth: number;
+}) {
+  const gap = 20;
+  const cardW = Math.floor((rowWidth - gap * (steps.length - 1)) / steps.length);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: rowWidth }}>
+      {/* Banner */}
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
-          marginTop: 36,
-          gap: 14,
+          alignItems: "center",
+          gap: 16,
+          marginBottom: 20,
         }}
       >
         <div
           style={{
             display: "flex",
-            fontSize: 76,
+            alignItems: "center",
+            justifyContent: "center",
+            width: 56,
+            height: 56,
+            borderRadius: 14,
+            backgroundColor: C.neon,
+            color: C.bg,
+            fontSize: 30,
             fontWeight: 900,
-            lineHeight: 0.96,
-            letterSpacing: -2,
+          }}
+        >
+          {num}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            fontSize: 38,
+            fontWeight: 900,
             color: C.ink,
+            letterSpacing: -0.5,
             textTransform: "uppercase",
           }}
         >
-          HOW TO BOOK
-        </div>
-        <div
-          style={{
-            display: "flex",
-            fontSize: 76,
-            fontWeight: 900,
-            lineHeight: 0.96,
-            letterSpacing: -2,
-            color: C.neon,
-            textTransform: "uppercase",
-          }}
-        >
-          A COURT ON DINKHUB
-        </div>
-        <div
-          style={{
-            display: "flex",
-            marginTop: 10,
-            fontSize: 22,
-            fontWeight: 700,
-            letterSpacing: 4,
-            color: C.inkMuted,
-            textTransform: "uppercase",
-          }}
-        >
-          Easy steps · Instant booking · More pickleball
+          {label}
         </div>
       </div>
 
-      {/* Section 1 banner */}
-      <SectionBanner num="1" label="FIND YOUR COURT" topMargin={56} />
-
-      <StepRow steps={findSteps} />
-
-      {/* Section 2 banner */}
-      <SectionBanner num="2" label="BOOK & PAY" topMargin={48} />
-
-      <StepRow steps={bookSteps} />
-
-      {/* Benefits panel */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          marginTop: 56,
-          padding: 28,
-          borderRadius: 18,
-          backgroundColor: C.card,
-          border: `1.5px solid ${C.neonSoft}`,
-          gap: 18,
-        }}
-      >
-        {benefits.map((b) => (
+      {/* Cards row */}
+      <div style={{ display: "flex", gap }}>
+        {steps.map((s) => (
           <div
-            key={b.title}
+            key={s.n}
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: 18,
+              flexDirection: "column",
+              width: cardW,
+              padding: 22,
+              borderRadius: 16,
+              backgroundColor: C.card,
+              border: `1.5px solid ${C.neonSoft}`,
             }}
           >
             <div
@@ -1993,202 +2194,43 @@ function SlideHowtoBook(): React.ReactElement {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                backgroundColor: C.neon,
-                color: C.bg,
-                fontSize: 18,
+                width: 44,
+                height: 44,
+                borderRadius: 999,
+                backgroundColor: C.neonSoft,
+                color: C.neon,
+                fontSize: 22,
                 fontWeight: 900,
-                letterSpacing: 1,
+                marginBottom: 14,
               }}
             >
-              {b.icon}
+              {s.n}
             </div>
             <div
               style={{
                 display: "flex",
-                flexDirection: "column",
-                flex: 1,
+                fontSize: 26,
+                fontWeight: 900,
+                color: C.ink,
+                letterSpacing: -0.3,
+                marginBottom: 10,
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: 22,
-                  fontWeight: 900,
-                  color: C.ink,
-                  letterSpacing: -0.3,
-                }}
-              >
-                {b.title}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: 18,
-                  color: C.inkMuted,
-                  marginTop: 2,
-                }}
-              >
-                {b.body}
-              </div>
+              {s.title}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                fontSize: 18,
+                color: C.inkMuted,
+                lineHeight: 1.35,
+              }}
+            >
+              {s.body}
             </div>
           </div>
         ))}
       </div>
-
-      {/* Footer */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "auto",
-          paddingTop: 32,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            fontSize: 26,
-            fontWeight: 900,
-            color: C.ink,
-            letterSpacing: -0.5,
-          }}
-        >
-          dinkhub.ph
-        </div>
-        <div
-          style={{
-            display: "flex",
-            fontSize: 18,
-            fontWeight: 700,
-            letterSpacing: 4,
-            color: C.neon,
-            textTransform: "uppercase",
-          }}
-        >
-          PLAY · BOOK · ENJOY
-        </div>
-      </div>
-    </Frame>
-  );
-}
-
-function SectionBanner({
-  num,
-  label,
-  topMargin,
-}: {
-  num: string;
-  label: string;
-  topMargin: number;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        marginTop: topMargin,
-        marginBottom: 22,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 56,
-          height: 56,
-          borderRadius: 14,
-          backgroundColor: C.neon,
-          color: C.bg,
-          fontSize: 30,
-          fontWeight: 900,
-        }}
-      >
-        {num}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          fontSize: 36,
-          fontWeight: 900,
-          color: C.ink,
-          letterSpacing: -0.5,
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-}
-
-function StepRow({
-  steps,
-}: {
-  steps: Array<{ n: string; title: string; body: string }>;
-}) {
-  return (
-    <div style={{ display: "flex", gap: 18 }}>
-      {steps.map((s) => (
-        <div
-          key={s.n}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            padding: 22,
-            borderRadius: 16,
-            backgroundColor: C.card,
-            border: `1.5px solid ${C.neonSoft}`,
-            minHeight: 220,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 44,
-              height: 44,
-              borderRadius: 999,
-              backgroundColor: C.neonSoft,
-              color: C.neon,
-              fontSize: 22,
-              fontWeight: 900,
-              marginBottom: 14,
-            }}
-          >
-            {s.n}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              fontSize: 24,
-              fontWeight: 900,
-              color: C.ink,
-              letterSpacing: -0.3,
-              marginBottom: 8,
-            }}
-          >
-            {s.title}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              fontSize: 17,
-              color: C.inkMuted,
-              lineHeight: 1.35,
-            }}
-          >
-            {s.body}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
