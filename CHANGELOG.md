@@ -1,5 +1,13 @@
 ﻿# Changelog
 
+## 2026-05-22 — Open Play polish: readable tile + clearer reserve-and-pay CTA (commit `83fc792`)
+
+### Fix — Picker tile contrast, shimmer placement, and join-page reserve+pay flow
+
+- **Tile readability.** Replaced the pale-gradient + `mix-blend-overlay` full-tile shimmer (washed out text in bright environments) with a solid deep-violet panel (`from-violet-700 via-violet-600 to-fuchsia-600`), white text with `drop-shadow-sm`, white pill for "OPEN PLAY" badge, emerald-400 / red-500 capacity pill, and a 3px shimmer strip on the top edge only — animation never overlays the text. Updated `@keyframes op-shimmer-sweep` to background-position sweep so the edge strip animates correctly.
+- **Reserve & pay CTA.** Lifted session title into the JoinForm card itself as a violet header strip ("OPEN PLAY · {title} · Reserve your spot, then complete payment in GCash"). CTA copy sharpened from "Reserve spot — pay …" to **"Reserve & pay {price}"**, and the hint now reads "We'll take you straight to the payment screen. Your spot is held for 15 minutes." The form already auto-routed to `/open-play/signups/{id}/pay` — this is purely visual hierarchy.
+- **Multi-court verification.** Confirmed `listOpenPlayForCourts` returns one row per (session, court) via the `open_play_session_courts` join. The existing 6 sessions in DB are all single-court because they were published before yesterday's deploy (migration 0027 backfilled only the primary). New sessions created via the checkbox pill grid will populate every selected court.
+
 ## 2026-05-22 — Open Play: multi-court sessions + animated picker tiles
 
 ### Feat — Open Play sessions can occupy multiple courts; booking picker shows OPEN PLAY tiles (migration `0027_open_play_multi_court`)
