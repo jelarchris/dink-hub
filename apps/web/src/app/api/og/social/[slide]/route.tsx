@@ -121,17 +121,10 @@ function Logo() {
           width: 38,
           height: 38,
           borderRadius: 999,
-          background: C.neon,
+          backgroundColor: C.neon,
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: C.bg,
-          fontSize: 24,
-          fontWeight: 900,
         }}
-      >
-        ●
-      </div>
+      />
       dinkhub
     </div>
   );
@@ -1428,9 +1421,17 @@ function PitchRow({ pain, fix }: { pain: string; fix: string }) {
           lineHeight: 1.3,
         }}
       >
-        <span style={{ display: "flex", marginRight: 12, color: "#F87171" }}>
-          ✕
-        </span>
+        <span
+          style={{
+            display: "flex",
+            width: 22,
+            height: 22,
+            borderRadius: 999,
+            backgroundColor: "rgba(248,113,113,0.18)",
+            border: "1.5px solid #F87171",
+            marginRight: 12,
+          }}
+        />
         <span style={{ display: "flex", flex: 1 }}>{pain}</span>
       </div>
       <div
@@ -1438,7 +1439,8 @@ function PitchRow({ pain, fix }: { pain: string; fix: string }) {
           display: "flex",
           alignItems: "center",
           color: C.inkSubtle,
-          fontSize: 22,
+          fontSize: 28,
+          fontWeight: 900,
         }}
       >
         →
@@ -1458,9 +1460,16 @@ function PitchRow({ pain, fix }: { pain: string; fix: string }) {
           lineHeight: 1.3,
         }}
       >
-        <span style={{ display: "flex", marginRight: 12, color: C.neon, fontWeight: 900 }}>
-          ✓
-        </span>
+        <span
+          style={{
+            display: "flex",
+            width: 22,
+            height: 22,
+            borderRadius: 999,
+            backgroundColor: C.neon,
+            marginRight: 12,
+          }}
+        />
         <span style={{ display: "flex", flex: 1 }}>{fix}</span>
       </div>
     </div>
@@ -1579,7 +1588,7 @@ function SlideOwnerPitch(): React.ReactElement {
         style={{
           display: "flex",
           flexDirection: "column",
-          marginTop: 40,
+          marginTop: 32,
           width: "100%",
         }}
       >
@@ -1588,7 +1597,7 @@ function SlideOwnerPitch(): React.ReactElement {
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: 8,
             width: "100%",
           }}
         >
@@ -1603,7 +1612,7 @@ function SlideOwnerPitch(): React.ReactElement {
         style={{
           display: "flex",
           flexDirection: "column",
-          marginTop: 36,
+          marginTop: 28,
           width: "100%",
         }}
       >
@@ -1612,7 +1621,7 @@ function SlideOwnerPitch(): React.ReactElement {
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: 8,
           }}
         >
           {[0, 2, 4].map((start) => (
@@ -1633,9 +1642,16 @@ function SlideOwnerPitch(): React.ReactElement {
                     lineHeight: 1.3,
                   }}
                 >
-                  <span style={{ display: "flex", marginRight: 10, color: C.neon, fontWeight: 900 }}>
-                    ✓
-                  </span>
+                  <span
+                    style={{
+                      display: "flex",
+                      width: 16,
+                      height: 16,
+                      borderRadius: 999,
+                      backgroundColor: C.neon,
+                      marginRight: 12,
+                    }}
+                  />
                   <span style={{ display: "flex", flex: 1 }}>{t}</span>
                 </div>
               ))}
@@ -1648,8 +1664,8 @@ function SlideOwnerPitch(): React.ReactElement {
       <div
         style={{
           display: "flex",
-          marginTop: 36,
-          padding: "20px 28px",
+          marginTop: 28,
+          padding: "18px 26px",
           borderRadius: 16,
           backgroundColor: C.neon,
           color: C.bg,
@@ -1712,7 +1728,7 @@ function SlideOwnerPitch(): React.ReactElement {
         style={{
           display: "flex",
           flexDirection: "column",
-          marginTop: 30,
+          marginTop: 24,
           width: "100%",
         }}
       >
@@ -1778,7 +1794,7 @@ function SlideOwnerPitch(): React.ReactElement {
         style={{
           display: "flex",
           marginTop: "auto",
-          paddingTop: 28,
+          paddingTop: 20,
           alignItems: "center",
           justifyContent: "space-between",
           width: "100%",
