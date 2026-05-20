@@ -48,10 +48,10 @@ function manilaInputToIso(local: string): string {
 }
 
 const CATEGORY_OPTIONS = [
-  { value: "weather", label: "Weather" },
-  { value: "court_unavailable", label: "Court unavailable (damage / maintenance)" },
-  { value: "venue_closure", label: "Venue closure (power, holiday, emergency)" },
-  { value: "other", label: "Other" },
+  { value: "weather", label: "Weather — rain / storm (free reschedule)" },
+  { value: "court_unavailable", label: "Court unavailable — damage / maintenance (free reschedule)" },
+  { value: "venue_closure", label: "Venue closure — power, holiday, emergency (free reschedule)" },
+  { value: "other", label: "Other — no free reschedule offered" },
 ] as const;
 
 export function ClosureForm({
@@ -99,18 +99,19 @@ export function ClosureForm({
   // Was a successful preview loaded and not yet invalidated by form changes?
   const preview =
     previewState?.ok ? previewState.data : null;
-  const totalDisplay =
-    preview
-      ? `₱${(Number(preview.totalCentavos) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
-      : null;
+
+  // Free self-reschedule only applies to operational categories; "other" still
+  // cancels but doesn't grant a free rebook credit.
+  const offersFreeRebook =
+    category === "weather" || category === "court_unavailable" || category === "venue_closure";
 
   // Success state
   if (commitState?.ok) {
     const { cancelledCount, skippedCount } = commitState.data;
     return (
-      <Alert variant="success" title="Venue closure recorded">
-        {cancelledCount} booking{cancelledCount !== 1 ? "s" : ""} cancelled and players
-        notified.
+      <Alert variant="success" title="Closure saved">
+        {cancelledCount} booking{cancelledCount !== 1 ? "s" : ""} cancelled. Players were
+        emailed{offersFreeRebook ? " with a one-tap link to pick a new time at no extra cost" : ""}.
         {skippedCount > 0 && (
           <> {skippedCount} booking{skippedCount !== 1 ? "s" : ""} were modified during
           the operation and skipped — check them manually.</>
@@ -303,16 +304,18 @@ export function ClosureForm({
           )}
 
           {preview && (
-            <div className="rounded-[var(--radius-md)] border border-[var(--color-warning-300)] bg-white px-4 py-3 text-sm">
-              <span className="font-semibold">
+            <div className="rounded-[var(--radius-md)] border border-[var(--color-warning-300)] bg-white px-4 py-3 text-sm space-y-1">
+              <div className="font-semibold">
                 {preview.bookingCount === 0
                   ? "No active bookings in this window."
                   : `${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""} will be cancelled`}
-              </span>
-              {preview.bookingCount > 0 && totalDisplay && (
-                <span className="ml-1 text-[var(--color-fg-muted)]">
-                  · {totalDisplay} total paid will need refunding
-                </span>
+              </div>
+              {preview.bookingCount > 0 && (
+                <div className="text-xs text-[var(--color-fg-muted)]">
+                  {offersFreeRebook
+                    ? "Each player gets an email with a one-tap link to pick a new time — same price, no payment needed. No refunds for you to process."
+                    : "Players will be emailed about the cancellation. No automatic reschedule offered for this category — handle refunds manually if needed."}
+                </div>
               )}
             </div>
           )}
@@ -334,9 +337,9 @@ export function ClosureForm({
           {hiddenFields}
 
           <p className="mb-2 text-xs text-[var(--color-warning-700)]">
-            This will permanently cancel {preview.bookingCount} booking
-            {preview.bookingCount !== 1 ? "s" : ""}. Players will be emailed.
-            Paid bookings will need a manual GCash refund.
+            {offersFreeRebook
+              ? `This cancels ${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""}. Each player gets an email with a free reschedule link — pick a new time, same price, no payment needed. No refunds to process.`
+              : `This permanently cancels ${preview.bookingCount} booking${preview.bookingCount !== 1 ? "s" : ""}. Players will be emailed. "Other" cancellations don't include a free reschedule — handle refunds manually if needed.`}
           </p>
           <SubmitButton variant="destructive" size="sm" pendingLabel="Closing…">
             Confirm closure — cancel {preview.bookingCount} booking
