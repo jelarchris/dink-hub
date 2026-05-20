@@ -165,7 +165,7 @@ export async function updateVoucherStatusAction(
 const previewSchema = z.object({
   code: z.string().trim().min(1).max(40),
   courtId: z.string().uuid(),
-  durationMinutes: z.coerce.number().int().min(30).max(240),
+  durationMinutes: z.coerce.number().int().min(60).max(240).refine((v) => v % 60 === 0, "must be in 1-hour increments"),
   startManilaHour: z.coerce.number().int().min(0).max(23),
 });
 

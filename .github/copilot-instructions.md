@@ -90,7 +90,7 @@
 
 ## Domain rules (locked decisions)
 
-1. **Slot granularity:** 30 minutes. Default booking duration: 60 minutes. Min: 30 min, Max: 4 hours.
+1. **Slot granularity:** 1 hour (on the hour). Default booking duration: 60 minutes. Min: 60 min, Max: 240 min, in 60-min increments.
 2. **Slot hold:** 15 min on slot picker, 15 min on payment screen. Auto-release via cron.
 3. **Cancellation window:** 15 min from booking creation. After that, button disabled + server rejects (`cancellable_until = created_at + interval '15 minutes'`).
 4. **Payment flow:** Single GCash transfer to venue. Player uploads ONE receipt. Venue verifies in dashboard. System fee accrued to platform via ledger entry, deducted from venue's weekly payout.

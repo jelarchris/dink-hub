@@ -13,7 +13,7 @@ import {
 import { BookingError } from "@/features/booking";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
-import { addMinutes, createFixtures, nextHalfHour, sha256Hex, type Fixtures } from "@/test/fixtures";
+import { addMinutes, createFixtures, nextHour, sha256Hex, type Fixtures } from "@/test/fixtures";
 
 describe("booking service", () => {
   let fx: Fixtures;
@@ -22,7 +22,7 @@ describe("booking service", () => {
 
   beforeEach(async () => {
     fx = await createFixtures();
-    start = nextHalfHour(60);
+    start = nextHour(60);
     end = addMinutes(start, 60);
   });
 
@@ -44,15 +44,15 @@ describe("booking service", () => {
     const pastEnd = addMinutes(past, 60);
     // Snap past time to grain so we hit the "future" check, not the grain check
     past.setUTCSeconds(0, 0);
-    past.setUTCMinutes(past.getUTCMinutes() - (past.getUTCMinutes() % 30));
+    past.setUTCMinutes(0);
     pastEnd.setUTCSeconds(0, 0);
-    pastEnd.setUTCMinutes(pastEnd.getUTCMinutes() - (pastEnd.getUTCMinutes() % 30));
+    pastEnd.setUTCMinutes(0);
     await expect(
       holdSlot({ playerId: fx.playerId, courtId: fx.courtId, startAt: past, endAt: pastEnd }),
     ).rejects.toMatchObject({ code: "validation_failed" });
   });
 
-  it("holdSlot rejects non-30-minute grain", async () => {
+  it("holdSlot rejects non-hourly grain", async () => {
     const off = new Date(start.getTime() + 5 * 60_000); // 5 minutes off-grain
     await expect(
       holdSlot({ playerId: fx.playerId, courtId: fx.courtId, startAt: off, endAt: addMinutes(off, 60) }),

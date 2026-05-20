@@ -26,6 +26,7 @@
 - **RLS:** every table. Default deny. Same migration as table creation.
 - **Service role key:** server-only. Never in `'use client'` files.
 - **Booking double-booking prevention:** PostgreSQL `EXCLUDE USING gist` constraint on `bookings(court_id, tstzrange(start_at, end_at))`. App-level checks are defense-in-depth only.
+- **Slot granularity:** 1 hour, on the hour. Bookings are 60/120/180/240 min only. Enforced by DB CHECK constraints (`booking_1_hour_grain`, `ops_1_hour_grain`) added in `0026_one_hour_slots.sql`. No 30-min, no 45-min, no 90-min. Update validators in both `features/booking/schema.ts` and `features/open-play/schema.ts` if changing.
 - **Migrations:** forward-only. Never edit a committed migration; write a new one.
 - **SMS:** rejected by user (2026-05-13). Email-only via Resend. Do NOT propose Semaphore/Twilio/PhilSMS.
 - **`"use server"` files:** can ONLY export async functions. No `export type`, no `export const`, no type re-exports. Violations surface as opaque 500s in prod.

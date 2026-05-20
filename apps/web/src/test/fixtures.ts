@@ -19,11 +19,11 @@ export type Fixtures = {
 const HOURLY_RATE_CENTAVOS = 20000n; // ₱200/hour
 
 /**
- * Snap a Date to the next 30-minute slot at least `minutesFromNow` in the future.
+ * Snap a Date to the next 1-hour slot at least `minutesFromNow` in the future.
  */
-export function nextHalfHour(minutesFromNow = 60): Date {
+export function nextHour(minutesFromNow = 60): Date {
   const ms = Date.now() + minutesFromNow * 60_000;
-  const slotMs = 30 * 60_000;
+  const slotMs = 60 * 60_000;
   return new Date(Math.ceil(ms / slotMs) * slotMs);
 }
 

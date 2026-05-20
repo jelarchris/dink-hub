@@ -5,7 +5,7 @@ import { z } from "zod";
  * has a corresponding `*InputSchema` — validates at the boundary so the service
  * body can rely on parsed types.
  *
- * Time validation mirrors bookings: 30-min grain UTC, 30 min ≤ duration ≤ 4 h.
+ * Time validation mirrors bookings: 1-hour grain UTC, 60 min ≤ duration ≤ 4 h, 60-min increments.
  */
 
 const uuidSchema = z.string().uuid();
@@ -20,24 +20,24 @@ function validateSlotTimes(d: { startAt: Date; endAt: Date }, ctx: z.RefinementC
     return;
   }
   const minutes = (d.endAt.getTime() - d.startAt.getTime()) / 60_000;
-  if (minutes < 30 || minutes > 240) {
+  if (minutes < 60 || minutes > 240 || minutes % 60 !== 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "duration must be between 30 minutes and 4 hours",
+      message: "duration must be 1 to 4 hours in 1-hour increments",
       path: ["endAt"],
     });
   }
   const aligned =
     d.startAt.getUTCSeconds() === 0 &&
     d.startAt.getUTCMilliseconds() === 0 &&
-    d.startAt.getUTCMinutes() % 30 === 0 &&
+    d.startAt.getUTCMinutes() === 0 &&
     d.endAt.getUTCSeconds() === 0 &&
     d.endAt.getUTCMilliseconds() === 0 &&
-    d.endAt.getUTCMinutes() % 30 === 0;
+    d.endAt.getUTCMinutes() === 0;
   if (!aligned) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "times must align to 30-minute grain (UTC)",
+      message: "times must align to 1-hour grain (UTC, on the hour)",
       path: ["startAt"],
     });
   }

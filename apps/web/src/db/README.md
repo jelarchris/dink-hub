@@ -24,8 +24,8 @@ auth.users (Supabase)
 |---|---|
 | **No double-booking on a court** | `EXCLUDE USING gist` on `(court_id, tstzrange(start_at, end_at))` |
 | **No double slot-hold** | Same `EXCLUDE` on `slot_holds` (filtered to non-expired) |
-| **30-min slot grain** | `CHECK extract(minute from start_at) % 30 = 0` |
-| **Min 30-min, max 4-hour booking** | `CHECK end_at >= start_at + interval '30 min'` etc. |
+| **1-hour slot grain** | `CHECK extract(minute from start_at) = 0` |
+| **Min 1-hour, max 4-hour booking** | `CHECK end_at >= start_at + interval '1 hour'` etc. |
 | **Money never negative (or rare exception)** | `CHECK amount_centavos >= 0` per column |
 | **PH phone format** | `CHECK phone_e164 ~ '^\+63[0-9]{10}$'` |
 | **PH GCash mobile format** | `CHECK gcash_account_number ~ '^09[0-9]{9}$'` |

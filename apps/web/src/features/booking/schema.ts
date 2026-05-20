@@ -3,8 +3,8 @@ import { z } from "zod";
 /**
  * Zod schemas for every public service input. The runtime boundary contract.
  * Time validation rules:
- *   - 30-minute grain (also enforced by DB CHECK constraint)
- *   - duration: 30 min <= d <= 4 h
+ *   - 1-hour grain (also enforced by DB CHECK constraint)
+ *   - duration: 60 min <= d <= 4 h, in 60-min increments
  *   - endAt strictly after startAt
  * `startAt` being in the future is checked in the service (not schema) so we can
  * unit-test schemas without time mocking.
@@ -23,24 +23,24 @@ function validateSlotTimes(d: { startAt: Date; endAt: Date }, ctx: z.RefinementC
     return;
   }
   const minutes = (d.endAt.getTime() - d.startAt.getTime()) / 60_000;
-  if (minutes < 30 || minutes > 240) {
+  if (minutes < 60 || minutes > 240 || minutes % 60 !== 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "duration must be between 30 minutes and 4 hours",
+      message: "duration must be 1 to 4 hours in 1-hour increments",
       path: ["endAt"],
     });
   }
   const aligned =
     d.startAt.getUTCSeconds() === 0 &&
     d.startAt.getUTCMilliseconds() === 0 &&
-    d.startAt.getUTCMinutes() % 30 === 0 &&
+    d.startAt.getUTCMinutes() === 0 &&
     d.endAt.getUTCSeconds() === 0 &&
     d.endAt.getUTCMilliseconds() === 0 &&
-    d.endAt.getUTCMinutes() % 30 === 0;
+    d.endAt.getUTCMinutes() === 0;
   if (!aligned) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "times must align to 30-minute grain (UTC)",
+      message: "times must align to 1-hour grain (UTC, on the hour)",
       path: ["startAt"],
     });
   }

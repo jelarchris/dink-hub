@@ -112,7 +112,8 @@ export function manilaUpcomingDays(
 }
 
 /**
- * Generate 30-minute Manila slot start times between [startHour, endHour) for a day.
+ * Generate hourly Manila slot start times between [startHour, endHour) for a day.
+ * Bookings are 1-hour grain platform-wide; returns one Date per hour on the hour.
  * Returns UTC Date objects.
  */
 export function generateDaySlotsManila(args: {
@@ -125,7 +126,6 @@ export function generateDaySlotsManila(args: {
   const out: Date[] = [];
   for (let h = args.startHour; h < args.endHour; h++) {
     out.push(fromManilaWallClock(y, m, d, h, 0));
-    out.push(fromManilaWallClock(y, m, d, h, 30));
   }
   return out;
 }

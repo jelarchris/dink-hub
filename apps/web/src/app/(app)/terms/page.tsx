@@ -112,8 +112,8 @@ export default function TermsPage() {
                 if the platform fee is subsequently updated by DinkHub.
               </p>
               <p>
-                Bookings have a minimum duration of <strong>30 minutes</strong> and a maximum of{" "}
-                <strong>4 hours</strong>, in 30-minute increments.
+                Bookings have a minimum duration of <strong>1 hour</strong> and a maximum of{" "}
+                <strong>4 hours</strong>, in 1-hour increments.
               </p>
             </Subsection>
             <Subsection title="4.3 Payment">
