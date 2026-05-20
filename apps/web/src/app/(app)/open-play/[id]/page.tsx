@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Calendar, MapPin, Trophy, Users } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +70,11 @@ export default async function PublicOpenPlayDetailPage({
         s.signup.status !== "cancelled" &&
         s.signup.status !== "expired",
     );
+    // If they still owe payment, send them straight to the pay screen —
+    // no intermediate "Finish your payment" alert.
+    if (match && match.signup.status === "pending_payment") {
+      redirect(`/open-play/signups/${match.signup.id}/pay`);
+    }
     existingSignupId = match?.signup.id ?? null;
   }
 
