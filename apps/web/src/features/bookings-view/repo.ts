@@ -647,39 +647,40 @@ export async function getOwnerGridData(args: {
   dayStartUtc: Date;
   dayEndUtc: Date;
 }): Promise<OwnerGridData | null> {
-  // 1. Verify venue ownership.
-  const venueRows = await db
-    .select({ id: venues.id, name: venues.name, slug: venues.slug })
-    .from(venues)
-    .where(
-      and(
-        eq(venues.id, args.venueId),
-        eq(venues.ownerId, args.ownerId),
-        isNull(venues.deletedAt),
-      ),
-    )
-    .limit(1);
+  // 1. Verify venue ownership + load courts in parallel — both keyed by venueId,
+  //    so a missing venue (RLS fail or not owned) just means an empty court list.
+  const [venueRows, courtRows] = await Promise.all([
+    db
+      .select({ id: venues.id, name: venues.name, slug: venues.slug })
+      .from(venues)
+      .where(
+        and(
+          eq(venues.id, args.venueId),
+          eq(venues.ownerId, args.ownerId),
+          isNull(venues.deletedAt),
+        ),
+      )
+      .limit(1),
+    db
+      .select({
+        id: courts.id,
+        name: courts.name,
+        openHour: courts.openHour,
+        closeHour: courts.closeHour,
+        hourlyRateCentavos: courts.hourlyRateCentavos,
+      })
+      .from(courts)
+      .where(
+        and(
+          eq(courts.venueId, args.venueId),
+          eq(courts.isActive, true),
+          isNull(courts.deletedAt),
+        ),
+      )
+      .orderBy(asc(courts.name)),
+  ]);
   const venue = venueRows[0];
   if (!venue) return null;
-
-  // 2. Active courts in display order.
-  const courtRows = await db
-    .select({
-      id: courts.id,
-      name: courts.name,
-      openHour: courts.openHour,
-      closeHour: courts.closeHour,
-      hourlyRateCentavos: courts.hourlyRateCentavos,
-    })
-    .from(courts)
-    .where(
-      and(
-        eq(courts.venueId, venue.id),
-        eq(courts.isActive, true),
-        isNull(courts.deletedAt),
-      ),
-    )
-    .orderBy(asc(courts.name));
 
   if (courtRows.length === 0) {
     return { venue, courts: [], bookings: [], closures: [] };
@@ -691,47 +692,47 @@ export async function getOwnerGridData(args: {
       ? args.courtId
       : courtRows[0]!.id;
 
-  // 3. Bookings overlapping [dayStart, dayEnd) for the selected court.
-  const bookingRows = await db
-    .select({
-      id: bookings.id,
-      status: bookings.status,
-      startAt: bookings.startAt,
-      endAt: bookings.endAt,
-      totalCentavos: bookings.totalCentavos,
-      playerDisplayName: profiles.displayName,
-      playerEmail: profiles.email,
-      playerPhoneE164: profiles.phoneE164,
-    })
-    .from(bookings)
-    .innerJoin(profiles, eq(profiles.id, bookings.playerId))
-    .where(
-      and(
-        eq(bookings.courtId, selectedCourtId),
-        lt(bookings.startAt, args.dayEndUtc),
-        gt(bookings.endAt, args.dayStartUtc),
-        sql`${bookings.status} not in ('cancelled','no_show','expired')`,
+  // 2. Bookings + closures overlapping [dayStart, dayEnd) for the selected court — parallel.
+  const [bookingRows, closureRows] = await Promise.all([
+    db
+      .select({
+        id: bookings.id,
+        status: bookings.status,
+        startAt: bookings.startAt,
+        endAt: bookings.endAt,
+        totalCentavos: bookings.totalCentavos,
+        playerDisplayName: profiles.displayName,
+        playerEmail: profiles.email,
+        playerPhoneE164: profiles.phoneE164,
+      })
+      .from(bookings)
+      .innerJoin(profiles, eq(profiles.id, bookings.playerId))
+      .where(
+        and(
+          eq(bookings.courtId, selectedCourtId),
+          lt(bookings.startAt, args.dayEndUtc),
+          gt(bookings.endAt, args.dayStartUtc),
+          sql`${bookings.status} not in ('cancelled','no_show','expired')`,
+        ),
+      )
+      .orderBy(asc(bookings.startAt)),
+    db
+      .select({
+        id: courtClosures.id,
+        startAt: courtClosures.startAt,
+        endAt: courtClosures.endAt,
+        reason: courtClosures.reason,
+      })
+      .from(courtClosures)
+      .where(
+        and(
+          eq(courtClosures.courtId, selectedCourtId),
+          lt(courtClosures.startAt, args.dayEndUtc),
+          gt(courtClosures.endAt, args.dayStartUtc),
+          isNull(courtClosures.deletedAt),
+        ),
       ),
-    )
-    .orderBy(asc(bookings.startAt));
-
-  // 4. Closures overlapping the same window.
-  const closureRows = await db
-    .select({
-      id: courtClosures.id,
-      startAt: courtClosures.startAt,
-      endAt: courtClosures.endAt,
-      reason: courtClosures.reason,
-    })
-    .from(courtClosures)
-    .where(
-      and(
-        eq(courtClosures.courtId, selectedCourtId),
-        lt(courtClosures.startAt, args.dayEndUtc),
-        gt(courtClosures.endAt, args.dayStartUtc),
-        isNull(courtClosures.deletedAt),
-      ),
-    );
+  ]);
 
   return {
     venue,

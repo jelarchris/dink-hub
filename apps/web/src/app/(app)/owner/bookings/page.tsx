@@ -28,6 +28,7 @@ import {
 import { formatPHP } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import type { Booking } from "@/db/schema";
+import { NavChip } from "./nav-chip";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Bookings schedule" };
@@ -413,22 +414,26 @@ function ViewToggle({
     "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-fg)]";
   return (
     <div className="mt-3 inline-flex rounded-full border border-[var(--color-border-default)] bg-[var(--color-bg)] p-0.5">
-      <Link
+      <NavChip
         href={agendaHref}
-        className={cn(base, currentView === "agenda" ? active : inactive)}
-        aria-current={currentView === "agenda" ? "page" : undefined}
+        active={currentView === "agenda"}
+        className={base}
+        activeClassName={active}
+        inactiveClassName={inactive}
       >
         <List className="size-3.5" />
         Agenda
-      </Link>
-      <Link
+      </NavChip>
+      <NavChip
         href={gridHref}
-        className={cn(base, currentView === "grid" ? active : inactive)}
-        aria-current={currentView === "grid" ? "page" : undefined}
+        active={currentView === "grid"}
+        className={base}
+        activeClassName={active}
+        inactiveClassName={inactive}
       >
         <LayoutGrid className="size-3.5" />
         Grid
-      </Link>
+      </NavChip>
     </div>
   );
 }
@@ -603,22 +608,20 @@ async function renderGridView(args: {
           </h2>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {gridData.courts.map((c) => (
-              <Link
+              <NavChip
                 key={c.id}
                 href={makeGridUrl({
                   venueId,
                   courtId: c.id,
                   dateIso: selectedDateIso,
                 })}
-                className={cn(
-                  "inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition active:scale-95",
-                  c.id === selectedCourtId
-                    ? "bg-[var(--color-brand-700)] text-white"
-                    : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)]",
-                )}
+                active={c.id === selectedCourtId}
+                className="inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition active:scale-95"
+                activeClassName="bg-[var(--color-brand-700)] text-white"
+                inactiveClassName="bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)]"
               >
                 {c.name}
-              </Link>
+              </NavChip>
             ))}
           </div>
         </section>
@@ -653,18 +656,16 @@ function VenueTabs({
   return (
     <div className="mt-3 flex flex-wrap gap-1.5">
       {venueList.map(({ venue }) => (
-        <Link
+        <NavChip
           key={venue.id}
           href={makeGridUrl({ venueId: venue.id })}
-          className={cn(
-            "inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold transition-colors",
-            venue.id === selectedVenueId
-              ? "bg-[var(--color-fg)] text-[var(--color-bg)]"
-              : "bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)]",
-          )}
+          active={venue.id === selectedVenueId}
+          className="inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold transition-colors"
+          activeClassName="bg-[var(--color-fg)] text-[var(--color-bg)]"
+          inactiveClassName="bg-[var(--color-bg-subtle)] text-[var(--color-fg-muted)] hover:bg-[var(--color-bg-muted)]"
         >
           {venue.name}
-        </Link>
+        </NavChip>
       ))}
     </div>
   );
@@ -686,15 +687,12 @@ function DateChip({
   href: string;
 }) {
   return (
-    <Link
+    <NavChip
       href={href}
-      aria-current={selected ? "date" : undefined}
-      className={cn(
-        "flex w-16 shrink-0 snap-start flex-col items-center justify-center rounded-[var(--radius-md)] border px-1 py-2 text-center transition active:scale-95",
-        selected
-          ? "border-[var(--color-brand-700)] bg-[var(--color-brand-700)] text-white shadow-[var(--shadow-sm)]"
-          : "border-[var(--color-border-default)] bg-[var(--color-bg)] text-[var(--color-fg)] hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)]",
-      )}
+      active={selected}
+      className="flex w-16 shrink-0 snap-start flex-col items-center justify-center rounded-[var(--radius-md)] border px-1 py-2 text-center transition active:scale-95"
+      activeClassName="border-[var(--color-brand-700)] bg-[var(--color-brand-700)] text-white shadow-[var(--shadow-sm)]"
+      inactiveClassName="border-[var(--color-border-default)] bg-[var(--color-bg)] text-[var(--color-fg)] hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)]"
     >
       <span
         className={cn(
@@ -718,7 +716,7 @@ function DateChip({
       )}
       {/* aria for screen readers */}
       <span className="sr-only">{dayLabel}</span>
-    </Link>
+    </NavChip>
   );
 }
 
