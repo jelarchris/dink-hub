@@ -23,6 +23,12 @@ interface Court {
 interface ClosureFormProps {
   venueId: string;
   courts: Court[];
+  /** Pre-select these courts. Defaults to all. */
+  defaultCourtIds?: string[];
+  /** When true the panel is always rendered (no inline trigger button). */
+  hideTrigger?: boolean;
+  /** Called after a successful commit so a parent (e.g. modal) can dismiss. */
+  onCommitted?: () => void;
 }
 
 // Manila has no DST — fixed UTC+08:00.
@@ -48,8 +54,14 @@ const CATEGORY_OPTIONS = [
   { value: "other", label: "Other" },
 ] as const;
 
-export function ClosureForm({ venueId, courts }: ClosureFormProps) {
-  const [open, setOpen] = useState(false);
+export function ClosureForm({
+  venueId,
+  courts,
+  defaultCourtIds,
+  hideTrigger = false,
+  onCommitted,
+}: ClosureFormProps) {
+  const [open, setOpen] = useState(hideTrigger);
 
   const [previewState, previewAction] = useActionState<
     ActionResult<ClosurePreviewData> | null,
@@ -72,9 +84,11 @@ export function ClosureForm({ venueId, courts }: ClosureFormProps) {
 
   const [fromLocal, setFromLocal] = useState(defaultFrom);
   const [untilLocal, setUntilLocal] = useState(defaultUntil);
-  const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>(
-    courts.map((c) => c.id),
-  );
+  const initialCourtIds =
+    defaultCourtIds && defaultCourtIds.length > 0
+      ? courts.filter((c) => defaultCourtIds.includes(c.id)).map((c) => c.id)
+      : courts.map((c) => c.id);
+  const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>(initialCourtIds);
   const [category, setCategory] = useState("venue_closure");
   const [reason, setReason] = useState("");
 
@@ -100,6 +114,17 @@ export function ClosureForm({ venueId, courts }: ClosureFormProps) {
         {skippedCount > 0 && (
           <> {skippedCount} booking{skippedCount !== 1 ? "s" : ""} were modified during
           the operation and skipped — check them manually.</>
+        )}
+        {onCommitted && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={onCommitted}
+              className="text-xs font-semibold text-[var(--color-fg-muted)] hover:underline"
+            >
+              Close
+            </button>
+          </div>
         )}
       </Alert>
     );
@@ -142,13 +167,15 @@ export function ClosureForm({ venueId, courts }: ClosureFormProps) {
           <AlertTriangle className="size-4" />
           Close venue / court for a period
         </p>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-xs text-[var(--color-fg-muted)] hover:underline"
-        >
-          Cancel
-        </button>
+        {!hideTrigger && (
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-xs text-[var(--color-fg-muted)] hover:underline"
+          >
+            Cancel
+          </button>
+        )}
       </div>
 
       {commitState && !commitState.ok && (

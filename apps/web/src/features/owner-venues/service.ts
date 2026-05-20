@@ -93,6 +93,47 @@ export async function listVenuesForOwner(ownerId: string): Promise<OwnerVenueLis
   }));
 }
 
+export interface OwnerVenueWithCourts {
+  venue: { id: string; name: string };
+  courts: { id: string; name: string }[];
+}
+
+/**
+ * Lightweight list of every owned venue + its active courts.
+ * Used by the closure launcher so it can render without a per-venue round trip.
+ */
+export async function listVenuesWithActiveCourtsForOwner(
+  ownerId: string,
+): Promise<OwnerVenueWithCourts[]> {
+  const rows = await db
+    .select({
+      venueId: venues.id,
+      venueName: venues.name,
+      courtId: courts.id,
+      courtName: courts.name,
+    })
+    .from(venues)
+    .leftJoin(
+      courts,
+      and(eq(courts.venueId, venues.id), eq(courts.isActive, true), isNull(courts.deletedAt)),
+    )
+    .where(and(eq(venues.ownerId, ownerId), isNull(venues.deletedAt)))
+    .orderBy(asc(venues.name), asc(courts.name));
+
+  const map = new Map<string, OwnerVenueWithCourts>();
+  for (const r of rows) {
+    let entry = map.get(r.venueId);
+    if (!entry) {
+      entry = { venue: { id: r.venueId, name: r.venueName }, courts: [] };
+      map.set(r.venueId, entry);
+    }
+    if (r.courtId && r.courtName) {
+      entry.courts.push({ id: r.courtId, name: r.courtName });
+    }
+  }
+  return Array.from(map.values()).filter((v) => v.courts.length > 0);
+}
+
 export async function getVenueWithCourtsForOwner(
   venueId: string,
   ownerId: string,

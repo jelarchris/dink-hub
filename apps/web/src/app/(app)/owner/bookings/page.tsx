@@ -16,7 +16,7 @@ import {
   type OwnerGridClosure,
   type OwnerGridCourt,
 } from "@/features/bookings-view";
-import { listVenuesForOwner } from "@/features/owner-venues/service";
+import { listVenuesForOwner, listVenuesWithActiveCourtsForOwner } from "@/features/owner-venues/service";
 import {
   formatDateLongManila,
   formatTimeManila,
@@ -29,6 +29,7 @@ import { formatPHP } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import type { Booking } from "@/db/schema";
 import { NavChip } from "./nav-chip";
+import { CloseVenueLauncher } from "./close-venue-launcher";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Bookings schedule" };
@@ -154,11 +155,13 @@ export default async function OwnerBookingsPage({
   const cursor = rawCursor ?? undefined;
 
   const venueList = await listVenuesForOwner(profile.id);
+  const venuesWithCourts = await listVenuesWithActiveCourtsForOwner(profile.id);
 
   if (view === "grid") {
     return renderGridView({
       profileId: profile.id,
       venueList,
+      venuesWithCourts,
       requestedVenueId: venueId,
       requestedCourtId: courtIdParam,
       requestedDateIso: dateParam,
@@ -182,9 +185,18 @@ export default async function OwnerBookingsPage({
         title="Bookings schedule"
         subtitle="Every confirmed booking, grouped by day"
         action={
-          <Link href="/owner" className={buttonVariants({ variant: "secondary", size: "sm" })}>
-            Dashboard
-          </Link>
+          <div className="flex items-center gap-2">
+            {venuesWithCourts.length > 0 && (
+              <CloseVenueLauncher
+                key={`agenda-${venueId ?? "all"}`}
+                venues={venuesWithCourts}
+                {...(venueId ? { defaultVenueId: venueId } : {})}
+              />
+            )}
+            <Link href="/owner" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+              Dashboard
+            </Link>
+          </div>
         }
       />
 
@@ -441,11 +453,12 @@ function ViewToggle({
 async function renderGridView(args: {
   profileId: string;
   venueList: Awaited<ReturnType<typeof listVenuesForOwner>>;
+  venuesWithCourts: Awaited<ReturnType<typeof listVenuesWithActiveCourtsForOwner>>;
   requestedVenueId: string | undefined;
   requestedCourtId: string | undefined;
   requestedDateIso: string | undefined;
 }) {
-  const { profileId, venueList, requestedVenueId, requestedCourtId, requestedDateIso } = args;
+  const { profileId, venueList, venuesWithCourts, requestedVenueId, requestedCourtId, requestedDateIso } = args;
 
   // No venues at all → empty state.
   if (venueList.length === 0) {
@@ -562,9 +575,19 @@ async function renderGridView(args: {
         title="Bookings schedule"
         subtitle={`${gridData.venue.name} · ${formatDateLongManila(selectedDay.manilaMidnightUtc)}`}
         action={
-          <Link href="/owner" className={buttonVariants({ variant: "secondary", size: "sm" })}>
-            Dashboard
-          </Link>
+          <div className="flex items-center gap-2">
+            {venuesWithCourts.length > 0 && (
+              <CloseVenueLauncher
+                key={`grid-${venueId}-${selectedCourtId}`}
+                venues={venuesWithCourts}
+                defaultVenueId={venueId}
+                defaultCourtId={selectedCourtId}
+              />
+            )}
+            <Link href="/owner" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+              Dashboard
+            </Link>
+          </div>
         }
       />
 
