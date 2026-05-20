@@ -1,5 +1,17 @@
 ﻿# Changelog
 
+## 2026-05-20 — Social carousel OG route (`/api/og/social/[slide]`)
+
+### Feat — 10-slide FB/IG marketing carousel as server-rendered PNGs
+
+- **`app/api/og/social/[slide]/route.tsx`** — public Satori route; slide ids `1`–`10` (hero, loop, book, flow, open-play, vs-messenger, owners, auto-move, trust, closer); `?format=square|portrait|fb` (1080×1080 / 1080×1350 / 1200×630).
+- Brand palette inlined: bg `#062018` deep forest, accent `#34D399` brand-green, card `#0E2A22`, body `#9AB3A8`.
+- Shared atoms: `Logo`, `Eyebrow`, `Headline`, `SubCopy`, `Check`, `Pill`, `GhostPill`, `Card` (with 4 absolute-positioned corner `Bracket`s — uses explicit `top/left/right/bottom` per Satori rules), `FeatureCard`, `Frame` (radial-gradient bg).
+- Slide-specific mocks: `VenueCardMock`, `SlotGridMock` (chunked rows, no `flexWrap`), `OpenPlayCardMock`, `OwnerDashboardMock`.
+- All currency rendered as `PHP ` (Inter has no ₱ glyph in Satori). Owner pill bakes in current launch offer ("FREE TO LIST · 0% PLATFORM FEE FOR YOUR FIRST 2 MONTHS").
+- Font loading: same Wget-UA Google Fonts TTF trick + `Promise.allSettled` so CDN flake degrades to system font instead of 500.
+- Cache: `public, max-age=300, s-maxage=86400, stale-while-revalidate=604800`.
+
 ## 2026-05-20 — Closure auto-move to sibling court (commit `3b38354`)
 
 ### Feat — Owner-opt-in auto-move bookings to another court at the same time
