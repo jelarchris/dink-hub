@@ -155,58 +155,20 @@ function Bracketed({
   children: React.ReactNode;
   width: number | string;
 }) {
-  // Card with neon corner brackets, Korte style.
+  // Card with neon-tinted border. (Absolute corner brackets break Satori
+  // when nested in flex parents — see AGENTS.md hard-won facts.)
   return (
     <div
       style={{
-        position: "relative",
         display: "flex",
         flexDirection: "column",
         background: C.card,
-        border: `1px solid ${C.cardEdge}`,
+        border: `1.5px solid ${C.neonSoft}`,
         borderRadius: 18,
         padding: 24,
         width,
       }}
     >
-      {/* corners */}
-      {(
-        [
-          { top: -2, left: -2, t: true, l: true },
-          { top: -2, right: -2, t: true, r: true },
-          { bottom: -2, left: -2, b: true, l: true },
-          { bottom: -2, right: -2, b: true, r: true },
-        ] as Array<{
-          top?: number;
-          bottom?: number;
-          left?: number;
-          right?: number;
-          t?: boolean;
-          b?: boolean;
-          l?: boolean;
-          r?: boolean;
-        }>
-      ).map((pos, i) => (
-        <div
-          key={i}
-          style={{
-            position: "absolute",
-            display: "flex",
-            width: 14,
-            height: 14,
-            top: pos.top,
-            bottom: pos.bottom,
-            left: pos.left,
-            right: pos.right,
-            borderColor: C.neon,
-            borderStyle: "solid",
-            borderTopWidth: pos.t ? 2 : 0,
-            borderBottomWidth: pos.b ? 2 : 0,
-            borderLeftWidth: pos.l ? 2 : 0,
-            borderRightWidth: pos.r ? 2 : 0,
-          }}
-        />
-      ))}
       {children}
     </div>
   );
@@ -536,7 +498,7 @@ function SlideBook(): React.ReactElement {
             }}
           >
             <span style={{ display: "flex" }}>SAT · MAY 23</span>
-            <span style={{ display: "flex", color: C.neon }}>₱350/hr</span>
+            <span style={{ display: "flex", color: C.neon }}>PHP 350/hr</span>
           </div>
           {[
             { t: "5 PM", a: "BOOKED", b: "SELECTED" },
@@ -616,7 +578,7 @@ function SlideBook(): React.ReactElement {
                   color: C.neon,
                 }}
               >
-                ₱700
+                PHP 700
               </div>
             </div>
           </div>
@@ -888,7 +850,7 @@ function SlideOpenPlay(): React.ReactElement {
                 color: C.neon,
               }}
             >
-              ₱250
+              PHP 250
             </div>
           </div>
           <div
@@ -989,14 +951,17 @@ function SlideVsMessenger(): React.ReactElement {
       <div
         style={{
           display: "flex",
-          flexWrap: "wrap",
+          flexDirection: "column",
           gap: 18,
-          justifyContent: "center",
-          maxWidth: 880,
+          alignItems: "center",
         }}
       >
-        {items.map((it) => (
-          <FeatureCard key={it.t} title={it.t} body={it.b} width={420} />
+        {[0, 2, 4].map((start) => (
+          <div key={start} style={{ display: "flex", gap: 18 }}>
+            {items.slice(start, start + 2).map((it) => (
+              <FeatureCard key={it.t} title={it.t} body={it.b} width={420} />
+            ))}
+          </div>
         ))}
       </div>
     </Frame>
@@ -1111,7 +1076,7 @@ function SlidePartners(): React.ReactElement {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-            <Stat label="TODAY" value="₱1,750" />
+            <Stat label="TODAY" value="PHP 1,750" />
             <Stat label="BOOKINGS" value="8" />
             <Stat label="RATED" value="4.9★" />
           </div>
@@ -1447,7 +1412,7 @@ function Frame({
         flexDirection: "column",
         width: SIZE,
         height: SIZE,
-        background: C.bg,
+        backgroundColor: C.bg,
         backgroundImage: `radial-gradient(circle at 80% 10%, rgba(52,211,153,0.08), transparent 50%)`,
         padding: PADDING,
         fontFamily: "Inter",
