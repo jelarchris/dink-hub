@@ -111,15 +111,39 @@ export function SessionForm({ venueId, courts }: SessionFormProps) {
       </FormField>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id="courtId" label="Court" error={err("courtId")}>
-          {({ id, describedBy, invalid }) => (
-            <Select id={id} name="courtId" required aria-describedby={describedBy} invalid={invalid}>
-              {courts.map((c) => (
-                <option key={c.id} value={c.id}>
+        <FormField
+          id="courtId"
+          label="Courts"
+          hint={
+            courts.length === 1
+              ? "Only one court available — auto-selected."
+              : "Select one or more courts to reserve for this session."
+          }
+          error={err("courtIds") ?? err("courtId")}
+        >
+          {() => (
+            <div className="flex flex-wrap gap-2">
+              {courts.map((c, i) => (
+                <label
+                  key={c.id}
+                  className="group relative inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium text-[var(--color-fg)] transition-colors hover:border-[var(--color-brand-500)] hover:bg-[var(--color-brand-50)] has-[input:checked]:border-[var(--color-brand-500)] has-[input:checked]:bg-[var(--color-brand-50)] has-[input:checked]:text-[var(--color-brand-700)] has-[input:checked]:ring-2 has-[input:checked]:ring-[var(--color-brand-500)]"
+                >
+                  <input
+                    type="checkbox"
+                    name="courtId"
+                    value={c.id}
+                    defaultChecked={courts.length === 1 || i === 0}
+                    className="sr-only"
+                  />
+                  <span aria-hidden="true" className="flex size-4 items-center justify-center rounded border border-[var(--color-border-default)] bg-[var(--color-bg)] text-[var(--color-brand-700)] group-has-[input:checked]:border-[var(--color-brand-500)] group-has-[input:checked]:bg-[var(--color-brand-500)] group-has-[input:checked]:text-white">
+                    <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="2.5 6.5 5 9 9.5 3.5" />
+                    </svg>
+                  </span>
                   {c.name}
-                </option>
+                </label>
               ))}
-            </Select>
+            </div>
           )}
         </FormField>
 

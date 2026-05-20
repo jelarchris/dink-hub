@@ -1,11 +1,12 @@
 import "server-only";
-import { and, count, desc, eq, gt, gte, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { haversineKm } from "@/lib/distance";
 import {
   bookings,
   courtClosures,
   courts,
+  openPlaySessionCourts,
   openPlaySessions,
   openPlaySignupPayments,
   openPlaySignups,
@@ -164,10 +165,160 @@ export async function updateSession(
 export interface SessionListItem {
   session: OpenPlaySession;
   venue: Pick<Venue, "id" | "name" | "slug" | "city" | "province" | "coverImageUrl">;
+  /** Primary court (mirror of session.court_id) — kept for back-compat. */
   court: Pick<Court, "id" | "name">;
+  /** All courts the session occupies. Always includes the primary court. */
+  courts: Array<Pick<Court, "id" | "name">>;
   activeSignupCount: number;
   /** Kilometres from the requested origin (when `near` is supplied). */
   distanceKm: number | null;
+}
+
+// ----------------------------------------------------------------------------
+// Multi-court join helpers (open_play_session_courts)
+// ----------------------------------------------------------------------------
+
+/**
+ * Insert one join row per court. Used both at create-time (shadow null) and
+ * is idempotent — duplicate keys are no-ops.
+ */
+export async function insertSessionCourts(
+  sessionId: string,
+  courtIds: readonly string[],
+  exec: Executor = db,
+): Promise<void> {
+  if (courtIds.length === 0) return;
+  await exec
+    .insert(openPlaySessionCourts)
+    .values(courtIds.map((courtId) => ({ sessionId, courtId })))
+    .onConflictDoNothing();
+}
+
+/** Return join rows (including per-court shadow_booking_id) for one session. */
+export async function listSessionCourtRows(
+  sessionId: string,
+  exec: Executor = db,
+): Promise<Array<{ courtId: string; shadowBookingId: string | null }>> {
+  return exec
+    .select({
+      courtId: openPlaySessionCourts.courtId,
+      shadowBookingId: openPlaySessionCourts.shadowBookingId,
+    })
+    .from(openPlaySessionCourts)
+    .where(eq(openPlaySessionCourts.sessionId, sessionId));
+}
+
+/** Set the shadow booking id on one (session, court) pair. */
+export async function setSessionCourtShadow(
+  sessionId: string,
+  courtId: string,
+  shadowBookingId: string | null,
+  exec: Executor = db,
+): Promise<void> {
+  await exec
+    .update(openPlaySessionCourts)
+    .set({ shadowBookingId })
+    .where(
+      and(
+        eq(openPlaySessionCourts.sessionId, sessionId),
+        eq(openPlaySessionCourts.courtId, courtId),
+      ),
+    );
+}
+
+/**
+ * Bulk-fetch the courts attached to every session id, grouped into a Map.
+ * Used by list endpoints to attach `courts: []` without N+1 queries.
+ */
+export async function listCourtsForSessions(
+  sessionIds: readonly string[],
+  exec: Executor = db,
+): Promise<Map<string, Array<Pick<Court, "id" | "name">>>> {
+  const map = new Map<string, Array<Pick<Court, "id" | "name">>>();
+  if (sessionIds.length === 0) return map;
+  const rows = await exec
+    .select({
+      sessionId: openPlaySessionCourts.sessionId,
+      courtId: courts.id,
+      courtName: courts.name,
+    })
+    .from(openPlaySessionCourts)
+    .innerJoin(courts, eq(courts.id, openPlaySessionCourts.courtId))
+    .where(inArray(openPlaySessionCourts.sessionId, [...sessionIds]))
+    .orderBy(courts.name);
+  for (const r of rows) {
+    const arr = map.get(r.sessionId) ?? [];
+    arr.push({ id: r.courtId, name: r.courtName });
+    map.set(r.sessionId, arr);
+  }
+  return map;
+}
+
+/**
+ * For the booking flow: return every published-session court that overlaps the
+ * given time window, joined to its parent session metadata. One row per
+ * (session, court). Used to render OPEN PLAY tiles in the slot picker.
+ */
+export interface OpenPlayForCourtsRow {
+  sessionId: string;
+  courtId: string;
+  startAt: Date;
+  endAt: Date;
+  title: string;
+  capacity: number;
+  pricePerPlayerCentavos: bigint;
+  activeSignupCount: number;
+}
+
+export async function listOpenPlayForCourts(
+  args: { courtIds: readonly string[]; fromAt: Date; toAt: Date },
+  exec: Executor = db,
+): Promise<OpenPlayForCourtsRow[]> {
+  if (args.courtIds.length === 0) return [];
+  const rows = await exec
+    .select({
+      sessionId: openPlaySessions.id,
+      courtId: openPlaySessionCourts.courtId,
+      startAt: openPlaySessions.startAt,
+      endAt: openPlaySessions.endAt,
+      title: openPlaySessions.title,
+      capacity: openPlaySessions.capacity,
+      pricePerPlayerCentavos: openPlaySessions.pricePerPlayerCentavos,
+    })
+    .from(openPlaySessions)
+    .innerJoin(
+      openPlaySessionCourts,
+      eq(openPlaySessionCourts.sessionId, openPlaySessions.id),
+    )
+    .where(
+      and(
+        inArray(openPlaySessionCourts.courtId, [...args.courtIds]),
+        eq(openPlaySessions.status, "published"),
+        isNull(openPlaySessions.deletedAt),
+        lt(openPlaySessions.startAt, args.toAt),
+        gt(openPlaySessions.endAt, args.fromAt),
+      ),
+    );
+
+  if (rows.length === 0) return [];
+
+  const sessionIds = Array.from(new Set(rows.map((r) => r.sessionId)));
+  const counts = await exec
+    .select({ sessionId: openPlaySignups.sessionId, c: count() })
+    .from(openPlaySignups)
+    .where(
+      and(
+        inArray(openPlaySignups.sessionId, sessionIds),
+        activeSignupWhere,
+      ),
+    )
+    .groupBy(openPlaySignups.sessionId);
+  const countMap = new Map(counts.map((c) => [c.sessionId, Number(c.c)]));
+
+  return rows.map((r) => ({
+    ...r,
+    activeSignupCount: countMap.get(r.sessionId) ?? 0,
+  }));
 }
 
 /**
@@ -229,6 +380,7 @@ export async function listPublishedSessions(
     )
     .groupBy(openPlaySignups.sessionId);
   const countMap = new Map(counts.map((c) => [c.sessionId, Number(c.c)]));
+  const courtsMap = await listCourtsForSessions(sessionIds, exec);
 
   const items: SessionListItem[] = rows.map((r) => {
     const lat = r.venue.latitude !== null ? Number(r.venue.latitude) : null;
@@ -248,6 +400,7 @@ export async function listPublishedSessions(
         coverImageUrl: r.venue.coverImageUrl,
       },
       court: r.court,
+      courts: courtsMap.get(r.session.id) ?? [r.court],
       activeSignupCount: countMap.get(r.session.id) ?? 0,
       distanceKm,
     };
@@ -313,11 +466,13 @@ export async function listSessionsByVenue(
     )
     .groupBy(openPlaySignups.sessionId);
   const countMap = new Map(counts.map((c) => [c.sessionId, Number(c.c)]));
+  const courtsMap = await listCourtsForSessions(sessionIds, exec);
 
   return rows.map((r) => ({
     session: r.session,
     venue: r.venue,
     court: r.court,
+    courts: courtsMap.get(r.session.id) ?? [r.court],
     activeSignupCount: countMap.get(r.session.id) ?? 0,
     distanceKm: null,
   }));
@@ -366,11 +521,13 @@ export async function listSessionsByOwner(
     )
     .groupBy(openPlaySignups.sessionId);
   const countMap = new Map(counts.map((c) => [c.sessionId, Number(c.c)]));
+  const courtsMap = await listCourtsForSessions(sessionIds, exec);
 
   return rows.map((r) => ({
     session: r.session,
     venue: r.venue,
     court: r.court,
+    courts: courtsMap.get(r.session.id) ?? [r.court],
     activeSignupCount: countMap.get(r.session.id) ?? 0,
     distanceKm: null,
   }));
@@ -488,6 +645,7 @@ export interface PlayerSignupListItem {
   session: OpenPlaySession;
   venue: Pick<Venue, "id" | "name" | "slug" | "city">;
   court: Pick<Court, "id" | "name">;
+  courts: Array<Pick<Court, "id" | "name">>;
   paymentStatus: "none" | "submitted" | "verified" | "rejected" | "disputed";
 }
 
@@ -520,11 +678,15 @@ export async function listSignupsForPlayer(
     .orderBy(desc(openPlaySignups.createdAt))
     .limit(100);
 
+  const sessionIds = Array.from(new Set(rows.map((r) => r.session.id)));
+  const courtsMap = await listCourtsForSessions(sessionIds, exec);
+
   return rows.map((r) => ({
     signup: r.signup,
     session: r.session,
     venue: r.venue,
     court: r.court,
+    courts: courtsMap.get(r.session.id) ?? [r.court],
     paymentStatus: r.paymentStatus ?? "none",
   }));
 }

@@ -13,6 +13,7 @@ import {
   countActiveSignups,
   findSessionWithVenue,
   findSignupById,
+  listCourtsForSessions,
   listSignupsForPlayer,
 } from "@/features/open-play";
 import { JoinForm } from "./join-form";
@@ -49,6 +50,9 @@ export default async function PublicOpenPlayDetailPage({
   if (session.status !== "published" && session.status !== "completed") {
     notFound();
   }
+
+  const courtsMap = await listCourtsForSessions([session.id]);
+  const courts = courtsMap.get(session.id) ?? [{ id: court.id, name: court.name }];
 
   const user = await getCurrentUser();
   const activeCount = await countActiveSignups(session.id);
@@ -154,7 +158,11 @@ export default async function PublicOpenPlayDetailPage({
               <Row icon={<Calendar className="size-4" />} label="Start" value={formatDateTimeManila(session.startAt)} />
               <Row icon={<Calendar className="size-4" />} label="End" value={formatDateTimeManila(session.endAt)} />
               <Row icon={<Trophy className="size-4" />} label="Skill" value={skillLabel[session.skillLevel] ?? session.skillLevel} />
-              <Row icon={<MapPin className="size-4" />} label="Court" value={court.name} />
+              <Row
+                icon={<MapPin className="size-4" />}
+                label={courts.length === 1 ? "Court" : `Courts (${courts.length})`}
+                value={courts.map((c) => c.name).join(" · ")}
+              />
 
               <div className="border-t border-[var(--color-border-default)] pt-2">
                 <Row label="Court fee" value={formatPHP(session.pricePerPlayerCentavos)} />

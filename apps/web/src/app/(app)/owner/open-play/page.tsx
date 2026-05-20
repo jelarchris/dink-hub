@@ -91,7 +91,7 @@ export default async function OwnerOpenPlayIndexPage() {
               key={s.session.id}
               session={s.session}
               venueName={s.venue.name}
-              courtName={s.court.name}
+              courtName={s.courts.map((c) => c.name).join(" · ")}
               activeCount={s.activeSignupCount}
             />
           ))}

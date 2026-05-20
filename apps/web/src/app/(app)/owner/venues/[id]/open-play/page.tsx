@@ -99,7 +99,7 @@ export default async function VenueOpenPlayListPage({
             <SessionCard
               key={s.session.id}
               session={s.session}
-              courtName={s.court.name}
+              courtName={s.courts.map((c) => c.name).join(" · ")}
               activeCount={s.activeSignupCount}
             />
           ))}

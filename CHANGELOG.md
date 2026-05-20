@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## 2026-05-22 — Open Play: multi-court sessions + animated picker tiles
+
+### Feat — Open Play sessions can occupy multiple courts; booking picker shows OPEN PLAY tiles (migration `0027_open_play_multi_court`)
+
+- **Multi-court Open Play.** Owners can now publish one Open Play session that occupies several courts on the same time window. New join table `open_play_session_courts (session_id, court_id, shadow_booking_id NULL, PK(session_id, court_id))` with full RLS (`opsc_public_read` for published+non-deleted parent, owner-only writes via venue join, admin-all). `open_play_sessions.court_id` and `shadow_booking_id` stay populated as the *primary* court/shadow for back-compat — no NOT NULL drops.
+- **Publish atomicity.** `publishSession` is now a single transaction that inserts one shadow booking per selected court, catches `23P01` (EXCLUDE conflict) on any one of them, and rolls back the whole publish with `OpenPlayError("slot_not_available", ...)`. Cancel walks the join table and cancels every shadow.
+- **Owner form.** Court chooser swapped from `<Select>` to a checkbox pill grid (Tailwind v4 `has-[input:checked]:` selectors, inline SVG checkmark, sr-only inputs). Validator: `courtIds: z.array(uuid).min(1).max(16)` with dedup superRefine.
+- **Player UI.** Session list, detail, "pay" page, and "my open play" all display the full court roster (`courts.map(c=>c.name).join(" · ")` or a `N courts · ...` summary chip on the discovery card). `listSignupsForPlayer` and `findSessionWithVenue`-consumers now bulk-fetch via `listCourtsForSessions`.
+- **Animated picker tiles (`/venues/[slug]/book`).** New `listOpenPlayForCourts({courtIds, fromAt, toAt})` repo query feeds the booking flow. Each open-play window renders as a wide gradient tile (violet→fuchsia→indigo, `gridColumn: span N`) with a shimmering overlay (`@keyframes op-shimmer-sweep` + `op-tile-pulse` in `globals.css`, both wrapped in `@media (prefers-reduced-motion: no-preference)`), a "OPEN PLAY" badge, time range, capacity progress bar, per-player price, and "Reserve →" CTA that pushes `/open-play/${sessionId}`. Consumed-hours `Set` prevents double-rendering subsequent hours of the same session.
+- **Hard-won fact (added to AGENTS.md):** Open Play sessions can occupy multiple courts via `open_play_session_courts`. `open_play_sessions.court_id` stays populated with the first selected court as `primary` for back-compat. Publish inserts one shadow booking per court inside a single transaction; any EXCLUDE conflict rolls back the whole publish.
+
 ## 2026-05-22 (latest) — Polish
 
 ### Fix — Venues page: merge duplicate city chips (commit `1126f1a`)

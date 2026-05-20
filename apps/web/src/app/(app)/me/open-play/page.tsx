@@ -111,7 +111,7 @@ function SignupRow({
 }: {
   row: Awaited<ReturnType<typeof listSignupsForPlayer>>[number];
 }) {
-  const { signup, session, venue, court } = row;
+  const { signup, session, venue, courts } = row;
   const status = signup.status as SignupStatus;
   const canPay = status === "pending_payment";
   const cancelDeadline = signup.cancellableUntil.getTime();
@@ -133,7 +133,7 @@ function SignupRow({
           </div>
           <div className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--color-fg-muted)]">
             <MapPin className="size-3" />
-            {venue.name} · {venue.city} · {court.name}
+            {venue.name} · {venue.city} · {courts.map((c) => c.name).join(" · ")}
           </div>
           <div className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--color-fg-muted)]">
             <Calendar className="size-3" />

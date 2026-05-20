@@ -14,6 +14,7 @@ import { formatDateTimeManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
 import {
   findSessionWithVenue,
+  listCourtsForSessions,
   listSignupsForSession,
   type SignupListItem,
 } from "@/features/open-play";
@@ -68,6 +69,9 @@ export default async function OwnerOpenPlaySessionPage({
   }
 
   const signups = await listSignupsForSession(session.id);
+  const courtsMap = await listCourtsForSessions([session.id]);
+  const courts = courtsMap.get(session.id) ?? [{ id: court.id, name: court.name }];
+  const courtNames = courts.map((c) => c.name).join(" · ");
   const activeSignups = signups.filter(
     (s) => s.signup.status !== "cancelled" && s.signup.status !== "expired",
   );
@@ -86,7 +90,7 @@ export default async function OwnerOpenPlaySessionPage({
         back={{ href: `/owner/venues/${venue.id}/open-play`, label: "Open Play" }}
         kicker="Open Play"
         title={session.title}
-        subtitle={`${venue.name} · ${court.name}`}
+        subtitle={`${venue.name} · ${courtNames}`}
         action={<SessionStatusBadge status={session.status} />}
       />
 
@@ -147,7 +151,11 @@ export default async function OwnerOpenPlaySessionPage({
               <Row icon={<Calendar className="size-4" />} label="End" value={formatDateTimeManila(session.endAt)} />
               <Row icon={<Trophy className="size-4" />} label="Skill" value={skillLabel[session.skillLevel] ?? session.skillLevel} />
               <Row icon={<Users className="size-4" />} label="Capacity" value={`${session.capacity} players`} />
-              <Row icon={<MapPin className="size-4" />} label="Court" value={court.name} />
+              <Row
+                icon={<MapPin className="size-4" />}
+                label={courts.length === 1 ? "Court" : `Courts (${courts.length})`}
+                value={courtNames}
+              />
               <div className="mt-2 border-t border-[var(--color-border-default)] pt-2">
                 <Row label="Price / player" value={formatPHP(session.pricePerPlayerCentavos)} />
                 <Row label="Booking fee / player" value={formatPHP(session.systemFeePerPlayerCentavos)} muted />

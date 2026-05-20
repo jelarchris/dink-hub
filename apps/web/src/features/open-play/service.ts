@@ -116,16 +116,22 @@ export async function createSession(input: CreateSessionInput): Promise<OpenPlay
 
   await assertOwnsVenue(data.venueId, data.ownerId);
 
-  const courtRow = await repo.findCourtById(data.courtId);
-  if (!courtRow) throw new OpenPlayError("court_not_found", "Court does not exist");
-  if (courtRow.venue.id !== data.venueId) {
-    throw new OpenPlayError("not_authorized", "Court does not belong to this venue");
-  }
-  if (!courtRow.court.isActive || courtRow.court.deletedAt) {
-    throw new OpenPlayError("court_inactive", "Court is not bookable");
-  }
-  if (await repo.hasActiveClosureInRange(data)) {
-    throw new OpenPlayError("court_closed", "Court is closed during this time window");
+  // Validate EVERY selected court belongs to the venue and is open.
+  for (const courtId of data.courtIds) {
+    const courtRow = await repo.findCourtById(courtId);
+    if (!courtRow) throw new OpenPlayError("court_not_found", "Court does not exist");
+    if (courtRow.venue.id !== data.venueId) {
+      throw new OpenPlayError("not_authorized", "Court does not belong to this venue");
+    }
+    if (!courtRow.court.isActive || courtRow.court.deletedAt) {
+      throw new OpenPlayError("court_inactive", `Court ${courtRow.court.name} is not bookable`);
+    }
+    if (await repo.hasActiveClosureInRange({ courtId, startAt: data.startAt, endAt: data.endAt })) {
+      throw new OpenPlayError(
+        "court_closed",
+        `Court ${courtRow.court.name} is closed during this time window`,
+      );
+    }
   }
 
   const feeRule = await getCurrentBookingFeeRule().catch(() => null);
@@ -133,20 +139,31 @@ export async function createSession(input: CreateSessionInput): Promise<OpenPlay
     throw new OpenPlayError("system_fee_unavailable", "No active booking fee configured");
   }
 
-  return repo.insertSession({
-    venueId: data.venueId,
-    courtId: data.courtId,
-    hostProfileId: data.ownerId,
-    title: data.title,
-    description: data.description ?? null,
-    skillLevel: data.skillLevel,
-    capacity: data.capacity,
-    pricePerPlayerCentavos: data.pricePerPlayerCentavos,
-    systemFeePerPlayerCentavos: feeRule.snapshotCentavos,
-    startAt: data.startAt,
-    endAt: data.endAt,
-    status: "draft",
-  } as NewOpenPlaySession);
+  // First selected court is the "primary" — mirrored into the legacy
+  // `open_play_sessions.court_id` column so existing reads keep working.
+  const primaryCourtId = data.courtIds[0]!;
+
+  return db.transaction(async (tx) => {
+    const session = await repo.insertSession(
+      {
+        venueId: data.venueId,
+        courtId: primaryCourtId,
+        hostProfileId: data.ownerId,
+        title: data.title,
+        description: data.description ?? null,
+        skillLevel: data.skillLevel,
+        capacity: data.capacity,
+        pricePerPlayerCentavos: data.pricePerPlayerCentavos,
+        systemFeePerPlayerCentavos: feeRule.snapshotCentavos,
+        startAt: data.startAt,
+        endAt: data.endAt,
+        status: "draft",
+      } as NewOpenPlaySession,
+      tx,
+    );
+    await repo.insertSessionCourts(session.id, data.courtIds, tx);
+    return session;
+  });
 }
 
 // ============================================================================
@@ -212,45 +229,64 @@ export async function publishSession(input: PublishSessionInput): Promise<OpenPl
   }
 
   return db.transaction(async (tx) => {
-    // 1. Insert the shadow booking. Using owner as the player_id keeps the
-    //    NOT NULL + FK happy without creating a fake profile. Money is zero
-    //    so it never lands in payouts/invoices.
-    let shadow: Booking;
-    try {
-      shadow = await repo.insertShadowBooking(
-        {
-          playerId: parsed.data.ownerId,
-          courtId: session.courtId,
-          venueId: session.venueId,
-          startAt: session.startAt,
-          endAt: session.endAt,
-          status: "open_play",
-          courtFeeCentavos: 0n,
-          systemFeeCentavos: 0n,
-          cancellableUntil: session.endAt,
-          paymentDueAt: session.endAt,
-          notes: `[open-play] ${session.title}`,
-        } as NewBooking,
-        tx,
-      );
-    } catch (err) {
-      if (isPgError(err, PG_EXCLUSION_VIOLATION)) {
-        throw new OpenPlayError(
-          "slot_not_available",
-          "Court is already booked for this time window",
-        );
-      }
-      throw err;
+    // Pull the canonical court list from the join table. If a draft predates
+    // the multi-court migration and has no rows yet, seed from the legacy
+    // primary courtId so publish still works.
+    let joinRows = await repo.listSessionCourtRows(session.id, tx);
+    if (joinRows.length === 0) {
+      await repo.insertSessionCourts(session.id, [session.courtId], tx);
+      joinRows = [{ courtId: session.courtId, shadowBookingId: null }];
     }
 
-    // 2. Flip the session to PUBLISHED with the shadow ref and fresh fee snapshot.
+    // Insert one shadow booking per court. Any EXCLUDE violation rolls back
+    // the whole transaction — partial publishes never happen.
+    let primaryShadowId: string | null = null;
+    for (const row of joinRows) {
+      let shadow: Booking;
+      try {
+        shadow = await repo.insertShadowBooking(
+          {
+            playerId: parsed.data.ownerId,
+            courtId: row.courtId,
+            venueId: session.venueId,
+            startAt: session.startAt,
+            endAt: session.endAt,
+            status: "open_play",
+            courtFeeCentavos: 0n,
+            systemFeeCentavos: 0n,
+            cancellableUntil: session.endAt,
+            paymentDueAt: session.endAt,
+            notes: `[open-play] ${session.title}`,
+          } as NewBooking,
+          tx,
+        );
+      } catch (err) {
+        if (isPgError(err, PG_EXCLUSION_VIOLATION)) {
+          throw new OpenPlayError(
+            "slot_not_available",
+            "One of the selected courts is already booked for this time window",
+          );
+        }
+        throw err;
+      }
+      await repo.setSessionCourtShadow(session.id, row.courtId, shadow.id, tx);
+      if (row.courtId === session.courtId) primaryShadowId = shadow.id;
+    }
+
+    // Fall back to the first shadow if the primary somehow wasn't in the join
+    // set (defensive — shouldn't happen given the seeding above).
+    if (primaryShadowId === null) {
+      const fresh = await repo.listSessionCourtRows(session.id, tx);
+      primaryShadowId = fresh[0]?.shadowBookingId ?? null;
+    }
+
     const updated = await repo.updateSession(
       session.id,
       session.version,
       {
         status: "published",
         publishedAt: new Date(),
-        shadowBookingId: shadow.id,
+        shadowBookingId: primaryShadowId,
         systemFeePerPlayerCentavos: feeRule.snapshotCentavos,
       },
       tx,
@@ -285,9 +321,17 @@ export async function cancelSession(
   const now = new Date();
 
   return db.transaction(async (tx) => {
-    // 1. Free the slot.
-    if (session.shadowBookingId) {
-      await repo.cancelShadowBooking(session.shadowBookingId, parsed.data.ownerId, reason, tx);
+    // 1. Free every per-court shadow booking. Fall back to the legacy single
+    //    shadow_booking_id when no join rows exist (pre-migration drafts).
+    const joinRows = await repo.listSessionCourtRows(session.id, tx);
+    const shadowIds = joinRows
+      .map((r) => r.shadowBookingId)
+      .filter((id): id is string => id !== null);
+    if (shadowIds.length === 0 && session.shadowBookingId) {
+      shadowIds.push(session.shadowBookingId);
+    }
+    for (const shadowId of shadowIds) {
+      await repo.cancelShadowBooking(shadowId, parsed.data.ownerId, reason, tx);
     }
 
     // 2. Cancel every active signup so players see it in /me/open-play.

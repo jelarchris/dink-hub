@@ -11,6 +11,7 @@ import {
   findSessionWithVenue,
   findSignupById,
   findSignupPaymentBySignupId,
+  listCourtsForSessions,
 } from "@/features/open-play";
 import { formatDateTimeManila } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
@@ -37,6 +38,9 @@ export default async function OpenPlayPayPage({
 
   const payment = await findSignupPaymentBySignupId(signup.id);
   const { session, venue, court } = detail;
+  const courtsMap = await listCourtsForSessions([session.id]);
+  const courts = courtsMap.get(session.id) ?? [{ id: court.id, name: court.name }];
+  const courtNames = courts.map((c) => c.name).join(" · ");
 
   // RSC: runs once per request — not a render-loop hazard.
   const minutesLeft = Math.max(
@@ -113,7 +117,7 @@ export default async function OpenPlayPayPage({
           <dl className="divide-y divide-[var(--color-border-default)] text-sm">
             <div className="pb-2">
               <div className="font-semibold">{session.title}</div>
-              <div className="text-[var(--color-fg-muted)]">{venue.name} · {court.name}</div>
+              <div className="text-[var(--color-fg-muted)]">{venue.name} · {courtNames}</div>
             </div>
             <SummaryRow label="Start" value={formatDateTimeManila(session.startAt)} />
             <SummaryRow label="End" value={formatDateTimeManila(session.endAt)} />

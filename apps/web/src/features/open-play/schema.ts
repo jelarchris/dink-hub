@@ -64,7 +64,12 @@ export const createSessionInputSchema = z
   .object({
     ownerId: uuidSchema,
     venueId: uuidSchema,
-    courtId: uuidSchema,
+    /**
+     * One or more courts the session occupies. The FIRST id is treated as the
+     * primary court (mirrored into the legacy `open_play_sessions.court_id`
+     * column for back-compat). All courts must belong to `venueId`.
+     */
+    courtIds: z.array(uuidSchema).min(1, "Pick at least one court").max(16),
     title: titleSchema,
     description: descriptionSchema,
     skillLevel: skillLevelSchema.default("any"),
@@ -73,7 +78,21 @@ export const createSessionInputSchema = z
     startAt: z.date(),
     endAt: z.date(),
   })
-  .superRefine(validateSlotTimes);
+  .superRefine(validateSlotTimes)
+  .superRefine((d, ctx) => {
+    const seen = new Set<string>();
+    for (const id of d.courtIds) {
+      if (seen.has(id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Duplicate court selected",
+          path: ["courtIds"],
+        });
+        return;
+      }
+      seen.add(id);
+    }
+  });
 export type CreateSessionInput = z.infer<typeof createSessionInputSchema>;
 
 export const updateSessionInputSchema = z

@@ -23,6 +23,7 @@ import { previewVoucherAction } from "@/features/vouchers/actions";
 import type { ActionResult } from "@/features/auth";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -68,12 +69,38 @@ export interface BookingFlowProps {
   }>;
   /** Occupancy for ALL courts across the full 14-day window. */
   occupancy: ReadonlyArray<{ courtId: string; startAtIso: string; endAtIso: string; kind: "booking" | "hold" | "closure" }>;
+  /**
+   * Open Play sessions overlapping the visible window — one row per
+   * (session, court). Used to render multi-hour OPEN PLAY tiles in the picker
+   * with a CTA linking out to the join flow.
+   */
+  openPlay?: ReadonlyArray<{
+    sessionId: string;
+    courtId: string;
+    startAtIso: string;
+    endAtIso: string;
+    title: string;
+    capacity: number;
+    activeSignupCount: number;
+    /** bigint serialised. */
+    pricePerPlayerCentavos: string;
+  }>;
 }
 
 interface OccupiedRange {
   start: number;
   end: number;
   kind: "booking" | "hold" | "closure";
+}
+
+interface OpenPlayRange {
+  sessionId: string;
+  start: number;
+  end: number;
+  title: string;
+  capacity: number;
+  activeSignupCount: number;
+  pricePerPlayerCentavos: bigint;
 }
 
 export function BookingFlow({
@@ -89,6 +116,7 @@ export function BookingFlow({
   days,
   courts,
   occupancy,
+  openPlay = [],
 }: BookingFlowProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -292,6 +320,25 @@ export function BookingFlow({
     return map;
   }, [occupancy]);
 
+  // Index open-play sessions once: courtId -> ranges.
+  const openPlayByCourt = useMemo(() => {
+    const map = new Map<string, OpenPlayRange[]>();
+    for (const r of openPlay) {
+      const arr = map.get(r.courtId) ?? [];
+      arr.push({
+        sessionId: r.sessionId,
+        start: new Date(r.startAtIso).getTime(),
+        end: new Date(r.endAtIso).getTime(),
+        title: r.title,
+        capacity: r.capacity,
+        activeSignupCount: r.activeSignupCount,
+        pricePerPlayerCentavos: BigInt(r.pricePerPlayerCentavos),
+      });
+      map.set(r.courtId, arr);
+    }
+    return map;
+  }, [openPlay]);
+
   // ---------------------------------------------------------------------------
   // After mount, if the URL carried restore params, strip the query string so
   // reloads don't carry stale picker state. The actual restoration happened
@@ -317,6 +364,7 @@ export function BookingFlow({
 
   const [now] = useState(() => Date.now());
   const courtRanges = occupancyByCourt.get(selectedCourtId) ?? [];
+  const courtOpenPlay = openPlayByCourt.get(selectedCourtId) ?? [];
 
   function isAvailable(slotStart: Date): boolean {
     const start = slotStart.getTime();
@@ -619,11 +667,100 @@ export function BookingFlow({
           hint="Tap adjacent slots to book multiple hours (max 4)"
         >
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {slots.map((s) => {
+            {(() => {
+              // Track slot start-ms covered by an already-rendered open-play
+              // tile so we skip those hours instead of double-rendering.
+              const consumed = new Set<number>();
+              return slots.map((s) => {
               const iso = s.toISOString();
-              const available = isAvailable(s);
               const slotStartMs = s.getTime();
               const slotEndMs = slotStartMs + SLOT_MINUTES * 60_000;
+
+              // Is this slot the FIRST hour of an open-play session on this
+              // court? If so, render a wide animated OPEN PLAY tile spanning
+              // the session duration and mark subsequent hours as consumed.
+              if (!consumed.has(slotStartMs)) {
+                const op = courtOpenPlay.find((r) => r.start === slotStartMs);
+                if (op) {
+                  const durationHours = Math.max(
+                    1,
+                    Math.round((op.end - op.start) / (SLOT_MINUTES * 60_000)),
+                  );
+                  for (let i = 1; i < durationHours; i++) {
+                    consumed.add(slotStartMs + i * SLOT_MINUTES * 60_000);
+                  }
+                  const span = Math.min(durationHours, 4);
+                  const spotsLeft = Math.max(0, op.capacity - op.activeSignupCount);
+                  const isFull = spotsLeft === 0;
+                  const isPast = op.end <= now;
+                  const disabled = isFull || isPast;
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        if (!disabled) router.push(`/open-play/${op.sessionId}`);
+                      }}
+                      style={{ gridColumn: `span ${span} / span ${span}` }}
+                      className={cn(
+                        "op-tile group relative overflow-hidden rounded-[var(--radius-md)] border px-3 py-3 text-left transition active:scale-[0.98]",
+                        "border-violet-300/60 dark:border-violet-400/30",
+                        "bg-[linear-gradient(110deg,rgba(139,92,246,0.18),rgba(217,70,239,0.14)_40%,rgba(99,102,241,0.18))]",
+                        "ring-2 ring-violet-400/40 hover:ring-violet-500/60",
+                        "shadow-[0_4px_16px_-6px_rgba(139,92,246,0.35)] hover:shadow-[0_6px_22px_-6px_rgba(139,92,246,0.5)]",
+                        disabled && "cursor-not-allowed opacity-60",
+                      )}
+                      title={op.title}
+                    >
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 motion-safe:op-shimmer bg-[linear-gradient(110deg,transparent_30%,rgba(255,255,255,0.45)_50%,transparent_70%)] [background-size:200%_100%] mix-blend-overlay"
+                      />
+                      <div className="relative flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-600/90 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-white shadow">
+                          <Zap className="size-3" /> Open Play
+                        </span>
+                        <Badge
+                          variant={isFull ? "danger" : "success"}
+                          className="text-[10px]"
+                        >
+                          {isFull ? "Full" : `${spotsLeft} spots`}
+                        </Badge>
+                      </div>
+                      <div className="relative mt-1.5 truncate text-sm font-bold leading-tight text-violet-950 dark:text-violet-50">
+                        {op.title}
+                      </div>
+                      <div className="relative mt-0.5 text-[11px] font-semibold text-violet-900/80 dark:text-violet-100/80">
+                        {formatTimeManila(new Date(op.start))}–{formatTimeManila(new Date(op.end))}
+                        <span className="ml-1 text-violet-900/60 dark:text-violet-100/60">
+                          ({durationHours}h)
+                        </span>
+                      </div>
+                      <div className="relative mt-2 h-1 w-full overflow-hidden rounded-full bg-violet-200/50 dark:bg-violet-900/40">
+                        <div
+                          className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-[width]"
+                          style={{
+                            width: `${Math.min(100, Math.round((op.activeSignupCount / op.capacity) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="relative mt-1.5 flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-violet-700 dark:text-violet-200">
+                          {formatPHP(op.pricePerPlayerCentavos)}/player
+                        </span>
+                        <span className="font-semibold text-violet-700 dark:text-violet-200 group-hover:underline">
+                          Reserve →
+                        </span>
+                      </div>
+                    </button>
+                  );
+                }
+              }
+
+              if (consumed.has(slotStartMs)) return null;
+
+              const available = isAvailable(s);
               const isPicked =
                 pickedStartMs !== null &&
                 pickedEndMs !== null &&
@@ -680,7 +817,8 @@ export function BookingFlow({
                   </span>
                 </button>
               );
-            })}
+            });
+            })()}
           </div>
           {slots.length > 0 && slots.every((s) => !isAvailable(s)) && (
             <p className="py-6 text-center text-sm text-[var(--color-fg-muted)]">

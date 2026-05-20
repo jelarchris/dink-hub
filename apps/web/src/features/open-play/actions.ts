@@ -128,7 +128,8 @@ export async function createSessionAction(
   const parsed = createSessionInputSchema.safeParse({
     ownerId: user.id,
     venueId: form.get("venueId"),
-    courtId: form.get("courtId"),
+    // Multi-select: `courtId` is sent once per selected court.
+    courtIds: form.getAll("courtId").filter((v): v is string => typeof v === "string"),
     title: form.get("title"),
     description: typeof description === "string" && description.length > 0 ? description : null,
     skillLevel: form.get("skillLevel") ?? "any",

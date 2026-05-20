@@ -7,6 +7,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -585,3 +586,23 @@ export type OpenPlaySignup = typeof openPlaySignups.$inferSelect;
 export type NewOpenPlaySignup = typeof openPlaySignups.$inferInsert;
 export type OpenPlaySignupPayment = typeof openPlaySignupPayments.$inferSelect;
 export type NewOpenPlaySignupPayment = typeof openPlaySignupPayments.$inferInsert;
+
+// ----------------------------------------------------------------------------
+// open_play_session_courts — join row letting one session occupy many courts.
+// Per-court shadow booking ref is NULL until publish time.
+// ----------------------------------------------------------------------------
+export const openPlaySessionCourts = pgTable(
+  "open_play_session_courts",
+  {
+    sessionId: uuid("session_id").notNull().references(() => openPlaySessions.id, { onDelete: "cascade" }),
+    courtId: uuid("court_id").notNull().references(() => courts.id),
+    shadowBookingId: uuid("shadow_booking_id").references(() => bookings.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.sessionId, t.courtId] }),
+  }),
+);
+
+export type OpenPlaySessionCourt = typeof openPlaySessionCourts.$inferSelect;
+export type NewOpenPlaySessionCourt = typeof openPlaySessionCourts.$inferInsert;

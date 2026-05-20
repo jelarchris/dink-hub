@@ -100,7 +100,7 @@ async function SessionsList({ near }: { near: { lat: number; lng: number } | nul
 }
 
 function SessionCard({ item }: { item: SessionListItem }) {
-  const { session, venue, court, activeSignupCount, distanceKm } = item;
+  const { session, venue, courts, activeSignupCount, distanceKm } = item;
   const pct = Math.min(100, Math.round((activeSignupCount / session.capacity) * 100));
   const spotsLeft = Math.max(0, session.capacity - activeSignupCount);
   const totalPrice = session.pricePerPlayerCentavos + session.systemFeePerPlayerCentavos;
@@ -142,7 +142,11 @@ function SessionCard({ item }: { item: SessionListItem }) {
             <Trophy className="size-3.5" />
             <span>{skillLabel[session.skillLevel] ?? session.skillLevel}</span>
             <span>·</span>
-            <span>{court.name}</span>
+            <span>
+              {courts.length === 1
+                ? courts[0]!.name
+                : `${courts.length} courts · ${courts.map((c) => c.name).join(", ")}`}
+            </span>
           </div>
         </dl>
 

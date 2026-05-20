@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { findActiveVenueBySlug, getCourtsOccupancy } from "@/features/venues";
 import { findCurrentSystemFeeCentavos, findCourtRateBands } from "@/features/booking/repo";
+import { listOpenPlayForCourts } from "@/features/open-play";
 import { fromManilaWallClock, manilaUpcomingDays } from "@/lib/date";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
 import { getSessionUser } from "@/server/session";
@@ -39,11 +40,16 @@ export default async function BookCourtPage({
   const [ly, lm, ld] = lastDay.isoDate.split("-").map(Number);
   const fromUtc = fromManilaWallClock(fy!, fm!, fd!, 0, 0);
   const toUtc = fromManilaWallClock(ly!, lm!, ld!, 24, 0);
-  const [occupancy, player, systemFee, allRateBands] = await Promise.all([
+  const [occupancy, openPlay, player, systemFee, allRateBands] = await Promise.all([
     getCourtsOccupancy({
       courtIds: courts.map((c) => c.id),
       fromUtc,
       toUtc,
+    }),
+    listOpenPlayForCourts({
+      courtIds: courts.map((c) => c.id),
+      fromAt: fromUtc,
+      toAt: toUtc,
     }),
     getSessionUser(),
     findCurrentSystemFeeCentavos(),
@@ -98,6 +104,16 @@ export default async function BookCourtPage({
           startAtIso: r.startAt.toISOString(),
           endAtIso: r.endAt.toISOString(),
           kind: r.kind,
+        }))}
+        openPlay={openPlay.map((r) => ({
+          sessionId: r.sessionId,
+          courtId: r.courtId,
+          startAtIso: r.startAt.toISOString(),
+          endAtIso: r.endAt.toISOString(),
+          title: r.title,
+          capacity: r.capacity,
+          activeSignupCount: r.activeSignupCount,
+          pricePerPlayerCentavos: r.pricePerPlayerCentavos.toString(),
         }))}
       />
     </Container>
