@@ -1,5 +1,31 @@
 ﻿# Changelog
 
+## 2026-05-22
+
+### Feat — Owner schedule view (day-grouped agenda + tap-to-contact)
+
+- **`/owner/bookings` rewritten as a day-grouped agenda.** Was: flat table sorted DESC. Now: sticky day headers (`Today · …`, `Tomorrow · …`, `Yesterday · …`, else long Manila date) with booking count, then a list of rows per day. Each row has a left time block (start / `to` / end in Manila time), player name + status badge + chevron linking to the booking detail, court + total amount, and a chip row with tap-to-call (`tel:`) and tap-to-email (`mailto:`) — the answer to "I want easy access like a calendar view that shows all date and time to all booked players."
+- **Upcoming-first by default.** `STATUS_TABS` reordered so `Upcoming` is first and is the default. `listBookingsForOwner` flips its sort: `upcoming` orders by `startAt ASC` (soonest first), every other filter stays `DESC`. Cursor predicate flips with the sort direction so pagination works in both modes.
+- **Player contact in the projection.** `OwnerBookingListItem` extended with `player: { email, phoneE164 }`. SELECT now joins `profiles.email` + `profiles.phoneE164` (already in scope — no extra join). Safe: this surface is owner-only, and these fields exist solely to let an owner contact a player who already booked their court.
+- **Dashboard discoverability.** Added a `Schedule` quick-action tile to `/owner` (first tile in the Manage grid, `CalendarDays` icon, links to `/owner/bookings?status=upcoming`).
+- **Files:** `apps/web/src/features/bookings-view/repo.ts`, `apps/web/src/app/(app)/owner/bookings/page.tsx`, `apps/web/src/app/(app)/owner/page.tsx`.
+
+## 2026-05-21 (much later)
+
+### Feat — Platform-wide 1-hour slot granularity (commit `1ec3a94`)
+
+- **Why.** Player and owner feedback: "only 1hr. no 30mins or 40mins what so ever." 30-min increments were creating noisy slot pickers and ambiguous open-play windows.
+- **DB invariants flipped (migration `0026_one_hour_slots.sql`).** Dropped `booking_min_30_min`, `booking_30_min_grain`, `ops_min_30_min`, `ops_30_min_grain`. Added `booking_min_1_hour`, `booking_1_hour_grain`, `ops_min_1_hour`, `ops_1_hour_grain`. Pre-verified zero violations across 75 bookings and 5 open-play sessions before applying.
+- **App-layer enforcement.** `validateSlotTimes` in `features/booking/schema.ts` and `features/open-play/schema.ts` now requires `60 ≤ minutes ≤ 240` AND `minutes % 60 === 0` AND UTC `minutes/seconds/ms === 0`. Voucher `durationMinutes` validator matches. `generateDaySlotsManila` only emits `h:00`. Terms copy and owner open-play form hint updated to "minimum 1 hour … 1-hour increments".
+- **Test fixtures.** `nextHalfHour` → `nextHour`. `slotMs = 60 * 60_000`. Past-time snap rewritten with `setUTCMinutes(0)`. Test renamed "non-30-minute grain" → "non-hourly grain".
+- **Invariant docs.** `.github/copilot-instructions.md` and `AGENTS.md` updated so future agents do not re-propose 30-min slots.
+
+## 2026-05-21 (later, before 1-hr slots)
+
+### Feat — Surface Share availability on dashboard + venue cards (commit `ae62e20`)
+
+- Owner dashboard gains a `Share availability` quick-action tile (only when the owner has at least one shareable venue). Per-venue cards also link to the share composer. Discoverability was zero before — the route existed but nothing pointed to it.
+
 ## 2026-05-21 (later)
 
 ### Polish — Availability poster: per-hour chips, bigger QR, "Scan or tap to book"

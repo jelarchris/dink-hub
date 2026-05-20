@@ -332,6 +332,12 @@ export default async function OwnerDashboard({
         </SectionLabel>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickAction
+            href="/owner/bookings?status=upcoming"
+            icon={<CalendarDays className="size-4" />}
+            title="Schedule"
+            subtitle="All bookings by day"
+          />
+          <QuickAction
             href="/owner/payments"
             icon={<ClipboardCheck className="size-4" />}
             title="Payments"

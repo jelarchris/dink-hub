@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarDays, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronRight, Mail, Phone } from "lucide-react";
 import { getSessionUser } from "@/server/session";
 import { Container } from "@/components/ui/container";
 import { PageHeader } from "@/components/ui/page-header";
@@ -13,16 +13,16 @@ import {
   type OwnerBookingStatusFilter,
 } from "@/features/bookings-view";
 import { listVenuesForOwner } from "@/features/owner-venues/service";
-import { formatDateTimeManila } from "@/lib/date";
+import { formatDateLongManila, formatTimeManila, manilaCalendarParts } from "@/lib/date";
 import { formatPHP } from "@/lib/money";
 import type { Booking } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Bookings history" };
+export const metadata = { title: "Bookings schedule" };
 
 const STATUS_TABS: { key: OwnerBookingStatusFilter; label: string }[] = [
-  { key: "all", label: "All" },
   { key: "upcoming", label: "Upcoming" },
+  { key: "all", label: "All" },
   { key: "confirmed", label: "Confirmed" },
   { key: "cancelled", label: "Cancelled" },
   { key: "no_show", label: "No-show" },
@@ -43,6 +43,55 @@ function makeUrl(
   if (cursor) params.set("cursor", cursor);
   const qs = params.toString();
   return `/owner/bookings${qs ? `?${qs}` : ""}`;
+}
+
+/** Manila YYYY-MM-DD day key. */
+function manilaDayKey(d: Date): string {
+  const p = manilaCalendarParts(d);
+  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+}
+
+/** Friendly day header: "Today", "Tomorrow", "Yesterday", or full date. */
+function dayHeaderLabel(
+  d: Date,
+  todayKey: string,
+  tomorrowKey: string,
+  yesterdayKey: string,
+): string {
+  const key = manilaDayKey(d);
+  const long = formatDateLongManila(d);
+  if (key === todayKey) return `Today · ${long}`;
+  if (key === tomorrowKey) return `Tomorrow · ${long}`;
+  if (key === yesterdayKey) return `Yesterday · ${long}`;
+  return long;
+}
+
+interface DayGroup {
+  key: string;
+  label: string;
+  items: OwnerBookingListItem[];
+}
+
+function groupByManilaDay(items: OwnerBookingListItem[]): DayGroup[] {
+  const now = new Date();
+  const todayKey = manilaDayKey(now);
+  const tomorrowKey = manilaDayKey(new Date(now.getTime() + 24 * 3600_000));
+  const yesterdayKey = manilaDayKey(new Date(now.getTime() - 24 * 3600_000));
+  const groups: DayGroup[] = [];
+  for (const item of items) {
+    const key = manilaDayKey(item.booking.startAt);
+    const existing = groups.find((g) => g.key === key);
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      groups.push({
+        key,
+        label: dayHeaderLabel(item.booking.startAt, todayKey, tomorrowKey, yesterdayKey),
+        items: [item],
+      });
+    }
+  }
+  return groups;
 }
 
 export default async function OwnerBookingsPage({
@@ -82,13 +131,14 @@ export default async function OwnerBookingsPage({
   ]);
 
   const showVenueFilter = venueList.length > 1;
+  const groups = groupByManilaDay(items);
 
   return (
     <Container className="py-3 sm:py-4">
       <PageHeader
         kicker="Owner"
-        title="Bookings history"
-        subtitle="All bookings across your venues"
+        title="Bookings schedule"
+        subtitle="Every confirmed booking, grouped by day"
         action={
           <Link href="/owner" className={buttonVariants({ variant: "secondary", size: "sm" })}>
             Dashboard
@@ -142,8 +192,8 @@ export default async function OwnerBookingsPage({
         </div>
       )}
 
-      {/* Booking list */}
-      {items.length === 0 ? (
+      {/* Day-grouped agenda */}
+      {groups.length === 0 ? (
         <EmptyState
           icon={<CalendarDays />}
           title="No bookings found"
@@ -162,21 +212,35 @@ export default async function OwnerBookingsPage({
         />
       ) : (
         <>
-          <ul className="mt-4 divide-y divide-[var(--color-border-default)] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] shadow-[var(--shadow-sm)]">
-            {items.map((item) => (
-              <BookingRow
-                key={item.booking.id}
-                item={item}
-                showVenue={showVenueFilter && !venueId}
-              />
+          <div className="mt-4 space-y-4">
+            {groups.map((group) => (
+              <section key={group.key}>
+                <header className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-[var(--radius-md)] border border-b-0 border-[var(--color-border-default)] bg-[var(--color-bg)]/95 px-3 py-1.5 backdrop-blur">
+                  <h2 className="text-xs font-bold uppercase tracking-wide text-[var(--color-fg-muted)]">
+                    {group.label}
+                  </h2>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-fg-subtle)]">
+                    {group.items.length} booking{group.items.length === 1 ? "" : "s"}
+                  </span>
+                </header>
+                <ul className="divide-y divide-[var(--color-border-default)] rounded-b-[var(--radius-lg)] border-x border-b border-[var(--color-border-default)] bg-[var(--color-bg)] shadow-[var(--shadow-sm)]">
+                  {group.items.map((item) => (
+                    <BookingRow
+                      key={item.booking.id}
+                      item={item}
+                      showVenue={showVenueFilter && !venueId}
+                    />
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
 
           {/* Pagination */}
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-[var(--color-fg-muted)]">
               {items.length} booking{items.length === 1 ? "" : "s"}
-              {cursor ? " · more results above" : ""}
+              {cursor ? " · more above" : ""}
             </p>
             <div className="flex gap-2">
               {cursor && (
@@ -210,29 +274,55 @@ function BookingRow({
   item: OwnerBookingListItem;
   showVenue: boolean;
 }) {
+  const phone = item.player.phoneE164;
+  const email = item.player.email;
   return (
-    <li>
-      <Link
-        href={`/owner/bookings/${item.booking.id}`}
-        className="flex items-center gap-3 px-4 py-3 transition hover:bg-[var(--color-bg-subtle)] active:bg-[var(--color-bg-muted)]"
-      >
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-semibold text-[var(--color-fg)]">
+    <li className="px-3 py-2.5">
+      <div className="flex items-start gap-3">
+        <div className="flex w-16 shrink-0 flex-col items-center rounded-[var(--radius-md)] bg-[var(--color-bg-subtle)] px-1 py-1.5 text-center">
+          <span className="text-[11px] font-bold leading-tight text-[var(--color-brand-700)]">
+            {formatTimeManila(item.booking.startAt)}
+          </span>
+          <span className="text-[9px] uppercase text-[var(--color-fg-subtle)]">to</span>
+          <span className="text-[11px] font-bold leading-tight text-[var(--color-fg)]">
+            {formatTimeManila(item.booking.endAt)}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/owner/bookings/${item.booking.id}`}
+            className="group flex items-center gap-1.5"
+          >
+            <span className="truncate font-semibold text-[var(--color-fg)] group-hover:text-[var(--color-brand-700)]">
               {item.playerDisplayName}
             </span>
             <BookingStatusBadge status={item.booking.status} />
-          </div>
-          <div className="text-xs text-[var(--color-fg-muted)]">
+            <ChevronRight className="ml-auto size-4 shrink-0 text-[var(--color-fg-subtle)]" />
+          </Link>
+          <p className="mt-0.5 truncate text-xs text-[var(--color-fg-muted)]">
             {showVenue ? `${item.venue.name} · ` : ""}
-            {item.court.name} · {formatDateTimeManila(item.booking.startAt)}
-          </div>
-          <div className="text-sm font-bold text-[var(--color-brand-700)]">
-            {formatPHP(item.booking.totalCentavos)}
+            {item.court.name} · {formatPHP(item.booking.totalCentavos)}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {phone && (
+              <a
+                href={`tel:${phone}`}
+                className="inline-flex items-center gap-1 rounded-full bg-[var(--color-bg-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)] active:bg-[var(--color-bg-muted)]"
+              >
+                <Phone className="size-3" />
+                {phone}
+              </a>
+            )}
+            <a
+              href={`mailto:${email}`}
+              className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-[var(--color-bg-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-fg)] hover:bg-[var(--color-bg-muted)] active:bg-[var(--color-bg-muted)]"
+            >
+              <Mail className="size-3 shrink-0" />
+              <span className="truncate">{email}</span>
+            </a>
           </div>
         </div>
-        <ChevronRight className="size-4 shrink-0 text-[var(--color-fg-subtle)]" />
-      </Link>
+      </div>
     </li>
   );
 }

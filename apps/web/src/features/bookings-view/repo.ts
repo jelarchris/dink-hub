@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, desc, eq, gt, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
@@ -466,6 +466,10 @@ export interface OwnerBookingListItem {
   venue: { id: string; name: string; slug: string };
   court: { name: string };
   playerDisplayName: string;
+  player: {
+    email: string;
+    phoneE164: string | null;
+  };
 }
 
 const OWNER_BOOKINGS_PAGE_SIZE = 25;
@@ -485,6 +489,8 @@ export async function listBookingsForOwner(args: {
 }): Promise<{ items: OwnerBookingListItem[]; nextCursor: string | null }> {
   const statusFilter = args.statusFilter ?? "all";
   const now = new Date();
+  // Upcoming = soonest-first (ASC). Everything else = newest-first (DESC).
+  const sortAsc = statusFilter === "upcoming";
 
   // Build the cursor condition from an opaque base64url token.
   let cursorCondition: ReturnType<typeof or> | undefined;
@@ -494,10 +500,15 @@ export async function listBookingsForOwner(args: {
         Buffer.from(args.cursor, "base64url").toString("utf8"),
       ) as { startAt: string; id: string };
       const cursorDate = new Date(startAt);
-      cursorCondition = or(
-        lt(bookings.startAt, cursorDate),
-        and(eq(bookings.startAt, cursorDate), lt(bookings.id, id)),
-      );
+      cursorCondition = sortAsc
+        ? or(
+            gt(bookings.startAt, cursorDate),
+            and(eq(bookings.startAt, cursorDate), gt(bookings.id, id)),
+          )
+        : or(
+            lt(bookings.startAt, cursorDate),
+            and(eq(bookings.startAt, cursorDate), lt(bookings.id, id)),
+          );
     } catch {
       // Malformed cursor — ignore and serve from the beginning.
     }
@@ -528,6 +539,8 @@ export async function listBookingsForOwner(args: {
       venue: { id: venues.id, name: venues.name, slug: venues.slug },
       court: { name: courts.name },
       playerDisplayName: profiles.displayName,
+      playerEmail: profiles.email,
+      playerPhoneE164: profiles.phoneE164,
     })
     .from(bookings)
     .innerJoin(venues, and(eq(venues.id, bookings.venueId), isNull(venues.deletedAt)))
@@ -543,7 +556,7 @@ export async function listBookingsForOwner(args: {
         cursorCondition,
       ),
     )
-    .orderBy(desc(bookings.startAt), desc(bookings.id))
+    .orderBy(sortAsc ? asc(bookings.startAt) : desc(bookings.startAt), sortAsc ? asc(bookings.id) : desc(bookings.id))
     .limit(OWNER_BOOKINGS_PAGE_SIZE + 1);
 
   const hasMore = rows.length > OWNER_BOOKINGS_PAGE_SIZE;
@@ -566,6 +579,10 @@ export async function listBookingsForOwner(args: {
       venue: r.venue,
       court: r.court,
       playerDisplayName: r.playerDisplayName,
+      player: {
+        email: r.playerEmail,
+        phoneE164: r.playerPhoneE164,
+      },
     })),
     nextCursor,
   };
