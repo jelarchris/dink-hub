@@ -10,6 +10,7 @@ import {
   type ShareSlotRange,
 } from "@/features/share";
 import { formatPHP } from "@/lib/money";
+import { captureException } from "@/lib/observability";
 
 /**
  * Public OG image route for venue availability posters.
@@ -55,18 +56,20 @@ const COLORS = {
   cardShadow: "rgba(15, 23, 42, 0.12)",
 } as const;
 
-// Inter from Google Fonts CDN. Cached at the build/CDN layer thanks to force-cache.
+// Inter from jsdelivr's @fontsource mirror — stable, versioned URLs (Google
+// Fonts' direct woff2 paths rotate with rebuilds and 404 unexpectedly).
 async function loadFonts(): Promise<Array<{ name: string; data: ArrayBuffer; weight: 400 | 700 | 900; style: "normal" }>> {
   const urls = {
-    400: "https://fonts.gstatic.com/s/inter/v18/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZhrib2Bg-4.woff2",
-    700: "https://fonts.gstatic.com/s/inter/v18/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fMZhrib2Bg-4.woff2",
-    900: "https://fonts.gstatic.com/s/inter/v18/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZhrib2Bg-4.woff2",
+    400: "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/files/inter-latin-400-normal.woff2",
+    700: "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/files/inter-latin-700-normal.woff2",
+    900: "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.1.0/files/inter-latin-900-normal.woff2",
   } as const;
-  const [r400, r700, r900] = await Promise.all([
-    fetch(urls[400], { cache: "force-cache" }).then((r) => r.arrayBuffer()),
-    fetch(urls[700], { cache: "force-cache" }).then((r) => r.arrayBuffer()),
-    fetch(urls[900], { cache: "force-cache" }).then((r) => r.arrayBuffer()),
-  ]);
+  const fetchFont = async (url: string): Promise<ArrayBuffer> => {
+    const res = await fetch(url, { cache: "force-cache" });
+    if (!res.ok) throw new Error(`Font fetch failed (${res.status}) for ${url}`);
+    return res.arrayBuffer();
+  };
+  const [r400, r700, r900] = await Promise.all([fetchFont(urls[400]), fetchFont(urls[700]), fetchFont(urls[900])]);
   return [
     { name: "Inter", data: r400, weight: 400, style: "normal" },
     { name: "Inter", data: r700, weight: 700, style: "normal" },
@@ -121,24 +124,58 @@ export async function GET(
     .replace(/^https?:\/\//, "")
     .replace(/\?.*$/, ""); // human-readable short version
 
-  const [fonts, qrDataUrl] = await Promise.all([
+  // Fonts and QR are independent best-efforts: if the font CDN is down we
+  // still want to ship an image (Satori falls back to its bundled default).
+  // If QR fails we render the short URL only.
+  const [fontsResult, qrResult] = await Promise.allSettled([
     loadFonts(),
     buildQrDataUrl(bookingUrl),
   ]);
+  if (fontsResult.status === "rejected") {
+    captureException(fontsResult.reason, {
+      scope: "share.og.fonts",
+      extra: { slug, format },
+    });
+  }
+  if (qrResult.status === "rejected") {
+    captureException(qrResult.reason, {
+      scope: "share.og.qr",
+      extra: { slug, format },
+    });
+  }
+  const fonts = fontsResult.status === "fulfilled" ? fontsResult.value : undefined;
+  const qrDataUrl = qrResult.status === "fulfilled" ? qrResult.value : null;
 
   const node = renderForFormat(format, data, { qrDataUrl, shortUrl });
 
-  return new ImageResponse(node, {
-    width: dim.width,
-    height: dim.height,
-    fonts,
-    headers: {
-      // Edge cache 5min — availability for the picked date changes when
-      // bookings come in. Owners regenerating to re-share will bust via
-      // ?t=<timestamp> query param when previewing in the dashboard.
-      "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
-    },
-  });
+  // Allow the share-client to force a download (Content-Disposition: attachment)
+  // so browsers save the PNG even when the user middle-clicks or shares via
+  // the system share sheet.
+  const isDownload = url.searchParams.get("download") === "1";
+  const filename = `dinkhub-${data.venue.slug}-${data.dateIso}-${format}.png`;
+
+  try {
+    return new ImageResponse(node, {
+      width: dim.width,
+      height: dim.height,
+      ...(fonts ? { fonts } : {}),
+      headers: {
+        // Edge cache 5min — availability for the picked date changes when
+        // bookings come in. Owners regenerating to re-share will bust via
+        // ?t=<timestamp> query param when previewing in the dashboard.
+        "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+        ...(isDownload
+          ? { "Content-Disposition": `attachment; filename="${filename}"` }
+          : {}),
+      },
+    });
+  } catch (err) {
+    captureException(err, {
+      scope: "share.og.render",
+      extra: { slug, format, date: parsed.data.date },
+    });
+    return new Response("Image render failed", { status: 500 });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +183,7 @@ export async function GET(
 // ---------------------------------------------------------------------------
 
 interface RenderExtras {
-  qrDataUrl: string;
+  qrDataUrl: string | null;
   shortUrl: string;
 }
 
@@ -309,25 +346,27 @@ function QrBlock({
   shortUrl,
   size,
 }: {
-  qrDataUrl: string;
+  qrDataUrl: string | null;
   shortUrl: string;
   size: number;
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center" }}>
-      <div
-        style={{
-          display: "flex",
-          padding: 12,
-          background: "#ffffff",
-          borderRadius: 16,
-          border: `1px solid ${COLORS.border}`,
-          boxShadow: `0 6px 18px ${COLORS.cardShadow}`,
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={qrDataUrl} alt="" width={size} height={size} style={{ display: "block" }} />
-      </div>
+      {qrDataUrl && (
+        <div
+          style={{
+            display: "flex",
+            padding: 12,
+            background: "#ffffff",
+            borderRadius: 16,
+            border: `1px solid ${COLORS.border}`,
+            boxShadow: `0 6px 18px ${COLORS.cardShadow}`,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qrDataUrl} alt="" width={size} height={size} style={{ display: "block" }} />
+        </div>
+      )}
       <div
         style={{
           marginLeft: 20,

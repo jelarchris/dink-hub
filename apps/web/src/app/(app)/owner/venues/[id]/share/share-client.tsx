@@ -81,6 +81,12 @@ export function ShareCardClient({
     return url.toString();
   }, [appUrl, venueSlug, dateIso, courtId, format, nonce]);
 
+  const downloadUrl = useMemo(() => {
+    const u = new URL(imageUrl);
+    u.searchParams.set("download", "1");
+    return u.toString();
+  }, [imageUrl]);
+
   const bookingUrl = useMemo(() => {
     const url = new URL(`/venues/${encodeURIComponent(venueSlug)}/book`, appUrl);
     url.searchParams.set("date", dateIso);
@@ -125,7 +131,7 @@ export function ShareCardClient({
         <PreviewFrame format={format} imageUrl={imageUrl} />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <a
-            href={imageUrl}
+            href={downloadUrl}
             download={`dinkhub-${venueSlug}-${dateIso}-${format}.png`}
             className="inline-flex h-10 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-brand-600)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--color-brand-700)]"
           >
