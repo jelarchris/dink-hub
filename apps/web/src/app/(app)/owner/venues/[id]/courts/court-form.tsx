@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Home, Sun } from "lucide-react";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
@@ -11,6 +12,7 @@ import type { ActionResult } from "@/features/auth";
 import type { Court } from "@/db/schema";
 import { centavosToPhpString, courtSurfaceValues } from "@/features/owner-venues/schema";
 import { venueMediaPublicUrl } from "@/lib/venue-media";
+import { cn } from "@/lib/cn";
 
 type CourtAction = (
   prev: ActionResult<never> | null,
@@ -114,15 +116,52 @@ export function CourtForm({ action, mode, venueId, initial }: CourtFormProps) {
         </FormField>
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="isIndoor"
-          defaultChecked={initial?.isIndoor ?? false}
-          className="size-4 rounded border-[var(--color-border-strong)] text-[var(--color-brand-500)] focus:ring-[var(--color-brand-500)]"
-        />
-        <span>Indoor court</span>
-      </label>
+      <fieldset>
+        <legend className="text-sm font-semibold text-[var(--color-fg)]">Court location</legend>
+        <p className="mt-0.5 text-xs text-[var(--color-fg-muted)]">
+          Pick whether this court is enclosed (indoor) or open-air (outdoor).
+        </p>
+        <div
+          role="radiogroup"
+          aria-label="Court location"
+          className="mt-2 inline-flex rounded-full border border-[var(--color-border-default)] bg-[var(--color-bg)] p-0.5"
+        >
+          <label
+            className={cn(
+              "relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition",
+              "has-[input:checked]:bg-[var(--color-brand-700)] has-[input:checked]:text-white",
+              "has-[input:not(:checked)]:text-[var(--color-fg-muted)] hover:has-[input:not(:checked)]:bg-[var(--color-bg-subtle)]",
+            )}
+          >
+            <input
+              type="radio"
+              name="isIndoor"
+              value="true"
+              defaultChecked={initial?.isIndoor === true}
+              className="sr-only"
+            />
+            <Home className="size-4" aria-hidden />
+            Indoor
+          </label>
+          <label
+            className={cn(
+              "relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition",
+              "has-[input:checked]:bg-[var(--color-brand-700)] has-[input:checked]:text-white",
+              "has-[input:not(:checked)]:text-[var(--color-fg-muted)] hover:has-[input:not(:checked)]:bg-[var(--color-bg-subtle)]",
+            )}
+          >
+            <input
+              type="radio"
+              name="isIndoor"
+              value="false"
+              defaultChecked={initial?.isIndoor !== true}
+              className="sr-only"
+            />
+            <Sun className="size-4" aria-hidden />
+            Outdoor
+          </label>
+        </div>
+      </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField
