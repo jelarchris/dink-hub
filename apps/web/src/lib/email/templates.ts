@@ -231,9 +231,18 @@ export function bookingCancelledByPlayerEmail(ctx: BookingEmailContext & {
 export function bookingForceCancelledEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
   reason: string;
+  rebookUrl?: string;
 }) {
   const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
+  const rebookBanner = ctx.rebookUrl
+    ? `<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;color:#065f46;">
+         <p style="margin:0 0 4px 0;"><strong>Good news \u2014 your payment carries over.</strong></p>
+         <p style="margin:0;">Pick any new time at no extra cost.</p>
+       </div>`
+    : "";
+  const ctaHref = ctx.rebookUrl ?? link;
+  const ctaLabel = ctx.rebookUrl ? "Pick a new time" : "View my bookings";
 
   return {
     subject: `Your booking was cancelled \u2014 ${ctx.venueName}`,
@@ -245,16 +254,19 @@ export function bookingForceCancelledEmail(ctx: BookingEmailContext & {
           <p style="margin:0 0 4px 0;"><strong>Reason:</strong></p>
           <p style="margin:0;color:#991b1b;">${escapeHtml(ctx.reason)}</p>
         </div>
+        ${rebookBanner}
         <p style="margin:0;">If you've already paid and a refund is owed, our team will contact you separately to coordinate it.</p>
       `,
-      ctaHref: link,
-      ctaLabel: "View my bookings",
+      ctaHref,
+      ctaLabel,
     }),
     text:
       `Your booking was cancelled by support\n\n` +
       `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\n\n` +
       `Reason: ${ctx.reason}\n\n` +
-      `If a refund is owed, our team will contact you separately.\n\n` +
+      (ctx.rebookUrl
+        ? `Pick a new time (no payment needed): ${ctx.rebookUrl}\n\n`
+        : `If a refund is owed, our team will contact you separately.\n\n`) +
       `View: ${link}\n`,
   };
 }

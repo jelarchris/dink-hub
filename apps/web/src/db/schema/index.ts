@@ -12,6 +12,7 @@ import {
   text,
   timestamp,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
   bookingStatusEnum,
@@ -212,6 +213,13 @@ export const bookings = pgTable("bookings", {
   // Set when this row is a SHADOW booking that physically blocks a court for
   // a published open-play session. NULL for ordinary player bookings.
   openPlaySessionId: uuid("open_play_session_id"),
+  // Set when this booking was created as a free rebook of a previously
+  // cancelled (venue_closure/weather/court_unavailable) booking. A partial
+  // unique index on this column (status NOT IN cancelled/expired/no_show)
+  // physically prevents double-claiming the credit.
+  rebookOfId: uuid("rebook_of_id").references((): AnyPgColumn => bookings.id, {
+    onDelete: "set null",
+  }),
 });
 
 // ----------------------------------------------------------------------------

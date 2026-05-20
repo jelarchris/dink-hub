@@ -1189,7 +1189,7 @@ export interface CloseBookingsResult {
 export async function closeBookingsForRange(
   input: import("./schema").ClosureRangeInput,
 ): Promise<{ result: CloseBookingsResult; cancelledBookingIds: string[] }> {
-  const { bookings: bookingsTable, courts, venues } = await import("@/db/schema");
+  const { bookings: bookingsTable, courtClosures, courts, venues } = await import("@/db/schema");
   const { and, eq, inArray } = await import("drizzle-orm");
 
   // Re-verify ownership inside the write path (defense in depth).
@@ -1275,6 +1275,27 @@ export async function closeBookingsForRange(
         skippedCount++;
       }
     }
+
+    // Block new bookings on the closed window by writing court_closures rows.
+    // getCourtsOccupancy UNIONs court_closures, so any future picker call will
+    // see the window as unavailable. Closures are intentional historical
+    // evidence — never GC'd. We tolerate EXCLUDE overlap (23P01) silently in
+    // case the owner has already scheduled a partial overlap manually.
+    const truncatedReason = input.reason.slice(0, 500);
+    for (const courtId of input.courtIds) {
+      try {
+        await tx.insert(courtClosures).values({
+          courtId,
+          createdBy: input.ownerId,
+          startAt: input.fromAt,
+          endAt: input.untilAt,
+          reason: truncatedReason,
+        });
+      } catch (err) {
+        if (isPgError(err, PG_EXCLUSION_VIOLATION)) continue;
+        throw err;
+      }
+    }
   });
 
   return { result: { cancelledCount, skippedCount }, cancelledBookingIds };
@@ -1282,3 +1303,152 @@ export async function closeBookingsForRange(
 
 // Internal helper exposed for tests only — do not import from app code.
 export const _testing = { computeCourtFeeCentavos, randomUUID };
+
+// ============================================================================
+// 13. rebookFromClosure — player self-rebook after venue closure
+//
+// When a booking is cancelled with category venue_closure | weather |
+// court_unavailable, the player has a one-time free rebook for any same-
+// venue / same-duration slot. Fees are SNAPSHOTTED from the parent so the
+// player owes no new payment and the platform records identical revenue.
+//
+// Race safety:
+//   - bookings_one_active_rebook_per_parent (partial unique index, DB) is
+//     the authoritative double-rebook guard.
+//   - bookings EXCLUDE constraint prevents overlap with any existing
+//     booking/hold/open-play shadow on the new court.
+// ============================================================================
+const FREE_REBOOK_CATEGORIES = new Set<NonNullable<Booking["cancellationCategory"]>>([
+  "venue_closure",
+  "weather",
+  "court_unavailable",
+]);
+const REBOOK_CANCEL_WINDOW_MS = CANCEL_WINDOW_MS;
+const REBOOK_PAYMENT_DUE_MS = 24 * 60 * 60_000;
+
+export interface RebookFromClosureInput {
+  playerId: string;
+  parentBookingId: string;
+  courtId: string;
+  startAt: Date;
+  endAt: Date;
+}
+
+export async function rebookFromClosure(
+  input: RebookFromClosureInput,
+): Promise<{ id: string; startAt: Date; endAt: Date }> {
+  const { bookings: bk, courts } = await import("@/db/schema");
+  const { and, eq, inArray } = await import("drizzle-orm");
+
+  return db.transaction(async (tx) => {
+    const parentRows = await tx
+      .select()
+      .from(bk)
+      .where(eq(bk.id, input.parentBookingId))
+      .limit(1);
+    const parent = parentRows[0];
+    if (!parent) throw new BookingError("booking_not_found", "Original booking not found.");
+    if (parent.playerId !== input.playerId)
+      throw new BookingError("booking_not_owned", "Not your booking.");
+    if (parent.status !== "cancelled")
+      throw new BookingError("booking_wrong_status", "Original booking is not cancelled.");
+    if (
+      !parent.cancellationCategory ||
+      !FREE_REBOOK_CATEGORIES.has(parent.cancellationCategory)
+    )
+      throw new BookingError(
+        "booking_wrong_status",
+        "Only venue-closure cancellations can be rebooked for free.",
+      );
+
+    const parentMinutes = durationMinutes(parent.startAt, parent.endAt);
+    const newMinutes = durationMinutes(input.startAt, input.endAt);
+    if (newMinutes !== parentMinutes)
+      throw new BookingError(
+        "validation_failed",
+        `New slot must be ${parentMinutes / 60}h to match the original.`,
+      );
+
+    const courtRows = await tx
+      .select({ venueId: courts.venueId })
+      .from(courts)
+      .where(eq(courts.id, input.courtId))
+      .limit(1);
+    const court = courtRows[0];
+    if (!court) throw new BookingError("court_not_found", "Court not found.");
+    if (court.venueId !== parent.venueId)
+      throw new BookingError("validation_failed", "Rebook must be at the same venue.");
+
+    if (
+      input.startAt.getUTCMinutes() !== 0 ||
+      input.startAt.getUTCSeconds() !== 0 ||
+      input.endAt.getUTCMinutes() !== 0 ||
+      input.endAt.getUTCSeconds() !== 0
+    )
+      throw new BookingError("validation_failed", "Slot must align to the hour.");
+
+    const now = await repo.getDatabaseNow(tx);
+    if (isAtOrBefore(input.startAt, now))
+      throw new BookingError("validation_failed", "Pick a future time.");
+
+    // Defense-in-depth — the partial unique index is authoritative.
+    const existing = await tx
+      .select({ id: bk.id })
+      .from(bk)
+      .where(
+        and(
+          eq(bk.rebookOfId, parent.id),
+          inArray(bk.status, ["pending_payment", "payment_submitted", "confirmed"]),
+        ),
+      );
+    if (existing.length > 0)
+      throw new BookingError(
+        "booking_wrong_status",
+        "You've already rebooked this cancelled booking.",
+      );
+
+    const cancellableUntil = addMilliseconds(now, REBOOK_CANCEL_WINDOW_MS);
+    const paymentDueAt = addMilliseconds(now, REBOOK_PAYMENT_DUE_MS);
+
+    try {
+      const inserted = await tx
+        .insert(bk)
+        .values({
+          playerId: input.playerId,
+          venueId: parent.venueId,
+          courtId: input.courtId,
+          startAt: input.startAt,
+          endAt: input.endAt,
+          status: "confirmed",
+          courtFeeCentavos: parent.courtFeeCentavos,
+          systemFeeCentavos: parent.systemFeeCentavos,
+          discountCentavos: parent.discountCentavos,
+          ...(parent.voucherId ? { voucherId: parent.voucherId } : {}),
+          ...(parent.voucherCodeSnapshot
+            ? { voucherCodeSnapshot: parent.voucherCodeSnapshot }
+            : {}),
+          ...(parent.contactEmail ? { contactEmail: parent.contactEmail } : {}),
+          cancellableUntil,
+          paymentDueAt,
+          rebookOfId: parent.id,
+          notes: `Free rebook of ${parent.id} (original ${parent.startAt.toISOString()})`,
+        })
+        .returning({ id: bk.id, startAt: bk.startAt, endAt: bk.endAt });
+      const row = inserted[0];
+      if (!row) throw new BookingError("validation_failed", "Insert failed.");
+      return row;
+    } catch (err) {
+      if (isPgError(err, PG_EXCLUSION_VIOLATION))
+        throw new BookingError(
+          "slot_not_available",
+          "That slot is no longer available — pick another.",
+        );
+      if (isPgError(err, PG_UNIQUE_VIOLATION))
+        throw new BookingError(
+          "booking_wrong_status",
+          "You've already rebooked this cancelled booking.",
+        );
+      throw err;
+    }
+  });
+}

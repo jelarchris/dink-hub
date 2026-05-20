@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   cancelBooking,
   createBooking,
+  rebookFromClosure,
   releaseHold,
 } from "@/features/booking/service";
 import { isBookingError } from "@/features/booking/errors";
@@ -199,5 +200,60 @@ export async function releaseHoldAction(form: FormData): Promise<void> {
     await releaseHold({ holdId: id, playerId: user.id });
   } catch {
     // best-effort cleanup
+  }
+}
+
+const rebookFromClosureSchema = z.object({
+  parentBookingId: z.string().uuid(),
+  courtId: z.string().uuid(),
+  startAt: isoDateSchema,
+  endAt: isoDateSchema,
+  venueSlug: z.string().min(1),
+});
+
+/**
+ * Player self-rebook after a venue-closure/weather/court-unavailable
+ * cancellation. Auth-gated; rate-limited per user; redirects unauthenticated
+ * users back to the rebook URL after sign-in. The DB partial-unique index
+ * `bookings_one_active_rebook_per_parent` is the authoritative double-claim
+ * guard.
+ */
+export async function rebookFromClosureAction(
+  form: FormData,
+): Promise<ActionResult<{ bookingId: string }>> {
+  const user = await getCurrentUser();
+  if (!user) {
+    const slug = (form.get("venueSlug") as string) ?? "";
+    const parent = (form.get("parentBookingId") as string) ?? "";
+    const next = encodeURIComponent(`/venues/${slug}/book?rebook=${parent}`);
+    redirect(`/sign-in?next=${next}`);
+  }
+
+  const rl = await checkRateLimit(limiters.bookingCreate, `booking:${user.id}`);
+  if (!rl.allowed) {
+    return { ok: false, code: "rate_limited", message: rateLimitMessage(rl.resetMs) };
+  }
+
+  const parsed = rebookFromClosureSchema.safeParse({
+    parentBookingId: form.get("parentBookingId"),
+    courtId: form.get("courtId"),
+    startAt: form.get("startAt"),
+    endAt: form.get("endAt"),
+    venueSlug: form.get("venueSlug"),
+  });
+  if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
+
+  try {
+    const booking = await rebookFromClosure({
+      playerId: user.id,
+      parentBookingId: parsed.data.parentBookingId,
+      courtId: parsed.data.courtId,
+      startAt: parsed.data.startAt,
+      endAt: parsed.data.endAt,
+    });
+    revalidatePath("/me/bookings");
+    return { ok: true, data: { bookingId: booking.id } };
+  } catch (err) {
+    return unwrap(err);
   }
 }

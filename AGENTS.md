@@ -93,6 +93,11 @@ Vercel auto-aliases `dinkhub.ph`.
 
 ## Hard-won facts (don't relearn these)
 
+- Closure flow writes BOTH `bookings` force-cancellations AND `court_closures` rows in one tx — closure rows are intentional historical evidence, do not GC.
+- Booking page `?rebook=<bookingId>` enters free-rebook mode: same venue, same duration, parent fees snapshot, status=`confirmed`, no payment. DB partial unique idx `bookings_one_active_rebook_per_parent` is the authoritative double-claim guard. Free-rebook categories: `venue_closure | weather | court_unavailable`.
+- BookingError code for EXCLUDE GiST constraint hit is `slot_not_available` (NOT `slot_unavailable`); 23505 → `booking_wrong_status`.
+- Drizzle self-FK requires `AnyPgColumn`: `uuid("rebook_of_id").references((): AnyPgColumn => bookings.id, { onDelete: "set null" })`.
+
 - React 19 `react-hooks/purity` lint forbids `Date.now()` inside Server Component render functions (even though it'd run on the server). Compute `now` in the page handler and pass it in as a prop.
 - `getOwnerGridData(args)` (`features/bookings-view/repo.ts`) takes `courtId` as OPTIONAL and falls back to the first active court internally. Don't do two-pass lookups from the page — pass the requested court id with the `exactOptionalPropertyTypes` spread `...(id !== undefined ? { courtId: id } : {})` and let the repo resolve. Returns `null` only when the venue isn't owned.
 - User-entered place names (`venues.city`, `venues.province`) arrive in mixed casing (e.g. "Cabadbaran City" vs "CABADBARAN CITY"). Group by `lower(city)` server-side and normalise display via `toTitleCase` from `@/lib/casing`. `listActiveVenueCities` already does this; `listActiveVenues` filters with `lower(city) = lower(x)`.

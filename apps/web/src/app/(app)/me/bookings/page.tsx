@@ -73,6 +73,13 @@ export default async function MyBookingsPage() {
             const isReviewable =
               it.booking.status === "confirmed" && it.booking.endAt.getTime() < now;
             const alreadyReviewed = reviewedBookingIds.has(it.booking.id);
+            const freeRebookEligible =
+              it.booking.status === "cancelled" &&
+              it.booking.cancellationCategory !== null &&
+              (it.booking.cancellationCategory === "venue_closure" ||
+                it.booking.cancellationCategory === "weather" ||
+                it.booking.cancellationCategory === "court_unavailable") &&
+              !it.hasActiveRebook;
             return (
               <li key={it.booking.id} className="flex flex-col gap-2 py-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -114,11 +121,24 @@ export default async function MyBookingsPage() {
                       Details
                     </Link>
                     {cancellable && <CancelBookingButton bookingId={it.booking.id} />}
+                    {freeRebookEligible && (
+                      <Link
+                        href={`/venues/${it.venue.slug}/book?rebook=${it.booking.id}`}
+                        className={buttonVariants({ size: "sm" })}
+                      >
+                        Rebook for free
+                      </Link>
+                    )}
                     {isReviewable && alreadyReviewed && (
                       <span className="text-xs font-semibold text-[var(--color-success)]">✓ Reviewed</span>
                     )}
                   </div>
                 </div>
+                {freeRebookEligible && (
+                  <div className="rounded-lg border border-red-300 bg-gradient-to-br from-red-50 to-orange-50 px-3 py-2 text-xs text-red-900">
+                    🌧 Venue closed: your {formatPHP(it.booking.totalCentavos)} payment is credit. Pick a new time at no extra cost.
+                  </div>
+                )}
                 {isReviewable && !alreadyReviewed && (
                   <LeaveReviewForm bookingId={it.booking.id} venueName={it.venue.name} />
                 )}

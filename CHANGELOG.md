@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## 2026-05-23 — Venue closures + free player self-rebook (pending commit)
+
+### Feat — Owner closures persist; players rebook cancelled slots at no cost
+
+- **DB migration `0028_booking_rebook_link.sql`** (idempotent, applied) — adds `bookings.rebook_of_id uuid → bookings(id) ON DELETE SET NULL`, idx, and partial unique idx `bookings_one_active_rebook_per_parent` (parent has at most one active child). Drizzle schema mirrored with `AnyPgColumn` self-FK.
+- **Closure persistence** — `closeBookingsForRange` now writes one `court_closures` row per affected court inside the same tx as the force-cancellations. Existing 23P01 (EXCLUDE) collisions are swallowed so a partial-overlap closure still records the cancellations.
+- **`rebookFromClosure` service** — validates parent owned + status `cancelled` + category ∈ `{venue_closure, weather, court_unavailable}` + same venue + 1h grain + future + no active rebook child. Inserts confirmed booking with snapshot fees, `rebook_of_id = parent.id`, no payment. 23P01 → `slot_not_available`, 23505 → `booking_wrong_status`.
+- **`rebookFromClosureAction`** — auth-redirects to `/sign-in?next=/venues/<slug>/book?rebook=<id>`, rate-limited per-user, revalidates `/me/bookings`.
+- **Email + booking page** — owner-cancellation email now includes a green "Pick a new time" CTA with deep-link `…/venues/<slug>/book?rebook=<bookingId>`. The booking flow detects `?rebook=` and (a) shows a green banner with original date/court, (b) locks the duration to the parent's, (c) submits via `rebookFromClosureAction` instead of the normal pay flow.
+- **`/me/bookings`** — cancelled bookings eligible for free rebook (no active child yet) render a red banner + "Rebook for free" CTA. `listBookingsForPlayer` now returns `cancellationCategory` and `hasActiveRebook`.
+
 ## 2026-05-22 — Open Play: skip "Finish your payment" alert (commit `7635340`)
 
 ### Fix — Pending-payment signups auto-redirect to /pay

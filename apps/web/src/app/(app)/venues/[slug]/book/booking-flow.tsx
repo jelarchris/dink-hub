@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import {
   cancelBookingAction,
+  rebookFromClosureAction,
   startBookingReturningIdAction,
 } from "@/features/booking/actions";
 import { submitReceiptAction } from "@/features/booking/payment-actions";
@@ -84,6 +85,20 @@ export interface BookingFlowProps {
     /** bigint serialised. */
     pricePerPlayerCentavos: string;
   }>;
+  /**
+   * When present, the flow runs in FREE-REBOOK mode:
+   *   - banner explains payment carries over
+   *   - duration locked to expectedDurationMinutes
+   *   - Continue calls rebookFromClosureAction (no payment modal)
+   * The booking page validates ownership + category before passing this in.
+   */
+  rebookContext?: {
+    parentBookingId: string;
+    expectedDurationMinutes: number;
+    originalStartIso: string;
+    originalCourtName: string;
+    totalCentavos: string;
+  };
 }
 
 interface OccupiedRange {
@@ -116,6 +131,7 @@ export function BookingFlow({
   courts,
   occupancy,
   openPlay = [],
+  rebookContext,
 }: BookingFlowProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -412,6 +428,20 @@ export function BookingFlow({
    */
   function pickSlot(slotStart: Date): void {
     const slotMs = slotStart.getTime();
+    // Rebook mode locks duration to the parent booking's hour count.
+    const lockedCount = rebookContext
+      ? rebookContext.expectedDurationMinutes / SLOT_MINUTES
+      : null;
+    if (lockedCount !== null) {
+      // Verify lockedCount contiguous hours starting at slotStart are all free.
+      for (let i = 0; i < lockedCount; i++) {
+        const s = new Date(slotMs + i * SLOT_MINUTES * 60_000);
+        if (!isAvailable(s)) return;
+      }
+      setPickedStartIso(slotStart.toISOString());
+      setPickedCount(lockedCount);
+      return;
+    }
     if (pickedStartIso === null || pickedCount === 0) {
       setPickedStartIso(slotStart.toISOString());
       setPickedCount(1);
@@ -500,6 +530,10 @@ export function BookingFlow({
    */
   function handleContinue(): void {
     if (!canContinue || !pickedStartIso) return;
+    if (rebookContext && pickedEndDate) {
+      void submitRebook(pickedStartIso, pickedEndDate);
+      return;
+    }
     if (isAuthenticated) {
       openModal();
       return;
@@ -512,6 +546,27 @@ export function BookingFlow({
     });
     const returnTo = `${pathname}?${qs.toString()}`;
     router.push(`/sign-up?next=${encodeURIComponent(returnTo)}`);
+  }
+
+  async function submitRebook(startIso: string, endDate: Date): Promise<void> {
+    if (!rebookContext) return;
+    setIsCreating(true);
+    setCreateError(null);
+    const form = new FormData();
+    form.set("parentBookingId", rebookContext.parentBookingId);
+    form.set("venueSlug", venueSlug);
+    form.set("courtId", selectedCourtId);
+    form.set("startAt", startIso);
+    form.set("endAt", endDate.toISOString());
+    const result = await rebookFromClosureAction(form);
+    setIsCreating(false);
+    if (!result.ok) {
+      setCreateError(result.message);
+      return;
+    }
+    startTransition(() => {
+      router.push(`/me/bookings?rebooked=${result.data.bookingId}`);
+    });
   }
 
   function closeModal(): void {
@@ -634,6 +689,14 @@ export function BookingFlow({
     <>
       {/* Slot picker */}
       <div className="pb-24">
+        {rebookContext ? (
+          <div className="mb-3 rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-50 to-teal-50 p-4 text-sm text-emerald-900 shadow-sm">
+            <div className="mb-1 font-bold">🌧 Free rebook — your payment carries over</div>
+            <div className="text-emerald-800">
+              Original: {new Date(rebookContext.originalStartIso).toLocaleString("en-PH", { timeZone: "Asia/Manila", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} on {rebookContext.originalCourtName}. Pick any {rebookContext.expectedDurationMinutes / 60}-hour slot at no extra cost.
+            </div>
+          </div>
+        ) : null}
         <Section label="Select court">
           <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             {courts.map((c) => (

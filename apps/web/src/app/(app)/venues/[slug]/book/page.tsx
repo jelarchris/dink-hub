@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { and, eq, inArray } from "drizzle-orm";
 import { Container } from "@/components/ui/container";
+import { db } from "@/db/client";
+import { bookings, courts as courtsTable } from "@/db/schema";
 import { findActiveVenueBySlug, getCourtsOccupancy } from "@/features/venues";
 import { findCurrentSystemFeeCentavos, findCourtRateBands } from "@/features/booking/repo";
 import { listOpenPlayForCourts } from "@/features/open-play";
@@ -14,6 +17,8 @@ export const dynamic = "force-dynamic";
 
 const DAYS_AHEAD = 14;
 
+const FREE_REBOOK_CATEGORIES = ["venue_closure", "weather", "court_unavailable"] as const;
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const found = await findActiveVenueBySlug(slug);
@@ -22,10 +27,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function BookCourtPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ rebook?: string }>;
 }) {
   const { slug } = await params;
+  const { rebook: rebookParam } = await searchParams;
   const found = await findActiveVenueBySlug(slug);
   if (!found) notFound();
   const { venue, courts } = found;
@@ -55,6 +63,70 @@ export default async function BookCourtPage({
     findCurrentSystemFeeCentavos(),
     Promise.all(courts.map((c) => findCourtRateBands(c.id).then((bands) => ({ courtId: c.id, bands })))),
   ]);
+
+  // Free-rebook context: if ?rebook=<id> points to a player-owned, cancelled,
+  // free-rebookable booking at this venue with no active rebook child, surface
+  // it so the picker locks duration + skips payment.
+  let rebookContext: {
+    parentBookingId: string;
+    expectedDurationMinutes: number;
+    originalStartIso: string;
+    originalCourtName: string;
+    totalCentavos: string;
+  } | undefined;
+  if (rebookParam && player) {
+    const parentRows = await db
+      .select({
+        id: bookings.id,
+        playerId: bookings.playerId,
+        venueId: bookings.venueId,
+        courtId: bookings.courtId,
+        startAt: bookings.startAt,
+        endAt: bookings.endAt,
+        status: bookings.status,
+        cancellationCategory: bookings.cancellationCategory,
+        totalCentavos: bookings.totalCentavos,
+      })
+      .from(bookings)
+      .where(eq(bookings.id, rebookParam))
+      .limit(1);
+    const parent = parentRows[0];
+    if (
+      parent &&
+      parent.playerId === player.id &&
+      parent.venueId === venue.id &&
+      parent.status === "cancelled" &&
+      parent.cancellationCategory !== null &&
+      (FREE_REBOOK_CATEGORIES as readonly string[]).includes(parent.cancellationCategory)
+    ) {
+      const childRows = await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.rebookOfId, parent.id),
+            inArray(bookings.status, ["pending_payment", "payment_submitted", "confirmed"]),
+          ),
+        )
+        .limit(1);
+      if (childRows.length === 0) {
+        const courtRow = await db
+          .select({ name: courtsTable.name })
+          .from(courtsTable)
+          .where(eq(courtsTable.id, parent.courtId))
+          .limit(1);
+        rebookContext = {
+          parentBookingId: parent.id,
+          expectedDurationMinutes: Math.round(
+            (parent.endAt.getTime() - parent.startAt.getTime()) / 60_000,
+          ),
+          originalStartIso: parent.startAt.toISOString(),
+          originalCourtName: courtRow[0]?.name ?? "court",
+          totalCentavos: parent.totalCentavos.toString(),
+        };
+      }
+    }
+  }
 
   return (
     <Container className="py-2 sm:py-3">
@@ -115,6 +187,7 @@ export default async function BookCourtPage({
           activeSignupCount: r.activeSignupCount,
           pricePerPlayerCentavos: r.pricePerPlayerCentavos.toString(),
         }))}
+        {...(rebookContext ? { rebookContext } : {})}
       />
     </Container>
   );

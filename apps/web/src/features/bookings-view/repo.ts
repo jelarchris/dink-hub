@@ -58,12 +58,20 @@ export interface BookingListItem {
     | "cancellableUntil"
     | "paymentDueAt"
     | "createdAt"
+    | "cancellationCategory"
   >;
   venue: Pick<Venue, "name" | "slug" | "city">;
   court: Pick<Court, "name">;
+  /** True when a not-cancelled child booking already claims this parent's free rebook. */
+  hasActiveRebook: boolean;
 }
 
 export async function listBookingsForPlayer(playerId: string): Promise<BookingListItem[]> {
+  const child = sql<boolean>`exists (
+    select 1 from bookings rb
+    where rb.rebook_of_id = ${bookings.id}
+      and rb.status not in ('cancelled','expired','no_show')
+  )`;
   const rows = await db
     .select({
       booking: {
@@ -78,9 +86,11 @@ export async function listBookingsForPlayer(playerId: string): Promise<BookingLi
         cancellableUntil: bookings.cancellableUntil,
         paymentDueAt: bookings.paymentDueAt,
         createdAt: bookings.createdAt,
+        cancellationCategory: bookings.cancellationCategory,
       },
       venue: { name: venues.name, slug: venues.slug, city: venues.city },
       court: { name: courts.name },
+      hasActiveRebook: child,
     })
     .from(bookings)
     .innerJoin(venues, eq(venues.id, bookings.venueId))

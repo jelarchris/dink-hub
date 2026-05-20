@@ -31,8 +31,17 @@ interface BookingJoin {
   endAt: Date;
   totalCentavos: bigint;
   rescheduledCount: number;
+  cancellationCategory:
+    | "weather"
+    | "court_unavailable"
+    | "venue_closure"
+    | "player_request"
+    | "admin_action"
+    | "other"
+    | null;
   courtName: string;
   venueName: string;
+  venueSlug: string;
   ownerEmail: string;
   ownerDisplayName: string;
   ownerNotificationPrefs: {
@@ -53,10 +62,12 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
       endAt: bookings.endAt,
       totalCentavos: bookings.totalCentavos,
       rescheduledCount: bookings.rescheduledCount,
+      cancellationCategory: bookings.cancellationCategory,
       playerId: bookings.playerId,
       contactEmail: bookings.contactEmail,
       courtName: courts.name,
       venueName: venues.name,
+      venueSlug: venues.slug,
       ownerId: venues.ownerId,
     })
     .from(bookings)
@@ -97,8 +108,10 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
     endAt: base.endAt,
     totalCentavos: base.totalCentavos,
     rescheduledCount: base.rescheduledCount,
+    cancellationCategory: base.cancellationCategory,
     courtName: base.courtName,
     venueName: base.venueName,
+    venueSlug: base.venueSlug,
     ownerEmail: ownerRow.email,
     ownerDisplayName: ownerRow.displayName,
     ownerNotificationPrefs: ownerRow.notificationPrefs,
@@ -224,6 +237,15 @@ export async function notifyBookingCancelledByOwner(bookingId: string, reason: s
   try {
     const ctx = await loadBookingJoin(bookingId);
     if (!ctx) return;
+    const isFreeRebookable =
+      ctx.cancellationCategory !== null &&
+      (ctx.cancellationCategory === "venue_closure" ||
+        ctx.cancellationCategory === "weather" ||
+        ctx.cancellationCategory === "court_unavailable");
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://dinkhub.ph";
+    const rebookUrl = isFreeRebookable
+      ? `${appUrl}/venues/${ctx.venueSlug}/book?rebook=${ctx.bookingId}`
+      : undefined;
     const tpl = bookingForceCancelledEmail({
       bookingId: ctx.bookingId,
       venueName: ctx.venueName,
@@ -233,6 +255,7 @@ export async function notifyBookingCancelledByOwner(bookingId: string, reason: s
       totalCentavos: ctx.totalCentavos,
       playerDisplayName: ctx.playerDisplayName,
       reason,
+      ...(rebookUrl ? { rebookUrl } : {}),
     });
     await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "booking_cancelled_by_owner" });
   } catch (err) {
