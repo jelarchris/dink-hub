@@ -155,6 +155,7 @@ describe("booking service", () => {
         receiptImagePath: "receipts/test.jpg",
         receiptHash: sha256Hex("wrong"),
         amountCentavos: booking.totalCentavos - 1n,
+        gcashReferenceNumber: "1234567890",
       }),
     ).rejects.toMatchObject({ code: "payment_amount_mismatch" });
 
@@ -164,6 +165,7 @@ describe("booking service", () => {
       receiptImagePath: "receipts/test.jpg",
       receiptHash: sha256Hex("ok"),
       amountCentavos: booking.totalCentavos,
+      gcashReferenceNumber: "1234567890",
     });
     expect(payment.status).toBe("submitted");
   });
@@ -181,6 +183,7 @@ describe("booking service", () => {
       receiptImagePath: "receipts/x.jpg",
       receiptHash: sha256Hex(`pay-${booking.id}`),
       amountCentavos: booking.totalCentavos,
+      gcashReferenceNumber: "1234567890",
     });
     const verified = await verifyPayment({ paymentId: payment.id, verifierId: fx.ownerId });
     expect(verified.status).toBe("verified");
@@ -210,6 +213,7 @@ describe("booking service", () => {
       receiptImagePath: "receipts/x.jpg",
       receiptHash: sha256Hex(`auth-${booking.id}`),
       amountCentavos: booking.totalCentavos,
+      gcashReferenceNumber: "1234567890",
     });
     await expect(
       verifyPayment({ paymentId: payment.id, verifierId: fx.playerId }),
@@ -229,6 +233,7 @@ describe("booking service", () => {
       receiptImagePath: "receipts/x.jpg",
       receiptHash: sha256Hex(`rej-${booking.id}`),
       amountCentavos: booking.totalCentavos,
+      gcashReferenceNumber: "1234567890",
     });
     const rejected = await rejectPayment({
       paymentId: payment.id,
@@ -265,6 +270,7 @@ describe("booking service", () => {
       receiptImagePath: "receipts/confirmed-cancel.jpg",
       receiptHash: sha256Hex(`confirmed-cancel-${booking.id}`),
       amountCentavos: booking.totalCentavos,
+      gcashReferenceNumber: "1234567890",
     });
     await verifyPayment({ paymentId: payment.id, verifierId: fx.ownerId });
 

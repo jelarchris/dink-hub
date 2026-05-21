@@ -145,13 +145,7 @@ export const submitSignupPaymentInputSchema = z.object({
   receiptImagePath: z.string().min(1),
   receiptHash: z.string().min(1),
   amountCentavos: z.bigint().positive(),
-  gcashReferenceNumber: z
-    .string()
-    .trim()
-    .min(6)
-    .max(20)
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  gcashReferenceNumber: z.string().trim().min(6).max(20),
 });
 export type SubmitSignupPaymentInput = z.infer<typeof submitSignupPaymentInputSchema>;
 

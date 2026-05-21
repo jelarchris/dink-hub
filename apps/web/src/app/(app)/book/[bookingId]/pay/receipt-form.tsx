@@ -106,7 +106,7 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
       <FormField
         id="gcashReferenceNumber"
         label="GCash reference number"
-        hint="Optional, but speeds up verification"
+        hint="Required — find this in your GCash receipt"
         error={fieldErrors?.gcashReferenceNumber?.[0]}
       >
         {({ id, describedBy, invalid }) => (
@@ -116,6 +116,9 @@ export function ReceiptUploadForm({ bookingId }: { bookingId: string }) {
             type="text"
             inputMode="numeric"
             placeholder="e.g. 1234567890"
+            required
+            minLength={6}
+            maxLength={20}
             aria-describedby={describedBy}
             invalid={invalid}
           />

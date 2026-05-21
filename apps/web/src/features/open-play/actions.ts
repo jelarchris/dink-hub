@@ -339,10 +339,9 @@ const submitReceiptSchema = z.object({
   gcashReferenceNumber: z
     .string()
     .trim()
+    .min(1, "GCash reference number is required")
     .min(6, "GCash reference must be at least 6 characters")
-    .max(20, "GCash reference must be 20 characters or less")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+    .max(20, "GCash reference must be 20 characters or less"),
 });
 
 export async function submitSignupReceiptAction(
@@ -358,7 +357,7 @@ export async function submitSignupReceiptAction(
   const ref = form.get("gcashReferenceNumber");
   const parsed = submitReceiptSchema.safeParse({
     signupId: form.get("signupId"),
-    gcashReferenceNumber: typeof ref === "string" ? ref : undefined,
+    gcashReferenceNumber: typeof ref === "string" ? ref : "",
   });
   if (!parsed.success) {
     return {
@@ -394,9 +393,7 @@ export async function submitSignupReceiptAction(
       receiptImagePath: upload.data.path,
       receiptHash: upload.data.hashHex,
       amountCentavos: signup.totalCentavos,
-      ...(parsed.data.gcashReferenceNumber !== undefined && {
-        gcashReferenceNumber: parsed.data.gcashReferenceNumber,
-      }),
+      gcashReferenceNumber: parsed.data.gcashReferenceNumber,
     });
   } catch (err) {
     return unwrap(err);

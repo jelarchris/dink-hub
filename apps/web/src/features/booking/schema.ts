@@ -94,7 +94,7 @@ export const submitPaymentInputSchema = z.object({
   receiptImagePath: z.string().min(1).max(500),
   receiptHash: z.string().regex(/^[a-f0-9]{64}$/, "must be a sha256 hex digest"),
   amountCentavos: positiveBigInt,
-  gcashReferenceNumber: z.string().min(6).max(20).optional(),
+  gcashReferenceNumber: z.string().min(6).max(20),
 });
 export type SubmitPaymentInput = z.infer<typeof submitPaymentInputSchema>;
 
