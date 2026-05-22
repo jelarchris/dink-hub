@@ -7,6 +7,7 @@ export type OwnerVenueErrorCode =
   | "slug_taken"
   | "version_conflict"
   | "validation"
+  | "court_name_taken"
   | "court_has_active_bookings"
   | "closure_overlap"
   | "unknown";

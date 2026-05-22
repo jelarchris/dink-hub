@@ -24,6 +24,41 @@ import {
 // helpers
 // ----------------------------------------------------------------------------
 
+const PG_UNIQUE_VIOLATION = "23505";
+const PG_CHECK_VIOLATION = "23514";
+
+function pgErrorInfo(err: unknown): { code?: string; constraint?: string; message?: string } {
+  if (typeof err !== "object" || err === null) return {};
+  const e = err as { code?: unknown; constraint_name?: unknown; message?: unknown; cause?: unknown };
+  if (typeof e.code === "string") {
+    const out: { code?: string; constraint?: string; message?: string } = { code: e.code };
+    if (typeof e.constraint_name === "string") out.constraint = e.constraint_name;
+    if (typeof e.message === "string") out.message = e.message;
+    return out;
+  }
+  if (e.cause) return pgErrorInfo(e.cause);
+  return {};
+}
+
+function translateCourtWriteError(err: unknown): never {
+  const info = pgErrorInfo(err);
+  if (info.code === PG_UNIQUE_VIOLATION) {
+    // unique (venue_id, name) — duplicate court name at this venue
+    throw new OwnerVenueError(
+      "court_name_taken",
+      "A court with this name already exists at this venue. Pick a different name (archived courts also reserve their name).",
+    );
+  }
+  if (info.code === PG_CHECK_VIOLATION) {
+    // courts_open_close_hours_valid, length(name) between 1 and 60, etc.
+    throw new OwnerVenueError(
+      "validation",
+      "Some values don't fit our limits. Check the court name length and that closing hour is later than opening hour.",
+    );
+  }
+  throw err;
+}
+
 function slugify(input: string): string {
   return input
     .normalize("NFKD")
@@ -313,20 +348,25 @@ export async function createCourt(args: {
   input: CourtUpsertInput;
 }): Promise<Court> {
   await loadVenueOwned(args.venueId, args.ownerId); // ownership guard
-  const [created] = await db
-    .insert(courts)
-    .values({
-      venueId: args.venueId,
-      name: args.input.name,
-      surface: args.input.surface,
-      isIndoor: args.input.isIndoor,
-      hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
-      openHour: args.input.openHour,
-      closeHour: args.input.closeHour,
-      imagePath: args.input.imagePath,
-      isActive: true,
-    })
-    .returning();
+  let created: Court | undefined;
+  try {
+    [created] = await db
+      .insert(courts)
+      .values({
+        venueId: args.venueId,
+        name: args.input.name,
+        surface: args.input.surface,
+        isIndoor: args.input.isIndoor,
+        hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
+        openHour: args.input.openHour,
+        closeHour: args.input.closeHour,
+        imagePath: args.input.imagePath,
+        isActive: true,
+      })
+      .returning();
+  } catch (err) {
+    translateCourtWriteError(err);
+  }
   if (!created) throw new OwnerVenueError("unknown", "Failed to create court.");
   return created;
 }
@@ -337,20 +377,25 @@ export async function updateCourt(args: {
   input: CourtUpsertInput;
 }): Promise<Court> {
   const { court } = await getCourtForOwner(args.courtId, args.ownerId);
-  const [updated] = await db
-    .update(courts)
-    .set({
-      name: args.input.name,
-      surface: args.input.surface,
-      isIndoor: args.input.isIndoor,
-      hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
-      openHour: args.input.openHour,
-      closeHour: args.input.closeHour,
-      imagePath: args.input.imagePath,
-      updatedAt: new Date(),
-    })
-    .where(eq(courts.id, court.id))
-    .returning();
+  let updated: Court | undefined;
+  try {
+    [updated] = await db
+      .update(courts)
+      .set({
+        name: args.input.name,
+        surface: args.input.surface,
+        isIndoor: args.input.isIndoor,
+        hourlyRateCentavos: phpStringToCentavos(args.input.hourlyRatePhp),
+        openHour: args.input.openHour,
+        closeHour: args.input.closeHour,
+        imagePath: args.input.imagePath,
+        updatedAt: new Date(),
+      })
+      .where(eq(courts.id, court.id))
+      .returning();
+  } catch (err) {
+    translateCourtWriteError(err);
+  }
   if (!updated) throw new OwnerVenueError("unknown", "Failed to update court.");
   return updated;
 }

@@ -1,5 +1,27 @@
 ﻿# Changelog
 
+## 2026-05-22 — Court create/edit: surface real DB errors instead of generic "Something went wrong"
+
+### Fix — Owner court form was silently failing on duplicate name / out-of-range values
+
+- **Root cause**: `createCourt` / `updateCourt` in `features/owner-venues/service.ts` did not catch Postgres errors. Any `23505` (unique `(venue_id, name)`) or `23514` (CHECK on `length(name) between 1 and 60`, `courts_open_close_hours_valid`) bubbled up unchecked, hit `unwrap()` in `actions.ts`, and rendered the generic top-form alert `"Something went wrong. Please try again."` — owners had no idea what to fix.
+- **`features/owner-venues/service.ts`** — added `pgErrorInfo()` + `translateCourtWriteError()`; wrapped both `db.insert(courts)` and `db.update(courts)` in try/catch. `23505` → typed `OwnerVenueError("court_name_taken", "A court with this name already exists at this venue…")`. `23514` → typed `OwnerVenueError("validation", "…check the court name length and that closing hour is later than opening hour.")`.
+- **`features/owner-venues/errors.ts`** — added `"court_name_taken"` to `OwnerVenueErrorCode`.
+- **`features/owner-venues/schema.ts`** — `courtUpsertSchema` now `.refine(openHour < closeHour, { path: ["closeHour"] })` so the friendly field-level error appears before hitting the DB CHECK. (`name.max(60)` was already aligned with the DB.)
+- **`features/owner-venues/actions.ts`** — `unwrap()` now logs `{ pgCode, constraint, message, stack }` instead of the raw error object, so future failures are diagnosable from a single Vercel log line.
+- **Hard-won fact**: under `exactOptionalPropertyTypes: true`, returning `{ foo: maybeString | undefined }` from a function typed `{ foo?: string }` is a TS error. Build the object conditionally (`if (x) out.foo = x`) instead of inline ternaries.
+
+## 2026-05-21 — GCash reference number required on receipt submission (commit `51125fe`)
+
+### Feat — Mandatory GCash reference number for all payment receipts
+
+- **Booking receipt form (`app/(app)/book/[bookingId]/pay/receipt-form.tsx`)** — input is now `required`, `minLength={6}`, `maxLength={20}`; helper text changed from "Optional, but speeds up verification" to "Required — find this in your GCash receipt".
+- **Open-play receipt form (`app/(app)/open-play/signups/[signupId]/pay/receipt-form.tsx`)** — same UI changes.
+- **`features/booking/payment-actions.ts`** — `submitInputSchema.gcashReferenceNumber` is now `z.string().trim().min(1, "GCash reference number is required").min(6).max(20)`; passed unconditionally to `submitPayment`.
+- **`features/open-play/actions.ts`** — `submitReceiptSchema.gcashReferenceNumber` mandatory with same rules; passed unconditionally to `submitSignupPayment`.
+- **`features/booking/schema.ts`** + **`features/open-play/schema.ts`** — service-layer `submitPaymentInputSchema.gcashReferenceNumber` and `submitSignupPaymentInputSchema.gcashReferenceNumber` drop `.optional()` (defence in depth at DB boundary).
+- **`features/booking/__tests__/service.test.ts`** — all 6 `submitPayment` test calls now pass a valid reference number.
+
 ## 2026-05-20 — Closure auto-move to sibling court (commit `3b38354`)
 
 ### Feat — Owner-opt-in auto-move bookings to another court at the same time

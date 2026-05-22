@@ -30,7 +30,18 @@ function unwrap(err: unknown): ActionResult<never> {
   if (isOwnerVenueError(err)) {
     return { ok: false, code: err.code, message: err.message };
   }
-  console.error("[owner-venue-action]", err);
+  const e = (typeof err === "object" && err !== null ? err : {}) as {
+    code?: unknown;
+    constraint_name?: unknown;
+    message?: unknown;
+    stack?: unknown;
+  };
+  console.error("[owner-venue-action]", {
+    pgCode: typeof e.code === "string" ? e.code : undefined,
+    constraint: typeof e.constraint_name === "string" ? e.constraint_name : undefined,
+    message: typeof e.message === "string" ? e.message : String(err),
+    stack: typeof e.stack === "string" ? e.stack : undefined,
+  });
   return fail("Something went wrong. Please try again.");
 }
 

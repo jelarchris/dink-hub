@@ -89,7 +89,7 @@ export const courtSurfaceValues = [
 ] as const;
 
 export const courtUpsertSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(80),
+  name: z.string().trim().min(1, "Name is required").max(60, "Keep the court name under 60 characters"),
   surface: z.enum(courtSurfaceValues),
   isIndoor: z
     .union([z.literal("on"), z.literal("true"), z.literal("false"), z.undefined()])
@@ -103,6 +103,9 @@ export const courtUpsertSchema = z.object({
     .max(500)
     .optional()
     .transform((v) => (v && v.length > 0 ? v : null)),
+}).refine((v) => v.openHour < v.closeHour, {
+  message: "Closing hour must be later than opening hour",
+  path: ["closeHour"],
 });
 
 export type CourtUpsertInput = z.infer<typeof courtUpsertSchema>;
