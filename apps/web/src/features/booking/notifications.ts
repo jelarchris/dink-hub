@@ -4,12 +4,16 @@ import { db } from "@/db/client";
 import { bookings, courts, payments, profiles, venues } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
 import {
+  bookingAutoConfirmedEmail,
   bookingCancelledByPlayerEmail,
   bookingForceCancelledEmail,
+  bookingLateConfirmedEmail,
   bookingRescheduledByOwnerEmail,
   buildRescheduleIcs,
   disputeOpenedEmail,
   disputeResolvedEmail,
+  ownerNudgeReceiptStaleEmail,
+  ownerNudgeReceiptUrgentEmail,
   paymentRejectedEmail,
   paymentSubmittedEmail,
   paymentVerifiedEmail,
@@ -421,5 +425,130 @@ export async function notifySessionReminder(bookingId: string): Promise<void> {
     await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "session_reminder" });
   } catch (err) {
     captureException(err, { scope: "notify.session_reminder", extra: { bookingId } });
+  }
+}
+
+/**
+ * Polite nudge to the venue owner: receipt has been awaiting verification for
+ * 2 hours. Gated on the owner's `email_on_payment_submitted` preference \u2014
+ * if they opted out of submission emails they implicitly opted out of nudges.
+ */
+export async function notifyOwnerNudge1(bookingId: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    if (!ctx.ownerNotificationPrefs.email_on_payment_submitted) return;
+    const tpl = ownerNudgeReceiptStaleEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      ownerDisplayName: ctx.ownerDisplayName,
+      playerDisplayName: ctx.playerDisplayName,
+      gcashReferenceNumber: ctx.gcashReferenceNumber,
+    });
+    await sendEmail({ to: ctx.ownerEmail, ...tpl, tag: "owner_nudge_1" });
+  } catch (err) {
+    captureException(err, { scope: "notify.owner_nudge_1", extra: { bookingId } });
+  }
+}
+
+/**
+ * Urgent nudge to the venue owner: session starts in under 2 hours and the
+ * receipt is still unverified. Same opt-out gate as nudge 1.
+ */
+export async function notifyOwnerNudge2(bookingId: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    if (!ctx.ownerNotificationPrefs.email_on_payment_submitted) return;
+    const tpl = ownerNudgeReceiptUrgentEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      ownerDisplayName: ctx.ownerDisplayName,
+      playerDisplayName: ctx.playerDisplayName,
+      gcashReferenceNumber: ctx.gcashReferenceNumber,
+    });
+    await sendEmail({ to: ctx.ownerEmail, ...tpl, tag: "owner_nudge_2" });
+  } catch (err) {
+    captureException(err, { scope: "notify.owner_nudge_2", extra: { bookingId } });
+  }
+}
+
+/**
+ * Booking was auto-confirmed by the SLA cron. Both parties are notified
+ * unconditionally \u2014 this is a state change, not a marketing nudge, so
+ * notification preferences are intentionally ignored.
+ */
+export async function notifyAutoConfirmed(bookingId: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const base = {
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+    };
+    const playerTpl = bookingAutoConfirmedEmail({
+      ...base,
+      recipientDisplayName: ctx.playerDisplayName,
+      audience: "player",
+    });
+    const ownerTpl = bookingAutoConfirmedEmail({
+      ...base,
+      recipientDisplayName: ctx.ownerDisplayName,
+      audience: "owner",
+    });
+    await Promise.all([
+      sendEmail({ to: ctx.playerEmail, ...playerTpl, tag: "booking_auto_confirmed" }),
+      sendEmail({ to: ctx.ownerEmail, ...ownerTpl, tag: "booking_auto_confirmed" }),
+    ]);
+  } catch (err) {
+    captureException(err, { scope: "notify.auto_confirmed", extra: { bookingId } });
+  }
+}
+
+/**
+ * Booking was late-confirmed by an admin after the session window passed.
+ * Both parties receive the audit notice unconditionally.
+ */
+export async function notifyLateConfirmed(bookingId: string, reason: string): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const base = {
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      reason,
+    };
+    const playerTpl = bookingLateConfirmedEmail({
+      ...base,
+      recipientDisplayName: ctx.playerDisplayName,
+      audience: "player",
+    });
+    const ownerTpl = bookingLateConfirmedEmail({
+      ...base,
+      recipientDisplayName: ctx.ownerDisplayName,
+      audience: "owner",
+    });
+    await Promise.all([
+      sendEmail({ to: ctx.playerEmail, ...playerTpl, tag: "booking_late_confirmed" }),
+      sendEmail({ to: ctx.ownerEmail, ...ownerTpl, tag: "booking_late_confirmed" }),
+    ]);
+  } catch (err) {
+    captureException(err, { scope: "notify.late_confirmed", extra: { bookingId } });
   }
 }

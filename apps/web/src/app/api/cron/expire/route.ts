@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { captureException } from "@/lib/observability";
-import { expireUnpaidBookings, releaseExpiredHolds } from "@/features/booking/service";
+import {
+  autoConfirmEligibleBookings,
+  expireUnpaidBookings,
+  releaseExpiredHolds,
+  sendOwnerVerificationNudges,
+} from "@/features/booking/service";
 import { expirePendingSignups } from "@/features/open-play";
 
 /**
@@ -35,10 +40,12 @@ export async function GET(req: Request) {
 
   const startedAt = Date.now();
   try {
-    const [holds, bookings, openPlaySignups] = await Promise.all([
+    const [holds, bookings, openPlaySignups, autoConfirmed, nudges] = await Promise.all([
       releaseExpiredHolds(),
       expireUnpaidBookings(),
       expirePendingSignups(),
+      autoConfirmEligibleBookings(),
+      sendOwnerVerificationNudges(),
     ]);
     return NextResponse.json({
       ok: true,
@@ -46,6 +53,8 @@ export async function GET(req: Request) {
       holds,
       bookings,
       openPlaySignups,
+      autoConfirmed,
+      nudges,
     });
   } catch (err) {
     captureException(err, { scope: "cron.expire" });

@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  autoConfirmEligibleBookings,
   cancelBooking,
   createBooking,
   expireUnpaidBookings,
   holdSlot,
+  lateConfirmPayment,
   rejectPayment,
   releaseExpiredHolds,
   releaseHold,
+  sendOwnerVerificationNudges,
   submitPayment,
   verifyPayment,
 } from "@/features/booking/service";
@@ -328,5 +331,188 @@ describe("booking service", () => {
     await db.execute(sql`update public.slot_holds set expires_at = now() - interval '1 minute' where id = ${hold.id}::uuid`);
     const result = await releaseExpiredHolds();
     expect(result.released).toBeGreaterThanOrEqual(1);
+  });
+
+  // --------------------------------------------------------------------------
+  // Receipt auto-validation heuristics (migration 0030)
+  // --------------------------------------------------------------------------
+
+  async function submitClean(bookingId: string, total: bigint, opts?: { ref?: string; hash?: string }) {
+    return submitPayment({
+      bookingId,
+      playerId: fx.playerId,
+      receiptImagePath: "receipts/auto.jpg",
+      receiptHash: opts?.hash ?? sha256Hex(`auto-${bookingId}-${Math.random()}`),
+      amountCentavos: total,
+      gcashReferenceNumber: opts?.ref ?? "1234567890",
+    });
+  }
+
+  async function readPaymentRow(paymentId: string) {
+    const rows = await db.execute<{
+      auto_validated_at: Date | null;
+      auto_validation_failures: string[];
+      auto_confirm_at: Date | null;
+      auto_confirmed_at: Date | null;
+      late_confirmed_at: Date | null;
+      owner_nudge1_sent_at: Date | null;
+      owner_nudge2_sent_at: Date | null;
+    }>(sql`
+      select p.auto_validated_at, p.auto_validation_failures,
+             b.auto_confirm_at,
+             p.auto_confirmed_at, p.late_confirmed_at,
+             p.owner_nudge1_sent_at, p.owner_nudge2_sent_at
+      from public.payments p
+      join public.bookings b on b.id = p.booking_id
+      where p.id = ${paymentId}::uuid
+    `);
+    expect(rows[0]).toBeDefined();
+    return rows[0]!;
+  }
+
+  it("submitPayment auto-validates a clean receipt and schedules SLA auto-confirm", async () => {
+    const booking = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    const payment = await submitClean(booking.id, booking.totalCentavos);
+    const row = await readPaymentRow(payment.id);
+    expect(row.auto_validated_at).not.toBeNull();
+    expect(row.auto_validation_failures).toEqual([]);
+    expect(row.auto_confirm_at).not.toBeNull();
+    // Scheduled for T-30m relative to start_at
+    const expected = new Date(start.getTime() - 30 * 60_000).getTime();
+    expect(row.auto_confirm_at!.getTime()).toBe(expected);
+  });
+
+  it("submitPayment records ref_format failure for non-numeric reference", async () => {
+    const booking = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    const payment = await submitClean(booking.id, booking.totalCentavos, { ref: "ABC-not-numeric" });
+    const row = await readPaymentRow(payment.id);
+    expect(row.auto_validated_at).toBeNull();
+    expect(row.auto_validation_failures).toContain("ref_format");
+    expect(row.auto_confirm_at).toBeNull();
+  });
+
+  it("submitPayment records ref_duplicate when the same GCash ref is reused", async () => {
+    const b1 = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    await submitClean(b1.id, b1.totalCentavos, { ref: "9999888877" });
+
+    const start2 = addMinutes(start, 120);
+    const b2 = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start2, endAt: addMinutes(start2, 60),
+    });
+    const p2 = await submitClean(b2.id, b2.totalCentavos, { ref: "9999888877" });
+    const row = await readPaymentRow(p2.id);
+    expect(row.auto_validation_failures).toContain("ref_duplicate");
+  });
+
+  it("submitPayment records hash_replay when the same receipt hash is reused", async () => {
+    const sharedHash = sha256Hex("shared-replay");
+    const b1 = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    await submitClean(b1.id, b1.totalCentavos, { ref: "1111222233", hash: sharedHash });
+
+    const start2 = addMinutes(start, 120);
+    const b2 = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start2, endAt: addMinutes(start2, 60),
+    });
+    const p2 = await submitClean(b2.id, b2.totalCentavos, { ref: "4444555566", hash: sharedHash });
+    const row = await readPaymentRow(p2.id);
+    expect(row.auto_validation_failures).toContain("hash_replay");
+  });
+
+  it("submitPayment skips auto_confirm_at when session start is too close", async () => {
+    // Booking starts soon — within the 10-minute minimum lead time before auto-confirm.
+    const nearStart = nextHour(60);
+    const booking = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: nearStart, endAt: addMinutes(nearStart, 60),
+    });
+    // Move start to be ~20m in the future (so auto_confirm would be T-30m = past).
+    await db.execute(sql`
+      update public.bookings
+         set start_at = now() + interval '20 minutes',
+             end_at = now() + interval '80 minutes'
+       where id = ${booking.id}::uuid
+    `);
+    const payment = await submitClean(booking.id, booking.totalCentavos);
+    const row = await readPaymentRow(payment.id);
+    expect(row.auto_validated_at).not.toBeNull();
+    expect(row.auto_confirm_at).toBeNull();
+  });
+
+  it("autoConfirmEligibleBookings confirms only payments past their SLA with auto_validated_at set", async () => {
+    const booking = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    const payment = await submitClean(booking.id, booking.totalCentavos);
+    // Force the SLA deadline into the past.
+    await db.execute(sql`
+      update public.bookings set auto_confirm_at = now() - interval '1 minute'
+       where id = ${booking.id}::uuid
+    `);
+    const before = await autoConfirmEligibleBookings();
+    expect(before.confirmed).toBeGreaterThanOrEqual(1);
+
+    const row = await readPaymentRow(payment.id);
+    expect(row.auto_confirmed_at).not.toBeNull();
+
+    // Ledger must be balanced for the auto-confirmed booking.
+    const ledger = await db.execute<{ debits: string; credits: string }>(sql`
+      select coalesce(sum(case when direction='debit' then amount_centavos end),0)::text as debits,
+             coalesce(sum(case when direction='credit' then amount_centavos end),0)::text as credits
+        from public.ledger_entries where booking_id = ${booking.id}::uuid
+    `);
+    expect(ledger[0]!.debits).toBe(ledger[0]!.credits);
+    expect(BigInt(ledger[0]!.debits)).toBe(booking.totalCentavos);
+  });
+
+  it("autoConfirmEligibleBookings skips bookings whose payment was not auto-validated", async () => {
+    const booking = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    // Submit with bad ref so auto_validated_at stays NULL.
+    await submitClean(booking.id, booking.totalCentavos, { ref: "BAD-REF-NOT-NUMERIC" });
+    // Manually set an auto_confirm_at in the past just to be sure the filter rejects.
+    await db.execute(sql`
+      update public.bookings set auto_confirm_at = now() - interval '1 minute'
+       where id = ${booking.id}::uuid
+    `);
+    const result = await autoConfirmEligibleBookings();
+    expect(result.confirmed).toBe(0);
+  });
+
+  it("lateConfirmPayment refuses to run before the session ends", async () => {
+    const booking = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    const payment = await submitClean(booking.id, booking.totalCentavos);
+    await expect(
+      lateConfirmPayment({ paymentId: payment.id, adminId: fx.ownerId, reason: "test" }),
+    ).rejects.toMatchObject({ code: "booking_wrong_status" });
+  });
+
+  it("sendOwnerVerificationNudges is idempotent — same payment is not nudged twice", async () => {
+    const booking = await createBooking({
+      playerId: fx.playerId, courtId: fx.courtId, startAt: start, endAt: end,
+    });
+    const payment = await submitClean(booking.id, booking.totalCentavos);
+    // Backdate submission so it qualifies for nudge 1 (≥ 2 hours old).
+    await db.execute(sql`
+      update public.payments set submitted_at = now() - interval '3 hours'
+       where id = ${payment.id}::uuid
+    `);
+    const first = await sendOwnerVerificationNudges();
+    expect(first.nudge1).toBeGreaterThanOrEqual(1);
+
+    const second = await sendOwnerVerificationNudges();
+    expect(second.nudge1).toBe(0);
+
+    const row = await readPaymentRow(payment.id);
+    expect(row.owner_nudge1_sent_at).not.toBeNull();
   });
 });

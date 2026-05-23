@@ -470,7 +470,46 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<Payment>
     if (!updated) {
       throw new BookingError("concurrent_modification", "Booking was modified concurrently");
     }
-    return payment;
+
+    // Heuristic auto-validation (no OCR). All 5 must pass to schedule the SLA
+    // auto-confirm. Failures are stored as machine-readable codes so the
+    // owner UI can surface them; the booking is NOT rejected on failure —
+    // the owner still manually verifies as before.
+    const failures: string[] = [];
+    const ref = gcashReferenceNumber ?? "";
+    if (!/^\d{10,16}$/.test(ref)) failures.push("ref_format");
+    if (ref && (await repo.findRecentRefDuplicate(ref, 90, payment.id, tx))) {
+      failures.push("ref_duplicate");
+    }
+    if (await repo.findRecentHashReplay(receiptHash, 90, payment.id, tx)) {
+      failures.push("hash_replay");
+    }
+    const lateBoundary = new Date(booking.startAt.getTime() + 30 * 60_000);
+    if (now > lateBoundary) failures.push("window_late");
+    if (now < booking.createdAt) failures.push("window_early");
+
+    const stamped = await repo.markAutoValidated(payment.id, payment.version, failures, tx);
+    if (!stamped) {
+      throw new BookingError("concurrent_modification", "Payment was modified concurrently");
+    }
+
+    if (failures.length === 0) {
+      const autoConfirmAt = new Date(booking.startAt.getTime() - 30 * 60_000);
+      const minLeadMs = 10 * 60_000;
+      if (autoConfirmAt.getTime() - now.getTime() > minLeadMs) {
+        const scheduled = await repo.setBookingAutoConfirmAt(
+          updated.id,
+          updated.version,
+          autoConfirmAt,
+          tx,
+        );
+        if (!scheduled) {
+          throw new BookingError("concurrent_modification", "Booking was modified concurrently");
+        }
+      }
+    }
+
+    return stamped;
   });
 }
 
@@ -478,6 +517,99 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<Payment>
 // 5. verifyPayment — venue owner confirms money received
 //    Writes ledger entries: DEBIT venue_payable, CREDIT platform_revenue
 // ============================================================================
+/**
+ * Confirm a booking and write the double-entry ledger rows.
+ *
+ * Shared by `verifyPayment` (owner), `autoConfirmEligibleBookings` (system),
+ * and `lateConfirmPayment` (admin). Keeping a single helper guarantees the
+ * three paths produce byte-identical ledger semantics — only the actor and
+ * idempotency-key prefix differ.
+ *
+ * Caller must:
+ *   - have already validated the actor's permission for this path
+ *   - pass freshly-read `booking` + `payment` rows from inside `tx`
+ *   - skip if payment.status !== 'submitted'
+ *
+ * Idempotency keys include `prefix` so a previously auto-confirmed booking
+ * cannot collide with a subsequent late-confirm attempt (they target
+ * different rows in the audit history).
+ */
+type LedgerActor = { id: string | null; kind: "owner" | "system" | "admin" };
+
+async function confirmBookingAndWriteLedger(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  booking: Booking,
+  payment: Payment,
+  now: Date,
+  actor: LedgerActor,
+  options?: { idempotencyPrefix?: string; descriptionTag?: string },
+): Promise<{ booking: Booking; payment: Payment }> {
+  const idemPrefix = options?.idempotencyPrefix ?? "bk";
+  const tag = options?.descriptionTag ? `${options.descriptionTag} ` : "";
+
+  const verifiedPayment = await repo.updatePayment(
+    payment.id,
+    payment.version,
+    {
+      status: "verified",
+      verifiedBy: actor.id,
+      verifiedAt: now,
+    },
+    tx,
+  );
+  if (!verifiedPayment) {
+    throw new BookingError("concurrent_modification", "Payment was modified concurrently");
+  }
+
+  const confirmedBooking = await repo.updateBookingStatus(
+    booking.id,
+    booking.version,
+    { status: "confirmed" },
+    tx,
+  );
+  if (!confirmedBooking) {
+    throw new BookingError("concurrent_modification", "Booking was modified concurrently");
+  }
+
+  // Double-entry: we owe the venue the court fee; we earned the system fee.
+  // Sum of debits === sum of credits === total_centavos. Zero-amount entries
+  // are skipped — the ledger CHECK requires amount >= 1 and a 0 entry carries
+  // no information (e.g. promo / waived system fee).
+  const allEntries: NewLedgerEntry[] = [
+    {
+      bookingId: booking.id,
+      account: "venue_payable",
+      direction: "credit",
+      amountCentavos: booking.courtFeeCentavos,
+      description: `${tag}Court fee owed to venue for booking ${booking.id}`,
+      idempotencyKey: `${idemPrefix}:${booking.id}:venue_payable`,
+      createdBy: actor.id,
+    },
+    {
+      bookingId: booking.id,
+      account: "platform_revenue",
+      direction: "credit",
+      amountCentavos: booking.systemFeeCentavos,
+      description: `${tag}System fee revenue for booking ${booking.id}`,
+      idempotencyKey: `${idemPrefix}:${booking.id}:platform_revenue`,
+      createdBy: actor.id,
+    },
+    {
+      bookingId: booking.id,
+      account: "platform_cash",
+      direction: "debit",
+      amountCentavos: booking.totalCentavos,
+      description: `${tag}Cash received (held by venue) for booking ${booking.id}`,
+      idempotencyKey: `${idemPrefix}:${booking.id}:platform_cash`,
+      createdBy: actor.id,
+    },
+  ];
+  const entries = allEntries.filter((e) => e.amountCentavos > 0n);
+  await repo.insertLedgerEntries(entries, tx);
+
+  return { booking: confirmedBooking, payment: verifiedPayment };
+}
+
 export async function verifyPayment(input: VerifyPaymentInput): Promise<Payment> {
   const parsed = verifyPaymentInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -508,66 +640,13 @@ export async function verifyPayment(input: VerifyPaymentInput): Promise<Payment>
       throw new BookingError("not_authorized", "Only the venue owner can verify this payment");
     }
 
-    const verifiedPayment = await repo.updatePayment(
-      paymentId,
-      payment.version,
-      {
-        status: "verified",
-        verifiedBy: verifierId,
-        verifiedAt: now,
-      },
+    const { payment: verifiedPayment } = await confirmBookingAndWriteLedger(
       tx,
+      booking,
+      payment,
+      now,
+      { id: verifierId, kind: "owner" },
     );
-    if (!verifiedPayment) {
-      throw new BookingError("concurrent_modification", "Payment was modified concurrently");
-    }
-
-    const confirmedBooking = await repo.updateBookingStatus(
-      booking.id,
-      booking.version,
-      { status: "confirmed" },
-      tx,
-    );
-    if (!confirmedBooking) {
-      throw new BookingError("concurrent_modification", "Booking was modified concurrently");
-    }
-
-    // Double-entry: we owe the venue the court fee; we earned the system fee.
-    // Sum of debits === sum of credits === total_centavos.
-    // Zero-amount entries are skipped — the ledger CHECK requires amount >= 1
-    // and a 0 entry carries no information (e.g. promo / waived system fee).
-    const allEntries: NewLedgerEntry[] = [
-      {
-        bookingId: booking.id,
-        account: "venue_payable",
-        direction: "credit", // liability increases on the credit side
-        amountCentavos: booking.courtFeeCentavos,
-        description: `Court fee owed to venue for booking ${booking.id}`,
-        idempotencyKey: `bk:${booking.id}:venue_payable`,
-        createdBy: verifierId,
-      },
-      {
-        bookingId: booking.id,
-        account: "platform_revenue",
-        direction: "credit", // revenue increases on the credit side
-        amountCentavos: booking.systemFeeCentavos,
-        description: `System fee revenue for booking ${booking.id}`,
-        idempotencyKey: `bk:${booking.id}:platform_revenue`,
-        createdBy: verifierId,
-      },
-      {
-        bookingId: booking.id,
-        account: "platform_cash",
-        direction: "debit", // we conceptually received the full amount on venue's behalf
-        amountCentavos: booking.totalCentavos,
-        description: `Cash received (held by venue) for booking ${booking.id}`,
-        idempotencyKey: `bk:${booking.id}:platform_cash`,
-        createdBy: verifierId,
-      },
-    ];
-    const entries = allEntries.filter((e) => e.amountCentavos > 0n);
-    await repo.insertLedgerEntries(entries, tx);
-
     return verifiedPayment;
   });
 }
@@ -1679,6 +1758,195 @@ export async function rebookFromClosure(
         );
       throw err;
     }
+  });
+}
+
+// ============================================================================
+// 14. autoConfirmEligibleBookings — cron: SLA T-30m auto-confirm
+//
+// When the player's receipt passed all 5 heuristic checks and the venue
+// owner is silent up to T-30m, we auto-confirm on the owner's behalf.
+// Ledger entries are written via the shared helper so the outcome is byte-
+// identical to a manual verify.
+//
+// Per-booking transaction: a single corrupted row never blocks the others.
+// notifyAutoConfirmed runs OUTSIDE the tx so an email outage cannot roll
+// back the financial state change.
+// ============================================================================
+export async function autoConfirmEligibleBookings(
+  limit = 100,
+): Promise<{ confirmed: number; skipped: number }> {
+  const { notifyAutoConfirmed } = await import("./notifications");
+  const candidates = await repo.findBookingsDueForAutoConfirm(limit);
+  let confirmed = 0;
+  let skipped = 0;
+  const confirmedIds: string[] = [];
+
+  for (const c of candidates) {
+    try {
+      await db.transaction(async (tx) => {
+        const now = await repo.getDatabaseNow(tx);
+        const booking = await repo.findBookingById(c.bookingId, tx);
+        const payment = await repo.findPaymentById(c.paymentId, tx);
+        if (!booking || !payment) return;
+        if (booking.status !== "payment_submitted") return;
+        if (payment.status !== "submitted") return;
+        if (payment.autoValidatedAt === null) return;
+
+        await confirmBookingAndWriteLedger(
+          tx,
+          booking,
+          payment,
+          now,
+          { id: null, kind: "system" },
+          { idempotencyPrefix: "auto", descriptionTag: "[AUTO]" },
+        );
+
+        // re-read for fresh version, then stamp the audit columns
+        const fresh = await repo.findPaymentById(c.paymentId, tx);
+        if (fresh) {
+          await repo.markAutoConfirmed(
+            fresh.id,
+            fresh.version,
+            "owner_silent_passed_validation",
+            tx,
+          );
+        }
+      });
+      confirmed++;
+      confirmedIds.push(c.bookingId);
+    } catch {
+      skipped++;
+    }
+  }
+
+  for (const bookingId of confirmedIds) {
+    await notifyAutoConfirmed(bookingId);
+  }
+
+  return { confirmed, skipped };
+}
+
+// ============================================================================
+// 15. sendOwnerVerificationNudges — cron: nudge silent owners
+//
+// Two passes:
+//   - Nudge 1 (polite): receipt submitted ≥ 2h ago, no nudge yet.
+//   - Nudge 2 (urgent): session starts in ≤ 2h and still unverified.
+//
+// Idempotency: stamp BEFORE the email send (same pattern as
+// sendSessionReminders). A flaky inbox costs one missed nudge, never spam.
+// ============================================================================
+export async function sendOwnerVerificationNudges(): Promise<{
+  nudge1: number;
+  nudge2: number;
+  skipped: number;
+}> {
+  const { notifyOwnerNudge1, notifyOwnerNudge2 } = await import("./notifications");
+
+  const nudge1Candidates = await repo.findPaymentsDueForNudge1();
+  const nudge2Candidates = await repo.findPaymentsDueForNudge2();
+  let nudge1 = 0;
+  let nudge2 = 0;
+  let skipped = 0;
+
+  for (const c of nudge1Candidates) {
+    const stamped = await repo.markNudge1Sent(c.paymentId, c.paymentVersion);
+    if (!stamped) {
+      skipped++;
+      continue;
+    }
+    try {
+      await notifyOwnerNudge1(c.bookingId);
+      nudge1++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  for (const c of nudge2Candidates) {
+    const stamped = await repo.markNudge2Sent(c.paymentId, c.paymentVersion);
+    if (!stamped) {
+      skipped++;
+      continue;
+    }
+    try {
+      await notifyOwnerNudge2(c.bookingId);
+      nudge2++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  return { nudge1, nudge2, skipped };
+}
+
+// ============================================================================
+// 16. lateConfirmPayment — admin recovery path
+//
+// When a booking's session window has already passed but the receipt was
+// never verified (owner forgot, payment failed heuristics, etc.) and the
+// player has provided evidence they actually played, an admin can confirm
+// after the fact. The ledger is still written (venue is owed their court
+// fee, platform earned its revenue) using a separate idempotency prefix
+// so it cannot collide with a prior auto-confirm or owner-verify.
+//
+// Caller (Server Action) MUST have already called requireAdmin().
+// ============================================================================
+export interface LateConfirmPaymentInput {
+  paymentId: string;
+  adminId: string;
+  reason: string;
+}
+
+export async function lateConfirmPayment(input: LateConfirmPaymentInput): Promise<Payment> {
+  if (!input.paymentId || !input.adminId || !input.reason.trim()) {
+    throw new BookingError("validation_failed", "Missing late-confirm input");
+  }
+
+  return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
+    const payment = await repo.findPaymentById(input.paymentId, tx);
+    if (!payment) throw new BookingError("payment_not_found", "Payment not found");
+    if (payment.status === "verified") {
+      throw new BookingError("payment_already_verified", "Payment is already verified");
+    }
+    if (payment.status !== "submitted") {
+      throw new BookingError(
+        "booking_wrong_status",
+        `Cannot late-confirm — payment status is ${payment.status}`,
+      );
+    }
+
+    const booking = await repo.findBookingById(payment.bookingId, tx);
+    if (!booking) throw new BookingError("booking_not_found", "Booking not found");
+    if (booking.endAt > now) {
+      throw new BookingError(
+        "booking_wrong_status",
+        "Late-confirm is only allowed after the session ends — use verify instead.",
+      );
+    }
+    if (booking.status !== "payment_submitted") {
+      throw new BookingError(
+        "booking_wrong_status",
+        `Cannot late-confirm — booking status is ${booking.status}`,
+      );
+    }
+
+    const { payment: confirmed } = await confirmBookingAndWriteLedger(
+      tx,
+      booking,
+      payment,
+      now,
+      { id: input.adminId, kind: "admin" },
+      { idempotencyPrefix: "late", descriptionTag: "[LATE]" },
+    );
+
+    const fresh = await repo.findPaymentById(confirmed.id, tx);
+    if (fresh) {
+      await repo.markLateConfirmed(fresh.id, fresh.version, input.adminId, input.reason, tx);
+    }
+    return confirmed;
   });
 }
 

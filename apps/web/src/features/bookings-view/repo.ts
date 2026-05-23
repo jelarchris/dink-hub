@@ -114,8 +114,13 @@ export interface PendingPaymentRow {
     | "gcashReferenceNumber"
     | "receiptImagePath"
     | "submittedAt"
+    | "autoValidatedAt"
+    | "autoValidationFailures"
   >;
-  booking: Pick<Booking, "id" | "startAt" | "endAt" | "totalCentavos" | "playerId">;
+  booking: Pick<
+    Booking,
+    "id" | "startAt" | "endAt" | "totalCentavos" | "playerId" | "autoConfirmAt"
+  >;
   venue: Pick<Venue, "id" | "name" | "slug">;
   court: Pick<Court, "name">;
   playerDisplayName: string;
@@ -129,11 +134,14 @@ export async function listPendingPaymentsForOwner(ownerId: string): Promise<Pend
     gcash_reference_number: string | null;
     receipt_image_path: string;
     submitted_at: Date;
+    auto_validated_at: Date | null;
+    auto_validation_failures: string[];
     booking_id: string;
     start_at: Date;
     end_at: Date;
     total_centavos: string;
     player_id: string;
+    auto_confirm_at: Date | null;
     venue_id: string;
     venue_name: string;
     venue_slug: string;
@@ -147,11 +155,14 @@ export async function listPendingPaymentsForOwner(ownerId: string): Promise<Pend
       p.gcash_reference_number,
       p.receipt_image_path,
       p.submitted_at,
+      p.auto_validated_at,
+      p.auto_validation_failures,
       b.id as booking_id,
       b.start_at,
       b.end_at,
       b.total_centavos::text as total_centavos,
       b.player_id,
+      b.auto_confirm_at,
       v.id as venue_id,
       v.name as venue_name,
       v.slug as venue_slug,
@@ -175,6 +186,8 @@ export async function listPendingPaymentsForOwner(ownerId: string): Promise<Pend
       gcashReferenceNumber: r.gcash_reference_number,
       receiptImagePath: r.receipt_image_path,
       submittedAt: new Date(r.submitted_at),
+      autoValidatedAt: r.auto_validated_at ? new Date(r.auto_validated_at) : null,
+      autoValidationFailures: r.auto_validation_failures ?? [],
     },
     booking: {
       id: r.booking_id,
@@ -182,10 +195,110 @@ export async function listPendingPaymentsForOwner(ownerId: string): Promise<Pend
       endAt: new Date(r.end_at),
       totalCentavos: BigInt(r.total_centavos),
       playerId: r.player_id,
+      autoConfirmAt: r.auto_confirm_at ? new Date(r.auto_confirm_at) : null,
     },
     venue: { id: r.venue_id, name: r.venue_name, slug: r.venue_slug },
     court: { name: r.court_name },
     playerDisplayName: r.player_display_name,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Admin-side: late-confirm queue (bookings whose session ended while still
+// stuck in `payment_submitted`). Surfaces in /admin/payments/late-confirm.
+// ---------------------------------------------------------------------------
+
+export interface LateConfirmCandidate {
+  payment: Pick<
+    Payment,
+    | "id"
+    | "version"
+    | "amountCentavos"
+    | "gcashReferenceNumber"
+    | "submittedAt"
+    | "autoValidatedAt"
+    | "autoValidationFailures"
+  >;
+  booking: Pick<
+    Booking,
+    "id" | "startAt" | "endAt" | "totalCentavos"
+  >;
+  venue: Pick<Venue, "id" | "name" | "slug">;
+  court: Pick<Court, "name">;
+  playerDisplayName: string;
+  ownerDisplayName: string;
+}
+
+export async function listLateConfirmCandidates(limit = 100): Promise<LateConfirmCandidate[]> {
+  const rows = await db.execute<{
+    payment_id: string;
+    payment_version: number;
+    amount_centavos: string;
+    gcash_reference_number: string | null;
+    submitted_at: Date;
+    auto_validated_at: Date | null;
+    auto_validation_failures: string[];
+    booking_id: string;
+    start_at: Date;
+    end_at: Date;
+    total_centavos: string;
+    venue_id: string;
+    venue_name: string;
+    venue_slug: string;
+    court_name: string;
+    player_display_name: string;
+    owner_display_name: string;
+  }>(sql`
+    select
+      p.id as payment_id,
+      p.version as payment_version,
+      p.amount_centavos::text as amount_centavos,
+      p.gcash_reference_number,
+      p.submitted_at,
+      p.auto_validated_at,
+      p.auto_validation_failures,
+      b.id as booking_id,
+      b.start_at,
+      b.end_at,
+      b.total_centavos::text as total_centavos,
+      v.id as venue_id,
+      v.name as venue_name,
+      v.slug as venue_slug,
+      c.name as court_name,
+      pp.display_name as player_display_name,
+      po.display_name as owner_display_name
+    from payments p
+    inner join bookings b on b.id = p.booking_id
+    inner join venues v on v.id = b.venue_id
+    inner join courts c on c.id = b.court_id
+    inner join profiles pp on pp.id = b.player_id
+    inner join profiles po on po.id = v.owner_id
+    where p.status = 'submitted'
+      and b.status = 'payment_submitted'
+      and b.end_at <= now()
+    order by b.end_at asc
+    limit ${limit}
+  `);
+  return rows.map((r) => ({
+    payment: {
+      id: r.payment_id,
+      version: r.payment_version,
+      amountCentavos: BigInt(r.amount_centavos),
+      gcashReferenceNumber: r.gcash_reference_number,
+      submittedAt: new Date(r.submitted_at),
+      autoValidatedAt: r.auto_validated_at ? new Date(r.auto_validated_at) : null,
+      autoValidationFailures: r.auto_validation_failures ?? [],
+    },
+    booking: {
+      id: r.booking_id,
+      startAt: new Date(r.start_at),
+      endAt: new Date(r.end_at),
+      totalCentavos: BigInt(r.total_centavos),
+    },
+    venue: { id: r.venue_id, name: r.venue_name, slug: r.venue_slug },
+    court: { name: r.court_name },
+    playerDisplayName: r.player_display_name,
+    ownerDisplayName: r.owner_display_name,
   }));
 }
 

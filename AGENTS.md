@@ -78,7 +78,6 @@ Vercel auto-aliases `dinkhub.ph`.
 |---|---|
 | Rate bands (per-court hourly pricing) | Migration + Drizzle + venue editor + slot picker + booking fee calc |
 | Booking confirmation email polish + ICS attachment | Today it's text-y |
-| Receipt SLA UX ("we'll review within 1h" + nudge owner if stale) | Player sits in limbo |
 | Session reminder email (T-2h) | Big no-show reduction lever. Email-only |
 | PostHog dashboard verification | Wired commit `dbdd14a` but firing not confirmed |
 | Player-initiated refund flow | Owner-initiated exists; player has no path |
@@ -92,6 +91,8 @@ Vercel auto-aliases `dinkhub.ph`.
 | Auth pages UX polish | Low priority |
 
 ## Hard-won facts (don't relearn these)
+
+- **Receipt auto-validation (migration `0030`):** 5 heuristic rules (`ref_format`, `ref_duplicate`, `hash_replay`, `window_late`, `window_early`) run inside `submitPayment`'s transaction. Codes persist to `payments.auto_validation_failures text[]`; `auto_validated_at` is stamped only when the array is empty. "Semi-confirmed" is **derived UI state**, NOT a new `booking_status` enum value (`auto_validated_at IS NOT NULL AND status='payment_submitted' AND failures='{}'`). `bookings.auto_confirm_at = startAt - 30min` is scheduled only when checks pass AND there's > 10 min slack. Cron job `autoConfirmEligibleBookings` (per-minute) does the actual confirm. Shared helper `confirmBookingAndWriteLedger(tx, booking, payment, now, actor, options)` is the ONLY place ledger entries are written for confirmation — owner/system/admin paths funnel through it. Idempotency-key prefix encodes provenance: `bk:` (owner) / `auto:` (system cron) / `late:` (admin). Stamp `owner_nudge{N}_sent_at` BEFORE Resend send so a thrown email doesn't re-spam on retry. Failure-code → UI metadata lives in `features/booking/auto-validation.ts` — single source of truth for player/owner/admin surfaces. Player never sees failure codes (avoids tipping off bad actors). Admin late-confirm Server Action MUST call `requireAdmin()` itself; admin layout protects the page UI but actions can be hit from anywhere.
 
 - **Deposit / full payment (migration `0029`):** per-venue opt-in via `venues.allow_partial_payment` + `venues.deposit_percent` (25–75). Booking carries `payment_mode ('full'|'deposit')`, `deposit_centavos`, `balance_due_centavos` (generated invariant: deposit+balance=total), `balance_collected_at`/`_by`. `bookings.total_centavos` is GENERATED — CHECK constraints CAN still reference it. Deposit rounds **UP to peso favoring the venue**: `((((total*pct+99n)/100n)+99n)/100n)*100n` (mirrored client+server, MUST stay in sync). BookingErrorCodes added: `deposit_not_allowed`, `deposit_not_configured`. Balance is collected at the venue in cash OR GCash — DinkHub does **not** track the channel; owner taps `MarkBalanceCollectedForm` to record it. Partial index `bookings_balance_outstanding_idx` powers fast owner-side "who owes me cash on arrival" queries. For Zod schemas with `.default()`ed fields that feed service input types, use `z.input<typeof schema>` (not `z.infer`) so existing tests can omit defaulted fields.
 

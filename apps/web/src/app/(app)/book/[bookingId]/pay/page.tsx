@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Check, Clock, CreditCard } from "lucide-react";
+import { Check, Clock, CreditCard, ShieldCheck } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
@@ -74,11 +74,12 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
           )}
 
           {booking.status === "payment_submitted" && payment && (
-            <Alert variant="info" icon={<Clock />} title="Waiting for venue verification">
-              Your receipt was uploaded {formatDateTimeManila(payment.submittedAt)}. The venue
-              owner will confirm your payment shortly. You&apos;ll see your booking move to{" "}
-              <strong>Confirmed</strong> here once approved. This page updates automatically.
-            </Alert>
+            <SubmittedStatus
+              submittedAt={payment.submittedAt}
+              autoValidatedAt={payment.autoValidatedAt}
+              autoValidationFailures={payment.autoValidationFailures}
+              autoConfirmAt={booking.autoConfirmAt}
+            />
           )}
 
           {booking.status === "confirmed" && (
@@ -121,7 +122,14 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
             </div>
             <div className="flex items-center justify-between py-2">
               <dt className="text-[var(--color-fg-muted)]">Status</dt>
-              <dd><StatusBadge status={booking.status} /></dd>
+              <dd>
+                <StatusBadge
+                  status={booking.status}
+                  semiConfirmed={
+                    booking.status === "payment_submitted" && payment?.autoValidatedAt != null
+                  }
+                />
+              </dd>
             </div>
             {booking.status === "pending_payment" && (
               <div className="pt-2 text-xs text-[var(--color-fg-muted)]">
@@ -253,7 +261,10 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, semiConfirmed }: { status: string; semiConfirmed?: boolean }) {
+  if (semiConfirmed) {
+    return <Badge variant="success">semi-confirmed</Badge>;
+  }
   const variant: "success" | "warning" | "info" | "danger" | "neutral" =
     status === "confirmed"
       ? "success"
@@ -265,4 +276,45 @@ function StatusBadge({ status }: { status: string }) {
             ? "danger"
             : "neutral";
   return <Badge variant={variant}>{status.replaceAll("_", " ")}</Badge>;
+}
+
+function SubmittedStatus({
+  submittedAt,
+  autoValidatedAt,
+  autoValidationFailures,
+  autoConfirmAt,
+}: {
+  submittedAt: Date;
+  autoValidatedAt: Date | null;
+  autoValidationFailures: readonly string[];
+  autoConfirmAt: Date | null;
+}) {
+  // Auto-checks ran AND every rule passed → reassure the player; tell them the
+  // SLA-confirm time if scheduled.
+  if (autoValidatedAt && autoValidationFailures.length === 0) {
+    return (
+      <Alert variant="success" icon={<ShieldCheck />} title="Receipt passed automated checks">
+        Uploaded {formatDateTimeManila(submittedAt)}. Your reference number and receipt look clean.{" "}
+        {autoConfirmAt ? (
+          <>
+            DinkHub will auto-confirm your booking at{" "}
+            <strong>{formatDateTimeManila(autoConfirmAt)}</strong> if the venue hasn&apos;t verified it
+            sooner.
+          </>
+        ) : (
+          <>The venue will verify shortly.</>
+        )}{" "}
+        This page updates automatically.
+      </Alert>
+    );
+  }
+
+  // Auto-checks flagged something or never ran → revert to neutral waiting copy.
+  return (
+    <Alert variant="info" icon={<Clock />} title="Waiting for venue verification">
+      Your receipt was uploaded {formatDateTimeManila(submittedAt)}. The venue owner will confirm
+      your payment shortly. You&apos;ll see your booking move to <strong>Confirmed</strong> here once
+      approved. This page updates automatically.
+    </Alert>
+  );
 }

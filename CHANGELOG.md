@@ -1,5 +1,38 @@
 ﻿# Changelog
 
+## 2026-05-23 — Receipt auto-validation + SLA auto-confirm + owner nudges
+
+### Feat — Heuristic checks on every receipt, owner-silent SLA auto-confirm, admin late-confirm fallback
+
+- **Migration `0030_receipt_auto_validation.sql`** — persists the SLA + heuristic state on existing rows. No new tables, no enum changes (deliberate: "semi-confirmed" is a derived UI label, not a status).
+  - `bookings.auto_confirm_at timestamptz` + partial index `bookings_auto_confirm_due_idx (auto_confirm_at) WHERE auto_confirm_at IS NOT NULL AND status='payment_submitted'`.
+  - `payments` columns: `auto_validated_at timestamptz`, `auto_validation_failures text[] not null default '{}'::text[]`, `auto_confirmed_at timestamptz`, `auto_confirmed_reason text`, `owner_nudge1_sent_at timestamptz`, `owner_nudge2_sent_at timestamptz`, `late_confirmed_at timestamptz`, `late_confirmed_by uuid REFERENCES profiles(id)`, `late_confirmed_reason text`.
+  - Partial indexes for nudge candidates (`payments_nudge1_candidates_idx`, `payments_nudge2_candidates_idx`); lookup indexes `payments_ref_lookup_idx (gcash_reference_number) WHERE … IS NOT NULL` and `payments_hash_lookup_idx (receipt_hash)` to keep the dedup checks O(log n).
+- **`features/booking/service.ts` — `submitPayment` runs 5 heuristic rules inside the same transaction**, never blocking the player on a failure:
+  1. `ref_format` — `^\d{10,16}$` on the GCash reference.
+  2. `ref_duplicate` — same reference seen on another booking in the last 90 days.
+  3. `hash_replay` — same receipt SHA-256 seen in the last 90 days.
+  4. `window_late` — uploaded > 30 min past session start.
+  5. `window_early` — upload timestamp earlier than booking creation.
+  Codes go to `payments.auto_validation_failures`; `auto_validated_at` is stamped only when the array is empty. When clean AND `(startAt - 30min) - now > 10min`, `bookings.auto_confirm_at = startAt - 30min`.
+- **`features/booking/service.ts` — `confirmBookingAndWriteLedger(tx, booking, payment, now, actor, options)` extracted** so owner-verify, system auto-confirm, and admin late-confirm write byte-identical ledger entries. Idempotency-key prefix encodes provenance: `bk:` (owner) / `auto:` (cron) / `late:` (admin). `verifyPayment` is now a thin wrapper.
+- **`features/booking/service.ts` — three new entry points**: `autoConfirmEligibleBookings(limit=100)` (per-booking SAVEPOINT tx; re-checks invariants; writes `auto_confirmed_at` + `auto_confirmed_reason='owner_silent_passed_validation'`; fires `notifyAutoConfirmed` after commit), `sendOwnerVerificationNudges()` (T+2h polite + T-2h-from-start urgent; stamps timestamp BEFORE send so retries don't double-mail), `lateConfirmPayment({ paymentId, adminId, reason })` (requires `booking.endAt <= now`; writes `late_confirmed_*` columns).
+- **`app/api/cron/expire/route.ts`** — `Promise.all` now runs 5 jobs (was 3): expire pending, expire holds, auto-cancel-on-no-show, auto-confirm eligible, send owner nudges. JSON response gains `autoConfirmed`, `nudges`.
+- **Player surface (`app/(app)/book/[bookingId]/pay/page.tsx`)** — when `payment.autoValidatedAt && !failures.length`, swaps the neutral "Waiting" alert for a green `ShieldCheck` "Receipt passed automated checks" alert with the scheduled auto-confirm time; summary badge reads `semi-confirmed` (success variant). Player never sees failure codes.
+- **Owner surface (`app/(app)/owner/payments/review-card.tsx`)** — new `AutoValidationPanel`: green when clean (with auto-confirm ETA), orange per-rule chip list otherwise (labels and severities from `features/booking/auto-validation.ts`). `PendingPaymentRow` extended with `payment.autoValidatedAt`, `payment.autoValidationFailures`, `booking.autoConfirmAt`.
+- **Admin surface (`app/(app)/admin/payments/late-confirm/`)** — new queue page lists `payment_submitted` bookings whose `end_at <= now()`. Reason-required form posts to `lateConfirmPaymentAction` which calls `requireAdmin()` defensively before the service. Sidebar link added under Bookings.
+- **Emails (`lib/email/templates.ts`)** — 4 new Resend templates: `ownerNudgeReceiptStaleEmail` (T+2h), `ownerNudgeReceiptUrgentEmail` (T-2h-from-start), `bookingAutoConfirmedEmail` (player + owner), `bookingLateConfirmedEmail` (player + owner).
+- **Notifications (`features/booking/notifications.ts`)** — `notifyOwnerNudge1/2` gated on `email_on_payment_submitted`; `notifyAutoConfirmed` and `notifyLateConfirmed` un-gated (state-change notices, not marketing).
+- **`features/booking/auto-validation.ts`** — single source of truth mapping failure code → `{ label, ownerHint, adminHint, severity }`. Player page, owner card, and admin page all consume it; add a heuristic in `service.ts` and add one entry here, nothing else.
+- **`features/booking/__tests__/service.test.ts`** — 9 new tests covering: clean receipt schedules auto-confirm; each of the 3 most important failure codes blocks scheduling; session-too-close skip; ledger debit-sum = credit-sum = total on auto-confirm; cron skips when failures present; `lateConfirmPayment` rejects future-end bookings; nudge idempotency.
+- **Hard-won facts**:
+  - "Semi-confirmed" is **derived from data**, not a `booking_status` enum value. `auto_validated_at IS NOT NULL AND status='payment_submitted' AND failures = '{}'`. Adding a new enum value would have invalidated every existing `CASE status WHEN …` block in the codebase.
+  - Idempotency prefix scheme (`bk:` / `auto:` / `late:`) makes the audit trail unambiguous even though the ledger entries themselves are byte-identical across actors.
+  - Server Actions can be invoked from anywhere — the admin layout protects the page UI but the action MUST call `requireAdmin()` itself (defense in depth).
+  - Stamp `owner_nudge{N}_sent_at` BEFORE calling Resend, not after. If the email send throws the timestamp is still set and the next cron tick won't re-spam. Resend failures surface in Sentry instead.
+
+
+
 ## 2026-05-22 — Court create/edit: surface real DB errors instead of generic "Something went wrong"
 
 ### Fix — Owner court form was silently failing on duplicate name / out-of-range values

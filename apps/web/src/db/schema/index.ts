@@ -239,6 +239,9 @@ export const bookings = pgTable("bookings", {
   // co-required (bookings_balance_collected_pair).
   balanceCollectedAt: timestamp("balance_collected_at", { withTimezone: true }),
   balanceCollectedBy: uuid("balance_collected_by").references(() => profiles.id),
+  // SLA: when set, cron auto-confirms the booking at this time if the owner
+  // has not verified the receipt. Cleared on owner verify/reject.
+  autoConfirmAt: timestamp("auto_confirm_at", { withTimezone: true }),
 });
 
 // ----------------------------------------------------------------------------
@@ -285,6 +288,20 @@ export const payments = pgTable("payments", {
   disputeResolution: text("dispute_resolution"),
   disputeResolvedAt: timestamp("dispute_resolved_at", { withTimezone: true }),
   disputeResolvedBy: uuid("dispute_resolved_by").references(() => profiles.id),
+  // Heuristic auto-validation at receipt submit time. Empty failures array
+  // means all checks passed (eligible for SLA auto-confirm).
+  autoValidatedAt: timestamp("auto_validated_at", { withTimezone: true }),
+  autoValidationFailures: text("auto_validation_failures").array().notNull().default(sql`'{}'::text[]`),
+  // SLA auto-confirm audit (cron path).
+  autoConfirmedAt: timestamp("auto_confirmed_at", { withTimezone: true }),
+  autoConfirmedReason: text("auto_confirmed_reason"),
+  // Owner nudge dispatch timestamps (T+15m polite, T+45m urgent).
+  ownerNudge1SentAt: timestamp("owner_nudge1_sent_at", { withTimezone: true }),
+  ownerNudge2SentAt: timestamp("owner_nudge2_sent_at", { withTimezone: true }),
+  // Admin late-confirm audit (force-verify after start_at).
+  lateConfirmedAt: timestamp("late_confirmed_at", { withTimezone: true }),
+  lateConfirmedBy: uuid("late_confirmed_by").references(() => profiles.id),
+  lateConfirmedReason: text("late_confirmed_reason"),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

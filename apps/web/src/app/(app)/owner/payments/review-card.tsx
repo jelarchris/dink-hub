@@ -2,10 +2,15 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X } from "lucide-react";
+import { AlertTriangle, Check, ShieldCheck, X } from "lucide-react";
 import { rejectPaymentAction, verifyPaymentAction } from "@/features/booking/payment-actions";
+import {
+  AUTO_VALIDATION_RULES,
+  isAutoValidationFailureCode,
+} from "@/features/booking/auto-validation";
 import type { ActionResult } from "@/features/auth";
 import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +31,9 @@ export interface PaymentReviewCardProps {
   courtName: string;
   playerName: string;
   receiptUrl: string | null;
+  autoValidatedAtIso: string | null;
+  autoValidationFailures: readonly string[];
+  autoConfirmAtIso: string | null;
 }
 
 export function PaymentReviewCard(props: PaymentReviewCardProps) {
@@ -139,6 +147,12 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
             </Alert>
           )}
 
+          <AutoValidationPanel
+            autoValidatedAtIso={props.autoValidatedAtIso}
+            autoValidationFailures={props.autoValidationFailures}
+            autoConfirmAtIso={props.autoConfirmAtIso}
+          />
+
           {error && <Alert variant="danger">{error}</Alert>}
 
           {mode === "idle" ? (
@@ -192,5 +206,63 @@ export function PaymentReviewCard(props: PaymentReviewCardProps) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function AutoValidationPanel({
+  autoValidatedAtIso,
+  autoValidationFailures,
+  autoConfirmAtIso,
+}: {
+  autoValidatedAtIso: string | null;
+  autoValidationFailures: readonly string[];
+  autoConfirmAtIso: string | null;
+}) {
+  // Skipped entirely when the heuristic batch never ran (defense in depth —
+  // shouldn't happen post-migration 0030 but keeps old rows safe).
+  if (!autoValidatedAtIso) return null;
+
+  const knownFailures = autoValidationFailures.filter(isAutoValidationFailureCode);
+
+  if (knownFailures.length === 0) {
+    return (
+      <div className="rounded-[var(--radius-md)] border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950">
+        <div className="flex items-center gap-2 font-semibold text-emerald-900 dark:text-emerald-200">
+          <ShieldCheck className="size-4" /> Automated checks passed
+        </div>
+        {autoConfirmAtIso ? (
+          <p className="mt-1 text-xs text-emerald-900/80 dark:text-emerald-200/80">
+            DinkHub will auto-confirm this booking at{" "}
+            <strong>{formatDateTimeManila(new Date(autoConfirmAtIso))}</strong> if you don&apos;t verify
+            it first. You can still verify now.
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-emerald-900/80 dark:text-emerald-200/80">
+            Reference number and receipt image look clean. Verify when ready.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-[var(--radius-md)] border border-orange-200 bg-orange-50 p-3 text-sm dark:border-orange-900 dark:bg-orange-950">
+      <div className="flex items-center gap-2 font-semibold text-orange-900 dark:text-orange-200">
+        <AlertTriangle className="size-4" /> Needs your attention
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {knownFailures.map((code) => {
+          const rule = AUTO_VALIDATION_RULES[code];
+          return (
+            <li key={code} className="flex items-start gap-2 text-xs">
+              <Badge variant={rule.severity}>{rule.label}</Badge>
+              <span className="pt-0.5 text-orange-900/80 dark:text-orange-200/80">
+                {rule.ownerHint}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

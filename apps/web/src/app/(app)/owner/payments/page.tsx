@@ -59,6 +59,9 @@ export default async function OwnerPaymentsPage() {
               courtName={row.court.name}
               playerName={row.playerDisplayName}
               receiptUrl={row.receiptUrl}
+              autoValidatedAtIso={row.payment.autoValidatedAt?.toISOString() ?? null}
+              autoValidationFailures={row.payment.autoValidationFailures}
+              autoConfirmAtIso={row.booking.autoConfirmAt?.toISOString() ?? null}
             />
           ))
         )}

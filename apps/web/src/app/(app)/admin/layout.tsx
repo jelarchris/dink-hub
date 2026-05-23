@@ -10,6 +10,7 @@ import {
   PercentCircle,
   Receipt,
   Settings,
+  ShieldAlert,
   Tag,
   Users,
 } from "lucide-react";
@@ -59,6 +60,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </SidebarLink>
           <SidebarLink href="/admin/bookings" icon={<BookOpen className="size-4" />}>
             Bookings
+          </SidebarLink>
+          <SidebarLink href="/admin/payments/late-confirm" icon={<ShieldAlert className="size-4" />}>
+            Late-confirm
           </SidebarLink>
           <SidebarLink href="/admin/payouts" icon={<Coins className="size-4" />}>
             Payouts

@@ -395,3 +395,248 @@ export async function findCancellableBookingsInRange(
     )
     .orderBy(bookings.startAt);
 }
+
+// ----------------------------------------------------------------------------
+// Receipt auto-validation heuristics + SLA auto-confirm + owner nudges
+// (See migration 0030_receipt_auto_validation.sql.)
+// ----------------------------------------------------------------------------
+
+/**
+ * True if any other payment within the last `withinDays` already uses this
+ * GCash reference number. Soft check (not a DB constraint) — owner can still
+ * re-upload after rejection without 5xx; auto-validation flag is the signal.
+ */
+export async function findRecentRefDuplicate(
+  ref: string,
+  withinDays: number,
+  excludePaymentId: string | null,
+  exec: Executor = db,
+): Promise<boolean> {
+  const intervalSql = sql.raw(`'${String(withinDays)} days'`);
+  const rows = await exec
+    .select({ id: payments.id })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.gcashReferenceNumber, ref),
+        gte(payments.submittedAt, sql<Date>`now() - interval ${intervalSql}`),
+        ...(excludePaymentId ? [sql`${payments.id} <> ${excludePaymentId}::uuid`] : []),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * True if the same receipt image hash was used on any other payment within
+ * the last `withinDays`. Anti-replay heuristic.
+ */
+export async function findRecentHashReplay(
+  hash: string,
+  withinDays: number,
+  excludePaymentId: string,
+  exec: Executor = db,
+): Promise<boolean> {
+  const intervalSql = sql.raw(`'${String(withinDays)} days'`);
+  const rows = await exec
+    .select({ id: payments.id })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.receiptHash, hash),
+        gte(payments.submittedAt, sql<Date>`now() - interval ${intervalSql}`),
+        sql`${payments.id} <> ${excludePaymentId}::uuid`,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Bookings whose SLA auto-confirm deadline has elapsed AND whose payment is
+ * still submitted + heuristic-validated. Feeds the cron auto-confirm loop.
+ */
+export async function findBookingsDueForAutoConfirm(
+  limit = 100,
+  exec: Executor = db,
+): Promise<
+  Array<{
+    bookingId: string;
+    bookingVersion: number;
+    paymentId: string;
+    paymentVersion: number;
+  }>
+> {
+  const rows = await exec
+    .select({
+      bookingId: bookings.id,
+      bookingVersion: bookings.version,
+      paymentId: payments.id,
+      paymentVersion: payments.version,
+    })
+    .from(bookings)
+    .innerJoin(payments, eq(payments.bookingId, bookings.id))
+    .where(
+      and(
+        eq(bookings.status, "payment_submitted"),
+        lte(bookings.autoConfirmAt, sql`now()`),
+        eq(payments.status, "submitted"),
+        sql`${payments.autoValidatedAt} is not null`,
+      ),
+    )
+    .limit(limit);
+  return rows;
+}
+
+/**
+ * Owner nudge 1 (polite): payment_submitted older than 2 hours, nudge not sent.
+ */
+export async function findPaymentsDueForNudge1(
+  limit = 100,
+  exec: Executor = db,
+): Promise<Array<{ paymentId: string; paymentVersion: number; bookingId: string }>> {
+  const rows = await exec
+    .select({
+      paymentId: payments.id,
+      paymentVersion: payments.version,
+      bookingId: payments.bookingId,
+    })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.status, "submitted"),
+        isNull(payments.ownerNudge1SentAt),
+        lte(payments.submittedAt, sql<Date>`now() - interval '2 hours'`),
+      ),
+    )
+    .limit(limit);
+  return rows;
+}
+
+/**
+ * Owner nudge 2 (urgent): booking starts within 2 hours and still unverified.
+ */
+export async function findPaymentsDueForNudge2(
+  limit = 100,
+  exec: Executor = db,
+): Promise<Array<{ paymentId: string; paymentVersion: number; bookingId: string }>> {
+  const rows = await exec
+    .select({
+      paymentId: payments.id,
+      paymentVersion: payments.version,
+      bookingId: payments.bookingId,
+    })
+    .from(payments)
+    .innerJoin(bookings, eq(bookings.id, payments.bookingId))
+    .where(
+      and(
+        eq(payments.status, "submitted"),
+        isNull(payments.ownerNudge2SentAt),
+        gt(bookings.startAt, sql`now()`),
+        lte(bookings.startAt, sql<Date>`now() + interval '2 hours'`),
+      ),
+    )
+    .limit(limit);
+  return rows;
+}
+
+/**
+ * Record the outcome of the 5 heuristic checks on a freshly-inserted payment.
+ * When `failures` is empty, sets `auto_validated_at = now()`; otherwise stores
+ * the failure codes and leaves auto_validated_at NULL.
+ */
+export async function markAutoValidated(
+  paymentId: string,
+  expectedVersion: number,
+  failures: string[],
+  exec: Executor = db,
+): Promise<Payment | null> {
+  const rows = await exec
+    .update(payments)
+    .set({
+      autoValidationFailures: failures,
+      ...(failures.length === 0 ? { autoValidatedAt: sql`now()` as unknown as Date } : {}),
+    })
+    .where(and(eq(payments.id, paymentId), eq(payments.version, expectedVersion)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * Schedule (or clear) the SLA auto-confirm deadline on a booking. Optimistic.
+ */
+export async function setBookingAutoConfirmAt(
+  bookingId: string,
+  expectedVersion: number,
+  ts: Date | null,
+  exec: Executor = db,
+): Promise<Booking | null> {
+  const rows = await exec
+    .update(bookings)
+    .set({ autoConfirmAt: ts })
+    .where(and(eq(bookings.id, bookingId), eq(bookings.version, expectedVersion)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markNudge1Sent(
+  paymentId: string,
+  expectedVersion: number,
+  exec: Executor = db,
+): Promise<Payment | null> {
+  const rows = await exec
+    .update(payments)
+    .set({ ownerNudge1SentAt: sql`now()` as unknown as Date })
+    .where(and(eq(payments.id, paymentId), eq(payments.version, expectedVersion)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markNudge2Sent(
+  paymentId: string,
+  expectedVersion: number,
+  exec: Executor = db,
+): Promise<Payment | null> {
+  const rows = await exec
+    .update(payments)
+    .set({ ownerNudge2SentAt: sql`now()` as unknown as Date })
+    .where(and(eq(payments.id, paymentId), eq(payments.version, expectedVersion)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markAutoConfirmed(
+  paymentId: string,
+  expectedVersion: number,
+  reason: string,
+  exec: Executor = db,
+): Promise<Payment | null> {
+  const rows = await exec
+    .update(payments)
+    .set({
+      autoConfirmedAt: sql`now()` as unknown as Date,
+      autoConfirmedReason: reason,
+    })
+    .where(and(eq(payments.id, paymentId), eq(payments.version, expectedVersion)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markLateConfirmed(
+  paymentId: string,
+  expectedVersion: number,
+  adminId: string,
+  reason: string,
+  exec: Executor = db,
+): Promise<Payment | null> {
+  const rows = await exec
+    .update(payments)
+    .set({
+      lateConfirmedAt: sql`now()` as unknown as Date,
+      lateConfirmedBy: adminId,
+      lateConfirmedReason: reason,
+    })
+    .where(and(eq(payments.id, paymentId), eq(payments.version, expectedVersion)))
+    .returning();
+  return rows[0] ?? null;
+}
