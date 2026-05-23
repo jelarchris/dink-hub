@@ -238,7 +238,7 @@ export function SessionForm({ venueId, courts }: SessionFormProps) {
           )}
         </FormField>
 
-        <FormField id="endAt" label="End" hint="1–4 hours after start (on the hour)" error={err("endAt")}>
+        <FormField id="endAt" label="End" hint="1–12 hours after start (on the hour)" error={err("endAt")}>
           {({ id, describedBy, invalid }) => (
             <Input
               id={id}

@@ -5,7 +5,9 @@ import { z } from "zod";
  * has a corresponding `*InputSchema` — validates at the boundary so the service
  * body can rely on parsed types.
  *
- * Time validation mirrors bookings: 1-hour grain UTC, 60 min ≤ duration ≤ 4 h, 60-min increments.
+ * Time validation mirrors bookings' 1-hour grain (UTC, on the hour) but allows
+ * longer durations: open-play sessions are host-defined and may run up to 12 h
+ * (full operating day). Player-initiated bookings remain capped at 4 h.
  */
 
 const uuidSchema = z.string().uuid();
@@ -20,10 +22,10 @@ function validateSlotTimes(d: { startAt: Date; endAt: Date }, ctx: z.RefinementC
     return;
   }
   const minutes = (d.endAt.getTime() - d.startAt.getTime()) / 60_000;
-  if (minutes < 60 || minutes > 240 || minutes % 60 !== 0) {
+  if (minutes < 60 || minutes > 720 || minutes % 60 !== 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "duration must be 1 to 4 hours in 1-hour increments",
+      message: "duration must be 1 to 12 hours in 1-hour increments",
       path: ["endAt"],
     });
   }
