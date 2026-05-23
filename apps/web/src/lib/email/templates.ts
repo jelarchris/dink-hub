@@ -1178,3 +1178,172 @@ export function bookingLateConfirmedEmail(ctx: BookingEmailContext & {
   };
 }
 
+// ---------------------------------------------------------------------------
+// open_play owner nudge 1 (polite) — signup receipt unverified after 2h
+// ---------------------------------------------------------------------------
+export function openPlayOwnerNudgeReceiptStaleEmail(ctx: OpenPlayEmailContext & {
+  ownerDisplayName: string;
+  playerDisplayName: string;
+  gcashReferenceNumber: string | null;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/owner/open-play/${ctx.sessionId}`;
+  const refLine = ctx.gcashReferenceNumber
+    ? `<p style="margin:0 0 6px 0;"><strong>GCash reference:</strong> ${escapeHtml(ctx.gcashReferenceNumber)}</p>`
+    : "";
+
+  return {
+    subject: `Reminder: open-play receipt awaiting verification \u2014 ${ctx.venueName}`,
+    html: shell({
+      heading: `Open-play receipt still needs your verification`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.ownerDisplayName)}, ${escapeHtml(ctx.playerDisplayName)} uploaded a payment receipt for <strong>${escapeHtml(ctx.sessionTitle)}</strong> 2 hours ago and it's still awaiting your verification.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+          ${refLine}
+        </div>
+        <p style="margin:0;">Verifying takes 10 seconds in your dashboard \u2014 it locks in the player's seat and triggers their confirmation email.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "Verify now",
+    }),
+    text:
+      `Reminder: open-play receipt awaiting verification\n\n` +
+      `${ctx.playerDisplayName} uploaded a receipt for ${ctx.sessionTitle} 2 hours ago and it still needs your verification.\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal: ${total}\n` +
+      (ctx.gcashReferenceNumber ? `GCash ref: ${ctx.gcashReferenceNumber}\n` : "") +
+      `\nVerify: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// open_play owner nudge 2 (urgent) — session in <2h, receipt unverified
+// ---------------------------------------------------------------------------
+export function openPlayOwnerNudgeReceiptUrgentEmail(ctx: OpenPlayEmailContext & {
+  ownerDisplayName: string;
+  playerDisplayName: string;
+  gcashReferenceNumber: string | null;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link = `${APP_URL}/owner/open-play/${ctx.sessionId}`;
+  const refLine = ctx.gcashReferenceNumber
+    ? `<p style="margin:0 0 6px 0;"><strong>GCash reference:</strong> ${escapeHtml(ctx.gcashReferenceNumber)}</p>`
+    : "";
+
+  return {
+    subject: `URGENT: open-play session in <2h, receipt unverified \u2014 ${ctx.venueName}`,
+    html: shell({
+      heading: `Open-play starts soon \u2014 verify the receipt`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.ownerDisplayName)}, this open-play seat starts in under 2 hours and the receipt is still pending verification.</p>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Player:</strong> ${escapeHtml(ctx.playerDisplayName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Session:</strong> ${escapeHtml(ctx.sessionTitle)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+          ${refLine}
+        </div>
+        <p style="margin:0;">If you don't verify before T-30 minutes, DinkHub will auto-confirm on your behalf \u2014 the seat stays valid and the fee still flows through your next weekly payout.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "Verify now",
+    }),
+    text:
+      `URGENT: open-play session in <2h, receipt unverified\n\n` +
+      `Player: ${ctx.playerDisplayName}\nSession: ${ctx.sessionTitle}\nVenue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal: ${total}\n` +
+      (ctx.gcashReferenceNumber ? `GCash ref: ${ctx.gcashReferenceNumber}\n` : "") +
+      `\nIf you don't verify before T-30m we will auto-confirm on your behalf.\nVerify: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// open_play signup auto-confirmed (both player and owner)
+// ---------------------------------------------------------------------------
+export function openPlaySignupAutoConfirmedEmail(ctx: OpenPlayEmailContext & {
+  recipientDisplayName: string;
+  audience: "player" | "owner";
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link =
+    ctx.audience === "player"
+      ? `${APP_URL}/me/open-play`
+      : `${APP_URL}/owner/open-play/${ctx.sessionId}`;
+  const body =
+    ctx.audience === "player"
+      ? `<p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.recipientDisplayName)}, your receipt for <strong>${escapeHtml(ctx.sessionTitle)}</strong> passed all of our automated checks and the venue didn't flag any issue, so we've auto-confirmed your seat. You're in.</p>`
+      : `<p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.recipientDisplayName)}, the receipt for the open-play signup below passed all automated checks. To keep the player's session on track we've auto-confirmed it on your behalf. The fee will appear in your next weekly payout as usual. If anything is wrong with the receipt, reply to this email within 24 hours.</p>`;
+
+  return {
+    subject: `Open-play seat auto-confirmed \u2014 ${ctx.venueName} on ${when}`,
+    html: shell({
+      heading: `Open-play seat auto-confirmed`,
+      bodyHtml: `
+        ${body}
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Session:</strong> ${escapeHtml(ctx.sessionTitle)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+        </div>
+      `,
+      ctaHref: link,
+      ctaLabel: "Open dashboard",
+    }),
+    text:
+      `Open-play seat auto-confirmed\n\n` +
+      `Session: ${ctx.sessionTitle}\nVenue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal: ${total}\n\n` +
+      `View: ${link}\n`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// open_play signup late-confirmed by admin (both parties)
+// ---------------------------------------------------------------------------
+export function openPlaySignupLateConfirmedEmail(ctx: OpenPlayEmailContext & {
+  recipientDisplayName: string;
+  audience: "player" | "owner";
+  reason: string;
+}) {
+  const when = formatOpenPlayWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const link =
+    ctx.audience === "player"
+      ? `${APP_URL}/me/open-play`
+      : `${APP_URL}/owner/open-play/${ctx.sessionId}`;
+
+  return {
+    subject: `Open-play seat confirmed after the fact \u2014 ${ctx.venueName}`,
+    html: shell({
+      heading: `Open-play seat confirmed by DinkHub support`,
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.recipientDisplayName)}, the open-play signup below was confirmed by a DinkHub admin after the session window ended. The ledger has been updated and the fee will appear in the next weekly payout.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Session:</strong> ${escapeHtml(ctx.sessionTitle)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+          <p style="margin:0;"><strong>Admin note:</strong> ${escapeHtml(ctx.reason)}</p>
+        </div>
+        <p style="margin:0;">If you believe this confirmation is incorrect, reply to this email and a support agent will review.</p>
+      `,
+      ctaHref: link,
+      ctaLabel: "Open dashboard",
+    }),
+    text:
+      `Open-play seat confirmed by DinkHub support\n\n` +
+      `Session: ${ctx.sessionTitle}\nVenue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal: ${total}\n` +
+      `Admin note: ${ctx.reason}\n\n` +
+      `View: ${link}\n`,
+  };
+}
+

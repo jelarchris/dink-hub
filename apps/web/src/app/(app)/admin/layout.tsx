@@ -64,6 +64,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <SidebarLink href="/admin/payments/late-confirm" icon={<ShieldAlert className="size-4" />}>
             Late-confirm
           </SidebarLink>
+          <SidebarLink href="/admin/open-play/late-confirm" icon={<ShieldAlert className="size-4" />}>
+            Late-confirm (open-play)
+          </SidebarLink>
           <SidebarLink href="/admin/payouts" icon={<Coins className="size-4" />}>
             Payouts
           </SidebarLink>

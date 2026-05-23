@@ -14,7 +14,11 @@ import {
   openPlayCancelledByOwnerEmail,
   openPlayJoinConfirmedEmail,
   openPlayJoinPendingEmail,
+  openPlayOwnerNudgeReceiptStaleEmail,
+  openPlayOwnerNudgeReceiptUrgentEmail,
   openPlaySessionReminderEmail,
+  openPlaySignupAutoConfirmedEmail,
+  openPlaySignupLateConfirmedEmail,
   openPlaySignupPaymentSubmittedEmail,
 } from "@/lib/email/templates";
 import { captureException } from "@/lib/observability";
@@ -172,5 +176,105 @@ export async function notifyOpenPlayCancelledByOwner(args: {
         extra: { signupId },
       });
     }
+  }
+}
+
+/**
+ * Polite nudge to the venue owner: open-play signup receipt has been awaiting
+ * verification for 2 hours. Mirrors booking-side notifyOwnerNudge1.
+ */
+export async function notifyOwnerSignupNudge1(signupId: string): Promise<void> {
+  try {
+    const ctx = await loadSignupJoin(signupId);
+    if (!ctx) return;
+    const tpl = openPlayOwnerNudgeReceiptStaleEmail(ctx);
+    await sendEmail({ to: ctx.ownerEmail, ...tpl, tag: "open_play_owner_nudge_1" });
+  } catch (err) {
+    captureException(err, {
+      scope: "open-play.notifyOwnerNudge1",
+      extra: { signupId },
+    });
+  }
+}
+
+/**
+ * Urgent nudge: session starts in <2h, receipt still unverified.
+ */
+export async function notifyOwnerSignupNudge2(signupId: string): Promise<void> {
+  try {
+    const ctx = await loadSignupJoin(signupId);
+    if (!ctx) return;
+    const tpl = openPlayOwnerNudgeReceiptUrgentEmail(ctx);
+    await sendEmail({ to: ctx.ownerEmail, ...tpl, tag: "open_play_owner_nudge_2" });
+  } catch (err) {
+    captureException(err, {
+      scope: "open-play.notifyOwnerNudge2",
+      extra: { signupId },
+    });
+  }
+}
+
+/**
+ * Signup was auto-confirmed by the SLA cron. Both parties are notified
+ * unconditionally — this is a state change, not a marketing nudge.
+ */
+export async function notifyOpenPlaySignupAutoConfirmed(signupId: string): Promise<void> {
+  try {
+    const ctx = await loadSignupJoin(signupId);
+    if (!ctx) return;
+    const playerTpl = openPlaySignupAutoConfirmedEmail({
+      ...ctx,
+      recipientDisplayName: ctx.playerDisplayName,
+      audience: "player",
+    });
+    const ownerTpl = openPlaySignupAutoConfirmedEmail({
+      ...ctx,
+      recipientDisplayName: ctx.ownerDisplayName,
+      audience: "owner",
+    });
+    await Promise.all([
+      sendEmail({ to: ctx.playerEmail, ...playerTpl, tag: "open_play_signup_auto_confirmed" }),
+      sendEmail({ to: ctx.ownerEmail, ...ownerTpl, tag: "open_play_signup_auto_confirmed" }),
+    ]);
+  } catch (err) {
+    captureException(err, {
+      scope: "open-play.notifyAutoConfirmed",
+      extra: { signupId },
+    });
+  }
+}
+
+/**
+ * Signup was late-confirmed by an admin after the session window ended.
+ * Both parties receive the audit notice unconditionally.
+ */
+export async function notifyOpenPlaySignupLateConfirmed(
+  signupId: string,
+  reason: string,
+): Promise<void> {
+  try {
+    const ctx = await loadSignupJoin(signupId);
+    if (!ctx) return;
+    const playerTpl = openPlaySignupLateConfirmedEmail({
+      ...ctx,
+      recipientDisplayName: ctx.playerDisplayName,
+      audience: "player",
+      reason,
+    });
+    const ownerTpl = openPlaySignupLateConfirmedEmail({
+      ...ctx,
+      recipientDisplayName: ctx.ownerDisplayName,
+      audience: "owner",
+      reason,
+    });
+    await Promise.all([
+      sendEmail({ to: ctx.playerEmail, ...playerTpl, tag: "open_play_signup_late_confirmed" }),
+      sendEmail({ to: ctx.ownerEmail, ...ownerTpl, tag: "open_play_signup_late_confirmed" }),
+    ]);
+  } catch (err) {
+    captureException(err, {
+      scope: "open-play.notifyLateConfirmed",
+      extra: { signupId },
+    });
   }
 }

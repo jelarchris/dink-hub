@@ -31,6 +31,10 @@ export {
   submitSignupPayment,
   updateSession,
   verifySignupPayment,
+  autoConfirmEligibleSignups,
+  sendOwnerSignupVerificationNudges,
+  lateConfirmSignupPayment,
+  type LateConfirmSignupPaymentInput,
 } from "./service";
 export {
   countActiveSignups,
@@ -46,6 +50,8 @@ export {
   listSessionsByVenue,
   listSignupsForPlayer,
   listSignupsForSession,
+  listLateConfirmSignupCandidates,
+  type LateConfirmSignupCandidate,
   type OpenPlayForCourtsRow,
   type PlayerSignupListItem,
   type SessionListItem,

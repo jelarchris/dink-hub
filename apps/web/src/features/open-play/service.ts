@@ -1,6 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
+import type { AutoValidationFailureCode } from "@/features/booking/auto-validation";
 import { openPlaySessions, openPlaySignups, venues } from "@/db/schema";
 import type {
   Booking,
@@ -510,7 +511,54 @@ export async function submitSignupPayment(
     if (!updated) {
       throw new OpenPlayError("concurrent_modification", "Signup was modified by another request");
     }
-    return payment;
+
+    // ------------------------------------------------------------------
+    // Receipt auto-validation (mirrors features/booking → submitPayment).
+    // 5 cheap heuristics. Empty failures + sufficient lead time schedule
+    // the signup for SLA auto-confirm at T-30m from session.startAt.
+    // ------------------------------------------------------------------
+    const session = await repo.findSessionById(signup.sessionId, tx);
+    if (!session) throw new OpenPlayError("session_not_found", "Session does not exist");
+    const now = await repo.getDatabaseNow(tx);
+
+    const failures: AutoValidationFailureCode[] = [];
+    const ref = data.gcashReferenceNumber ?? "";
+    if (!/^\d{10,16}$/.test(ref)) failures.push("ref_format");
+    if (
+      ref &&
+      (await repo.findRecentSignupRefDuplicate(ref, 90, payment.id, tx))
+    ) {
+      failures.push("ref_duplicate");
+    }
+    if (await repo.findRecentSignupHashReplay(data.receiptHash, 90, payment.id, tx)) {
+      failures.push("hash_replay");
+    }
+    const lateBoundary = new Date(session.startAt.getTime() + 30 * 60_000);
+    if (now > lateBoundary) failures.push("window_late");
+    if (now < signup.createdAt) failures.push("window_early");
+
+    const stamped = await repo.markSignupAutoValidated(
+      payment.id,
+      payment.version,
+      failures,
+      tx,
+    );
+    if (!stamped) {
+      throw new OpenPlayError(
+        "concurrent_modification",
+        "Payment was modified by another request",
+      );
+    }
+
+    if (failures.length === 0) {
+      const autoConfirmAt = new Date(session.startAt.getTime() - 30 * 60_000);
+      const minLeadMs = 10 * 60_000;
+      if (autoConfirmAt.getTime() - now.getTime() > minLeadMs) {
+        await repo.setSignupAutoConfirmAt(updated.id, updated.version, autoConfirmAt, tx);
+      }
+    }
+
+    return stamped;
   });
 }
 
@@ -736,4 +784,208 @@ export async function sendOpenPlayReminders(): Promise<{ sent: number; expired: 
     }
   }
   return { sent, expired };
+}
+
+// ============================================================================
+// 11. autoConfirmEligibleSignups — SLA cron (mirrors booking equivalent)
+//
+// Each signup is processed in its own transaction so a slow notify can't
+// roll back ledger state. Notifies are dispatched OUTSIDE the tx for the
+// same reason — an email outage must never undo a confirmed signup.
+// ============================================================================
+export async function autoConfirmEligibleSignups(
+  limit = 100,
+): Promise<{ confirmed: number; skipped: number }> {
+  const candidates = await repo.findSignupsDueForAutoConfirm(limit);
+  let confirmed = 0;
+  let skipped = 0;
+  const notifyTargets: string[] = [];
+
+  for (const c of candidates) {
+    try {
+      await db.transaction(async (tx) => {
+        const freshSignup = await repo.findSignupById(c.signupId, tx);
+        const freshPayment = await repo.findSignupPaymentById(c.paymentId, tx);
+        if (!freshSignup || !freshPayment) {
+          skipped++;
+          return;
+        }
+        if (
+          freshSignup.status !== "payment_submitted" ||
+          freshPayment.status !== "submitted"
+        ) {
+          skipped++;
+          return;
+        }
+
+        const now = await repo.getDatabaseNow(tx);
+        const { payment: confirmedPayment } = await confirmSignupAndWriteLedger(
+          tx,
+          freshSignup,
+          freshPayment,
+          now,
+          { id: null, kind: "system" },
+          { idempotencyPrefix: "auto", descriptionTag: "[AUTO]" },
+        );
+        const stamped = await repo.markSignupAutoConfirmed(
+          confirmedPayment.id,
+          confirmedPayment.version,
+          "owner_silent_passed_validation",
+          tx,
+        );
+        if (!stamped) {
+          skipped++;
+          return;
+        }
+        confirmed++;
+        notifyTargets.push(freshSignup.id);
+      });
+    } catch {
+      skipped++;
+    }
+  }
+
+  if (notifyTargets.length > 0) {
+    const { notifyOpenPlaySignupAutoConfirmed } = await import("./notifications");
+    for (const signupId of notifyTargets) {
+      await notifyOpenPlaySignupAutoConfirmed(signupId);
+    }
+  }
+
+  return { confirmed, skipped };
+}
+
+// ============================================================================
+// 12. sendOwnerSignupVerificationNudges — T-2h / T-30m owner reminders
+//
+// INVARIANT: stamp `owner_nudge{N}_sent_at` BEFORE the Resend send. One
+// missed nudge is far better than a spam loop if Resend fails repeatedly.
+// ============================================================================
+export async function sendOwnerSignupVerificationNudges(): Promise<{
+  nudge1: number;
+  nudge2: number;
+  skipped: number;
+}> {
+  const [nudge1Candidates, nudge2Candidates] = await Promise.all([
+    repo.findSignupPaymentsDueForNudge1(),
+    repo.findSignupPaymentsDueForNudge2(),
+  ]);
+
+  const { notifyOwnerSignupNudge1, notifyOwnerSignupNudge2 } = await import(
+    "./notifications"
+  );
+
+  let nudge1 = 0;
+  let nudge2 = 0;
+  let skipped = 0;
+
+  for (const c of nudge1Candidates) {
+    const stamped = await repo.markSignupNudge1Sent(c.paymentId, c.paymentVersion);
+    if (!stamped) {
+      skipped++;
+      continue;
+    }
+    try {
+      await notifyOwnerSignupNudge1(c.signupId);
+      nudge1++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  for (const c of nudge2Candidates) {
+    const stamped = await repo.markSignupNudge2Sent(c.paymentId, c.paymentVersion);
+    if (!stamped) {
+      skipped++;
+      continue;
+    }
+    try {
+      await notifyOwnerSignupNudge2(c.signupId);
+      nudge2++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  return { nudge1, nudge2, skipped };
+}
+
+// ============================================================================
+// 13. lateConfirmSignupPayment — admin recovery path
+//
+// When a signup's session window has already ended but the receipt was never
+// verified (owner forgot, heuristics failed, etc.) an admin can confirm after
+// the fact. Ledger entries use the `late:` idempotency prefix so they cannot
+// collide with a prior owner-verify (`ops:`) or auto-confirm (`auto:`).
+//
+// Caller (Server Action) MUST have already called requireAdmin().
+// ============================================================================
+export interface LateConfirmSignupPaymentInput {
+  paymentId: string;
+  adminId: string;
+  reason: string;
+}
+
+export async function lateConfirmSignupPayment(
+  input: LateConfirmSignupPaymentInput,
+): Promise<OpenPlaySignupPayment> {
+  if (!input.paymentId || !input.adminId || !input.reason.trim()) {
+    throw new OpenPlayError("validation_failed", "Missing late-confirm input");
+  }
+
+  return db.transaction(async (tx) => {
+    const now = await repo.getDatabaseNow(tx);
+    const payment = await repo.findSignupPaymentById(input.paymentId, tx);
+    if (!payment) throw new OpenPlayError("payment_not_found", "Payment not found");
+    if (payment.status === "verified") {
+      throw new OpenPlayError("payment_already_verified", "Payment is already verified");
+    }
+    if (payment.status !== "submitted") {
+      throw new OpenPlayError(
+        "validation_failed",
+        `Cannot late-confirm a payment in status ${payment.status}`,
+      );
+    }
+
+    const signup = await repo.findSignupById(payment.signupId, tx);
+    if (!signup) throw new OpenPlayError("signup_not_found", "Signup not found");
+    if (signup.status !== "payment_submitted") {
+      throw new OpenPlayError(
+        "validation_failed",
+        `Cannot late-confirm — signup is ${signup.status.replace("_", " ")}`,
+      );
+    }
+
+    const session = await repo.findSessionById(signup.sessionId, tx);
+    if (!session) throw new OpenPlayError("session_not_found", "Session not found");
+    if (session.endAt.getTime() > now.getTime()) {
+      throw new OpenPlayError(
+        "validation_failed",
+        "Session is still in progress — wait until it ends before late-confirming",
+      );
+    }
+
+    const { payment: confirmedPayment } = await confirmSignupAndWriteLedger(
+      tx,
+      signup,
+      payment,
+      now,
+      { id: input.adminId, kind: "admin" },
+      { idempotencyPrefix: "late", descriptionTag: "[LATE]" },
+    );
+    const stamped = await repo.markSignupLateConfirmed(
+      confirmedPayment.id,
+      confirmedPayment.version,
+      input.adminId,
+      input.reason,
+      tx,
+    );
+    if (!stamped) {
+      throw new OpenPlayError(
+        "concurrent_modification",
+        "Payment was modified by another request",
+      );
+    }
+    return stamped;
+  });
 }

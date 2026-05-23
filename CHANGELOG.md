@@ -1,5 +1,28 @@
 ﻿# Changelog
 
+## 2026-05-25 — Open Play payment parity (Phase B)
+
+### Feat — Receipt auto-validation + SLA auto-confirm + owner nudges + admin late-confirm for Open Play
+
+- Builds on Phase A (commit `b8936e0`). All Phase B database infrastructure was pre-shipped in migration `0031` — **no new migration required**.
+- **Heuristic auto-validation at receipt submit** (`submitSignupPayment`):
+  - Reuses `AutoValidationFailureCode` from `features/booking/auto-validation.ts` — that module is feature-generic and shared across booking + open-play, no duplication.
+  - Five rule codes evaluated in-transaction after the payment row is inserted: `ref_format`, `ref_duplicate` (15-day lookback), `hash_replay` (30-day lookback), `window_late` (`now > session.startAt + 30min`), `window_early` (`now < signup.createdAt`).
+  - Result written to `open_play_signup_payments.auto_validation_failures` via `repo.markSignupAutoValidated`; if `failures.length === 0` and the SLA buffer permits (`autoConfirmAt - now > 10min`), `auto_confirm_at` is set to `session.startAt - 30min`.
+- **SLA auto-confirm cron** (`autoConfirmEligibleSignups`):
+  - Each signup processed in its own transaction so a slow notification can never roll back ledger state. Re-reads signup + payment in-tx and re-checks statuses before delegating to `confirmSignupAndWriteLedger` with `{ idempotencyPrefix: "auto", descriptionTag: "[AUTO]" }` and a `{ kind: "system", id: null }` actor.
+  - Stamps `auto_confirmed_at` + `auto_confirmed_reason = 'owner_silent_passed_validation'`, then dispatches notifications to BOTH player and owner outside the transaction.
+- **Owner nudges** (`sendOwnerSignupVerificationNudges`):
+  - Two passes: T-2h-since-submit (`nudge1`) and T-30m-before-session (`nudge2`). **Invariant: `markSignupNudge{N}Sent` is called BEFORE `sendEmail`.** A missed nudge is far better than a spam loop if Resend fails repeatedly.
+- **Admin late-confirm** for sessions that already ended while the receipt is still in `submitted`:
+  - New Server Action `lateConfirmSignupPaymentAction` in `features/open-play/late-confirm-actions.ts`. Calls `requireAdmin()` itself (defense in depth — admin layout guard ≠ action guard).
+  - New service `lateConfirmSignupPayment({ paymentId, adminId, reason })` validates `session.endAt <= now`, `payment.status='submitted'`, `signup.status='payment_submitted'`, then delegates to `confirmSignupAndWriteLedger` with `{ idempotencyPrefix: "late", descriptionTag: "[LATE]" }` and a `{ kind: "admin", id: adminId }` actor, finally stamping `late_confirmed_at` + `late_confirmed_by` + `late_confirmed_reason`.
+  - New admin page `/admin/open-play/late-confirm` mirrors `/admin/payments/late-confirm`. Both player and owner receive a state-change notification (unconditional — not a marketing nudge).
+- **Idempotency prefix scheme** locked in: `ops:` (owner verify) / `auto:` (system cron) / `late:` (admin recovery). Keys: `${prefix}:${signup.id}:${account}`. The three prefixes physically cannot collide, so a signup can transit owner → admin recovery paths without duplicate ledger entries even on retry storms.
+- **Cron wiring** (`/api/cron/expire`) extended: `autoConfirmEligibleSignups()` and `sendOwnerSignupVerificationNudges()` join the existing `Promise.all`; response JSON gains `openPlayAutoConfirmed` and `openPlayNudges` counters.
+- **Email templates** added in `lib/email/templates.ts`: `openPlayOwnerNudgeReceiptStaleEmail`, `openPlayOwnerNudgeReceiptUrgentEmail`, `openPlaySignupAutoConfirmedEmail`, `openPlaySignupLateConfirmedEmail` (player + owner audience variants).
+- Validation gate: `tsc --noEmit` ✅ 0 errors, `eslint --max-warnings 0` ✅ 0 warnings, `next build` ✅ 68 routes (+1 admin page).
+
 ## 2026-05-24 — Open Play payment parity (Phase A)
 
 ### Feat — Ledger entries on Open Play signup confirm + UNION into payouts and weekly owner invoices

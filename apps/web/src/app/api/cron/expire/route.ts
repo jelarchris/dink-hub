@@ -7,7 +7,11 @@ import {
   releaseExpiredHolds,
   sendOwnerVerificationNudges,
 } from "@/features/booking/service";
-import { expirePendingSignups } from "@/features/open-play";
+import {
+  autoConfirmEligibleSignups,
+  expirePendingSignups,
+  sendOwnerSignupVerificationNudges,
+} from "@/features/open-play";
 
 /**
  * Cron route — runs every minute via Vercel Cron (see vercel.json).
@@ -40,12 +44,22 @@ export async function GET(req: Request) {
 
   const startedAt = Date.now();
   try {
-    const [holds, bookings, openPlaySignups, autoConfirmed, nudges] = await Promise.all([
+    const [
+      holds,
+      bookings,
+      openPlaySignups,
+      autoConfirmed,
+      nudges,
+      openPlayAutoConfirmed,
+      openPlayNudges,
+    ] = await Promise.all([
       releaseExpiredHolds(),
       expireUnpaidBookings(),
       expirePendingSignups(),
       autoConfirmEligibleBookings(),
       sendOwnerVerificationNudges(),
+      autoConfirmEligibleSignups(),
+      sendOwnerSignupVerificationNudges(),
     ]);
     return NextResponse.json({
       ok: true,
@@ -55,6 +69,8 @@ export async function GET(req: Request) {
       openPlaySignups,
       autoConfirmed,
       nudges,
+      openPlayAutoConfirmed,
+      openPlayNudges,
     });
   } catch (err) {
     captureException(err, { scope: "cron.expire" });

@@ -827,3 +827,382 @@ export async function getDatabaseNow(exec: Executor = db): Promise<Date> {
   if (!row) throw new Error("getDatabaseNow: no row returned");
   return new Date(row.now);
 }
+
+// ----------------------------------------------------------------------------
+// Phase B: receipt auto-validation + SLA auto-confirm + nudges + late-confirm
+// All helpers mirror features/booking/repo.ts so the two payment lifecycles
+// stay byte-for-byte parallel. See AGENTS.md "Open Play payment parity".
+// ----------------------------------------------------------------------------
+
+/**
+ * True if the same GCash reference number was used on any other signup payment
+ * within the last `withinDays`. Anti-replay heuristic for refs.
+ */
+export async function findRecentSignupRefDuplicate(
+  ref: string,
+  withinDays: number,
+  excludePaymentId: string | null,
+  exec: Executor = db,
+): Promise<boolean> {
+  const intervalSql = sql.raw(`'${String(withinDays)} days'`);
+  const rows = await exec
+    .select({ id: openPlaySignupPayments.id })
+    .from(openPlaySignupPayments)
+    .where(
+      and(
+        eq(openPlaySignupPayments.gcashReferenceNumber, ref),
+        gte(openPlaySignupPayments.submittedAt, sql<Date>`now() - interval ${intervalSql}`),
+        ...(excludePaymentId
+          ? [sql`${openPlaySignupPayments.id} <> ${excludePaymentId}::uuid`]
+          : []),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * True if the same receipt image hash was used on any other signup payment
+ * within the last `withinDays`. Anti-replay heuristic for images.
+ */
+export async function findRecentSignupHashReplay(
+  hash: string,
+  withinDays: number,
+  excludePaymentId: string,
+  exec: Executor = db,
+): Promise<boolean> {
+  const intervalSql = sql.raw(`'${String(withinDays)} days'`);
+  const rows = await exec
+    .select({ id: openPlaySignupPayments.id })
+    .from(openPlaySignupPayments)
+    .where(
+      and(
+        eq(openPlaySignupPayments.receiptHash, hash),
+        gte(openPlaySignupPayments.submittedAt, sql<Date>`now() - interval ${intervalSql}`),
+        sql`${openPlaySignupPayments.id} <> ${excludePaymentId}::uuid`,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Signups whose SLA auto-confirm deadline has elapsed AND whose payment is
+ * still submitted + heuristic-validated. Feeds the cron auto-confirm loop.
+ */
+export async function findSignupsDueForAutoConfirm(
+  limit = 100,
+  exec: Executor = db,
+): Promise<
+  Array<{
+    signupId: string;
+    signupVersion: number;
+    paymentId: string;
+    paymentVersion: number;
+  }>
+> {
+  const rows = await exec
+    .select({
+      signupId: openPlaySignups.id,
+      signupVersion: openPlaySignups.version,
+      paymentId: openPlaySignupPayments.id,
+      paymentVersion: openPlaySignupPayments.version,
+    })
+    .from(openPlaySignups)
+    .innerJoin(
+      openPlaySignupPayments,
+      eq(openPlaySignupPayments.signupId, openPlaySignups.id),
+    )
+    .where(
+      and(
+        eq(openPlaySignups.status, "payment_submitted"),
+        lte(openPlaySignups.autoConfirmAt, sql`now()`),
+        eq(openPlaySignupPayments.status, "submitted"),
+        sql`${openPlaySignupPayments.autoValidatedAt} is not null`,
+      ),
+    )
+    .limit(limit);
+  return rows;
+}
+
+/**
+ * Owner nudge 1 (polite): signup payment submitted >2h ago, nudge unsent.
+ */
+export async function findSignupPaymentsDueForNudge1(
+  limit = 100,
+  exec: Executor = db,
+): Promise<Array<{ paymentId: string; paymentVersion: number; signupId: string }>> {
+  const rows = await exec
+    .select({
+      paymentId: openPlaySignupPayments.id,
+      paymentVersion: openPlaySignupPayments.version,
+      signupId: openPlaySignupPayments.signupId,
+    })
+    .from(openPlaySignupPayments)
+    .where(
+      and(
+        eq(openPlaySignupPayments.status, "submitted"),
+        isNull(openPlaySignupPayments.ownerNudge1SentAt),
+        lte(openPlaySignupPayments.submittedAt, sql<Date>`now() - interval '2 hours'`),
+      ),
+    )
+    .limit(limit);
+  return rows;
+}
+
+/**
+ * Owner nudge 2 (urgent): session starts in <2h and signup still unverified.
+ */
+export async function findSignupPaymentsDueForNudge2(
+  limit = 100,
+  exec: Executor = db,
+): Promise<Array<{ paymentId: string; paymentVersion: number; signupId: string }>> {
+  const rows = await exec
+    .select({
+      paymentId: openPlaySignupPayments.id,
+      paymentVersion: openPlaySignupPayments.version,
+      signupId: openPlaySignupPayments.signupId,
+    })
+    .from(openPlaySignupPayments)
+    .innerJoin(openPlaySignups, eq(openPlaySignups.id, openPlaySignupPayments.signupId))
+    .innerJoin(openPlaySessions, eq(openPlaySessions.id, openPlaySignups.sessionId))
+    .where(
+      and(
+        eq(openPlaySignupPayments.status, "submitted"),
+        isNull(openPlaySignupPayments.ownerNudge2SentAt),
+        gt(openPlaySessions.startAt, sql`now()`),
+        lte(openPlaySessions.startAt, sql<Date>`now() + interval '2 hours'`),
+      ),
+    )
+    .limit(limit);
+  return rows;
+}
+
+/**
+ * Record the outcome of the 5 heuristic checks on a freshly-inserted signup
+ * payment. When `failures` is empty, sets `auto_validated_at = now()`.
+ */
+export async function markSignupAutoValidated(
+  paymentId: string,
+  expectedVersion: number,
+  failures: string[],
+  exec: Executor = db,
+): Promise<OpenPlaySignupPayment | null> {
+  const rows = await exec
+    .update(openPlaySignupPayments)
+    .set({
+      autoValidationFailures: failures,
+      ...(failures.length === 0
+        ? { autoValidatedAt: sql`now()` as unknown as Date }
+        : {}),
+    })
+    .where(
+      and(
+        eq(openPlaySignupPayments.id, paymentId),
+        eq(openPlaySignupPayments.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * Schedule (or clear) the SLA auto-confirm deadline on a signup. Optimistic.
+ */
+export async function setSignupAutoConfirmAt(
+  signupId: string,
+  expectedVersion: number,
+  ts: Date | null,
+  exec: Executor = db,
+): Promise<OpenPlaySignup | null> {
+  const rows = await exec
+    .update(openPlaySignups)
+    .set({ autoConfirmAt: ts })
+    .where(
+      and(
+        eq(openPlaySignups.id, signupId),
+        eq(openPlaySignups.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markSignupNudge1Sent(
+  paymentId: string,
+  expectedVersion: number,
+  exec: Executor = db,
+): Promise<OpenPlaySignupPayment | null> {
+  const rows = await exec
+    .update(openPlaySignupPayments)
+    .set({ ownerNudge1SentAt: sql`now()` as unknown as Date })
+    .where(
+      and(
+        eq(openPlaySignupPayments.id, paymentId),
+        eq(openPlaySignupPayments.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markSignupNudge2Sent(
+  paymentId: string,
+  expectedVersion: number,
+  exec: Executor = db,
+): Promise<OpenPlaySignupPayment | null> {
+  const rows = await exec
+    .update(openPlaySignupPayments)
+    .set({ ownerNudge2SentAt: sql`now()` as unknown as Date })
+    .where(
+      and(
+        eq(openPlaySignupPayments.id, paymentId),
+        eq(openPlaySignupPayments.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markSignupAutoConfirmed(
+  paymentId: string,
+  expectedVersion: number,
+  reason: string,
+  exec: Executor = db,
+): Promise<OpenPlaySignupPayment | null> {
+  const rows = await exec
+    .update(openPlaySignupPayments)
+    .set({
+      autoConfirmedAt: sql`now()` as unknown as Date,
+      autoConfirmedReason: reason,
+    })
+    .where(
+      and(
+        eq(openPlaySignupPayments.id, paymentId),
+        eq(openPlaySignupPayments.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function markSignupLateConfirmed(
+  paymentId: string,
+  expectedVersion: number,
+  adminId: string,
+  reason: string,
+  exec: Executor = db,
+): Promise<OpenPlaySignupPayment | null> {
+  const rows = await exec
+    .update(openPlaySignupPayments)
+    .set({
+      lateConfirmedAt: sql`now()` as unknown as Date,
+      lateConfirmedBy: adminId,
+      lateConfirmedReason: reason,
+    })
+    .where(
+      and(
+        eq(openPlaySignupPayments.id, paymentId),
+        eq(openPlaySignupPayments.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Admin-side: late-confirm queue. Open-play signups whose session has ended
+// but payment is still in 'submitted'. Mirrors bookings-view equivalent.
+// ---------------------------------------------------------------------------
+export interface LateConfirmSignupCandidate {
+  payment: Pick<
+    OpenPlaySignupPayment,
+    | "id"
+    | "version"
+    | "amountCentavos"
+    | "gcashReferenceNumber"
+    | "submittedAt"
+    | "autoValidatedAt"
+    | "autoValidationFailures"
+  >;
+  signup: { id: string };
+  session: Pick<OpenPlaySession, "id" | "title" | "startAt" | "endAt">;
+  venue: Pick<Venue, "id" | "name" | "slug">;
+  playerDisplayName: string;
+  ownerDisplayName: string;
+}
+
+export async function listLateConfirmSignupCandidates(
+  limit = 100,
+): Promise<LateConfirmSignupCandidate[]> {
+  const rows = await db.execute<{
+    payment_id: string;
+    payment_version: number;
+    amount_centavos: string;
+    gcash_reference_number: string | null;
+    submitted_at: Date;
+    auto_validated_at: Date | null;
+    auto_validation_failures: string[];
+    signup_id: string;
+    session_id: string;
+    session_title: string;
+    start_at: Date;
+    end_at: Date;
+    venue_id: string;
+    venue_name: string;
+    venue_slug: string;
+    player_display_name: string;
+    owner_display_name: string;
+  }>(sql`
+    select
+      p.id as payment_id,
+      p.version as payment_version,
+      p.amount_centavos::text as amount_centavos,
+      p.gcash_reference_number,
+      p.submitted_at,
+      p.auto_validated_at,
+      p.auto_validation_failures,
+      s.id as signup_id,
+      sess.id as session_id,
+      sess.title as session_title,
+      sess.start_at,
+      sess.end_at,
+      v.id as venue_id,
+      v.name as venue_name,
+      v.slug as venue_slug,
+      pp.display_name as player_display_name,
+      po.display_name as owner_display_name
+    from open_play_signup_payments p
+    inner join open_play_signups s on s.id = p.signup_id
+    inner join open_play_sessions sess on sess.id = s.session_id
+    inner join venues v on v.id = sess.venue_id
+    inner join profiles pp on pp.id = s.player_id
+    inner join profiles po on po.id = v.owner_id
+    where p.status = 'submitted'
+      and s.status = 'payment_submitted'
+      and sess.end_at <= now()
+    order by sess.end_at asc
+    limit ${limit}
+  `);
+  return rows.map((r) => ({
+    payment: {
+      id: r.payment_id,
+      version: r.payment_version,
+      amountCentavos: BigInt(r.amount_centavos),
+      gcashReferenceNumber: r.gcash_reference_number,
+      submittedAt: new Date(r.submitted_at),
+      autoValidatedAt: r.auto_validated_at ? new Date(r.auto_validated_at) : null,
+      autoValidationFailures: r.auto_validation_failures ?? [],
+    },
+    signup: { id: r.signup_id },
+    session: {
+      id: r.session_id,
+      title: r.session_title,
+      startAt: new Date(r.start_at),
+      endAt: new Date(r.end_at),
+    },
+    venue: { id: r.venue_id, name: r.venue_name, slug: r.venue_slug },
+    playerDisplayName: r.player_display_name,
+    ownerDisplayName: r.owner_display_name,
+  }));
+}
