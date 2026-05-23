@@ -84,9 +84,18 @@ export const createBookingInputSchema = z
      * account's profiles.email. The account email itself is unchanged.
      */
     contactEmail: z.string().trim().toLowerCase().email().max(254).optional(),
+    /**
+     * Payment mode chosen by the player. `full` is the legacy behaviour:
+     * the player transfers the entire total via GCash. `deposit` requires
+     * the venue to have opted in (venues.allow_partial_payment); the player
+     * transfers `venues.deposit_percent` of the total now and settles the
+     * balance at the venue on arrival. The service re-validates against the
+     * venue's setting and rejects mismatches.
+     */
+    paymentMode: z.enum(["full", "deposit"]).default("full"),
   })
   .superRefine(validateSlotTimes);
-export type CreateBookingInput = z.infer<typeof createBookingInputSchema>;
+export type CreateBookingInput = z.input<typeof createBookingInputSchema>;
 
 export const submitPaymentInputSchema = z.object({
   bookingId: uuidSchema,

@@ -26,6 +26,7 @@ import { NoShowForm } from "./_components/no-show-form";
 import { CancelBookingForm } from "./_components/cancel-booking-form";
 import { RescheduleForm } from "./_components/reschedule-form";
 import { RecordRefundForm } from "./_components/record-refund-form";
+import { MarkBalanceCollectedForm } from "./_components/mark-balance-collected-form";
 
 export const dynamic = "force-dynamic";
 
@@ -208,6 +209,26 @@ export default async function OwnerBookingDetailPage({
                   {formatPHP(booking.totalCentavos)}
                 </dd>
               </div>
+              {booking.paymentMode === "deposit" && (
+                <>
+                  <SummaryRow
+                    label="Deposit (paid via GCash)"
+                    value={formatPHP(booking.depositCentavos ?? 0n)}
+                  />
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <dt className="text-[var(--color-fg-muted)]">Balance due at venue</dt>
+                    <dd>
+                      {booking.balanceCollectedAt ? (
+                        <Badge variant="success">Collected</Badge>
+                      ) : (
+                        <span className="font-semibold text-[var(--color-warning-700)]">
+                          {formatPHP(booking.balanceDueCentavos)}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between px-4 py-2.5">
                 <dt className="text-[var(--color-fg-muted)]">Status</dt>
                 <dd><BookingStatusBadge status={booking.status} /></dd>
@@ -234,13 +255,33 @@ export default async function OwnerBookingDetailPage({
             const canReschedule =
               reschedulableStatuses.includes(booking.status) &&
               booking.startAt.getTime() > renderedAtMs;
+            const canCollectBalance =
+              isConfirmed &&
+              booking.paymentMode === "deposit" &&
+              booking.balanceCollectedAt === null;
 
-            if (!isConfirmed && !canCancel && !canReschedule) return null;
+            if (!isConfirmed && !canCancel && !canReschedule && !canCollectBalance)
+              return null;
 
             return (
               <div>
                 <SectionLabel className="mb-2 block">Actions</SectionLabel>
                 <div className="space-y-4 rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-4">
+                  {canCollectBalance && (
+                    <div>
+                      <p className="mb-2 text-xs text-[var(--color-fg-muted)]">
+                        Player owes{" "}
+                        <strong>{formatPHP(booking.balanceDueCentavos)}</strong>{" "}
+                        on arrival (cash or GCash — your choice). Tap once they
+                        have paid you.
+                      </p>
+                      <MarkBalanceCollectedForm
+                        bookingId={booking.id}
+                        version={booking.version}
+                        formattedBalance={formatPHP(booking.balanceDueCentavos)}
+                      />
+                    </div>
+                  )}
                   {canReschedule && (
                     <div>
                       <p className="mb-2 text-xs text-[var(--color-fg-muted)]">

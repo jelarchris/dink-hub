@@ -26,6 +26,8 @@ export type BookingErrorCode =
   | "duplicate_receipt" // same hash already submitted for this booking
   | "not_authorized" // caller is not venue owner / admin for the action
   | "system_fee_unavailable"
+  | "deposit_not_allowed" // player asked for deposit mode on a venue that disabled it
+  | "deposit_not_configured" // venue has no deposit_percent set
   | "concurrent_modification"; // optimistic lock failed
 
 export class BookingError extends Error {

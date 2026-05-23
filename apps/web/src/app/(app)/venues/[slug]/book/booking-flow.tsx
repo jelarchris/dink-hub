@@ -47,6 +47,10 @@ export interface BookingFlowProps {
   venueName: string;
   gcashAccountName: string | null;
   gcashAccountNumber: string | null;
+  /** Venue opted in to accept partial deposits. */
+  allowPartialPayment: boolean;
+  /** Whole-number percent (25–75). Always present when `allowPartialPayment`. */
+  depositPercent: number | null;
   /** bigint serialised — convert with BigInt() for arithmetic. */
   systemFeeEstimateCentavos: string;
   playerName: string;
@@ -122,6 +126,8 @@ export function BookingFlow({
   venueName,
   gcashAccountName,
   gcashAccountNumber,
+  allowPartialPayment,
+  depositPercent,
   systemFeeEstimateCentavos,
   playerName,
   playerEmail,
@@ -200,6 +206,12 @@ export function BookingFlow({
   const [createdTotalCentavos, setCreatedTotalCentavos] = useState<bigint | null>(null);
   const [createdCourtFeeCentavos, setCreatedCourtFeeCentavos] = useState<bigint | null>(null);
   const [createdSystemFeeCentavos, setCreatedSystemFeeCentavos] = useState<bigint | null>(null);
+  /** Player's payment mode selection in Step 1. Defaults to safer "full". */
+  const [paymentMode, setPaymentMode] = useState<"full" | "deposit">("full");
+  /** Snapshotted deposit + balance amounts returned by the server post-create. */
+  const [createdDepositCentavos, setCreatedDepositCentavos] = useState<bigint | null>(null);
+  const [createdBalanceDueCentavos, setCreatedBalanceDueCentavos] = useState<bigint>(0n);
+  const [createdPaymentMode, setCreatedPaymentMode] = useState<"full" | "deposit">("full");
 
   // Player detail fields (editable in step 1)
   const [editName, setEditName] = useState(playerName);
@@ -581,6 +593,10 @@ export function BookingFlow({
     setCreatedTotalCentavos(null);
     setCreatedCourtFeeCentavos(null);
     setCreatedSystemFeeCentavos(null);
+    setCreatedDepositCentavos(null);
+    setCreatedBalanceDueCentavos(0n);
+    setCreatedPaymentMode("full");
+    setPaymentMode("full");
     setCreateError(null);
     setFileName(null);
     setFileError(null);
@@ -638,6 +654,7 @@ export function BookingFlow({
     form.set("startAt", pickedStartIso);
     form.set("endAt", pickedEndDate.toISOString());
     if (appliedVoucher) form.set("voucherCode", appliedVoucher.code);
+    form.set("paymentMode", paymentMode);
     // Per-booking notification email override. Only sent when the player
     // edited the email to something different from their account email.
     // The server validates the format; account email is left untouched.
@@ -658,6 +675,11 @@ export function BookingFlow({
     setCreatedTotalCentavos(BigInt(result.data.totalCentavos));
     setCreatedCourtFeeCentavos(BigInt(result.data.courtFeeCentavos));
     setCreatedSystemFeeCentavos(BigInt(result.data.systemFeeCentavos));
+    setCreatedPaymentMode(result.data.paymentMode);
+    setCreatedDepositCentavos(
+      result.data.depositCentavos === null ? null : BigInt(result.data.depositCentavos),
+    );
+    setCreatedBalanceDueCentavos(BigInt(result.data.balanceDueCentavos));
     setStep("step2");
   }
 
@@ -1031,6 +1053,10 @@ export function BookingFlow({
                   voucherError={voucherError}
                   onApplyVoucher={() => void applyVoucher()}
                   onClearVoucher={clearVoucher}
+                  allowPartialPayment={allowPartialPayment}
+                  depositPercent={depositPercent}
+                  paymentMode={paymentMode}
+                  onPaymentModeChange={setPaymentMode}
                 />
               ) : (
                 <Step2Body
@@ -1038,6 +1064,9 @@ export function BookingFlow({
                   totalCentavos={displayTotal}
                   courtFeeCentavos={displayCourtFee}
                   systemFeeCentavos={displaySystemFee}
+                  paymentMode={createdPaymentMode}
+                  depositCentavos={createdDepositCentavos}
+                  balanceDueCentavos={createdBalanceDueCentavos}
                   gcashAccountName={gcashAccountName}
                   gcashAccountNumber={gcashAccountNumber}
                   receiptFormAction={receiptFormAction}
@@ -1116,6 +1145,10 @@ function Step1Body({
   voucherError,
   onApplyVoucher,
   onClearVoucher,
+  allowPartialPayment,
+  depositPercent,
+  paymentMode,
+  onPaymentModeChange,
 }: {
   venueName: string;
   courtName: string;
@@ -1148,6 +1181,10 @@ function Step1Body({
   voucherError: string | null;
   onApplyVoucher: () => void;
   onClearVoucher: () => void;
+  allowPartialPayment: boolean;
+  depositPercent: number | null;
+  paymentMode: "full" | "deposit";
+  onPaymentModeChange: (mode: "full" | "deposit") => void;
 }) {
   const timeRange =
     pickedStartDate && pickedEndDate
@@ -1250,6 +1287,15 @@ function Step1Body({
         )}
       </div>
 
+      {allowPartialPayment && depositPercent !== null && (
+        <PaymentModeChooser
+          totalCentavos={totalCentavos}
+          depositPercent={depositPercent}
+          value={paymentMode}
+          onChange={onPaymentModeChange}
+        />
+      )}
+
       {/* Your Details */}
       <div>
         <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
@@ -1341,12 +1387,99 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Two-card chooser rendered when the venue opts in to partial deposits.
+ * Computes a client-side preview of `deposit = ceil(total * percent / 100)`
+ * rounded UP to the nearest peso — mirrors `computeDepositSnapshot` in
+ * `features/booking/service.ts`. Server is the source of truth; the snapshot
+ * returned post-create is what the player ultimately pays.
+ */
+function PaymentModeChooser({
+  totalCentavos,
+  depositPercent,
+  value,
+  onChange,
+}: {
+  totalCentavos: bigint;
+  depositPercent: number;
+  value: "full" | "deposit";
+  onChange: (mode: "full" | "deposit") => void;
+}) {
+  const pct = BigInt(depositPercent);
+  const exact = (totalCentavos * pct + 99n) / 100n;
+  const depositPreview = ((exact + 99n) / 100n) * 100n;
+  const balancePreview = totalCentavos - depositPreview;
+  const options: ReadonlyArray<{
+    id: "full" | "deposit";
+    title: string;
+    amount: bigint;
+    sub: string;
+  }> = [
+    {
+      id: "full",
+      title: "Pay in full now",
+      amount: totalCentavos,
+      sub: "One GCash transfer. You're set.",
+    },
+    {
+      id: "deposit",
+      title: `${depositPercent}% deposit, balance at venue`,
+      amount: depositPreview,
+      sub: `Pay ${formatPHP(balancePreview)} (cash or GCash) when you arrive.`,
+    },
+  ];
+  return (
+    <fieldset className="rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg)] p-3">
+      <legend className="px-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
+        Payment option
+      </legend>
+      <div className="mt-1 flex flex-col gap-2">
+        {options.map((opt) => {
+          const selected = value === opt.id;
+          return (
+            <label
+              key={opt.id}
+              className={cn(
+                "flex cursor-pointer items-start gap-3 rounded-[var(--radius-md)] border p-3 transition-colors",
+                selected
+                  ? "border-[var(--color-brand-500)] bg-[var(--color-brand-50)]"
+                  : "border-[var(--color-border-default)] hover:bg-[var(--color-bg-subtle)]",
+              )}
+            >
+              <input
+                type="radio"
+                name="paymentModeChoice"
+                value={opt.id}
+                checked={selected}
+                onChange={() => onChange(opt.id)}
+                className="mt-1 size-4 accent-[var(--color-brand-500)]"
+              />
+              <span className="flex-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{opt.title}</span>
+                  <span className="text-sm font-bold tabular-nums text-[var(--color-brand-700)]">
+                    {formatPHP(opt.amount)}
+                  </span>
+                </span>
+                <span className="block text-xs text-[var(--color-fg-muted)]">{opt.sub}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Step 2 — Payment & Confirmation
 // ---------------------------------------------------------------------------
 function Step2Body({
   bookingId,
   totalCentavos,
+  paymentMode,
+  depositCentavos,
+  balanceDueCentavos,
   gcashAccountName,
   gcashAccountNumber,
   receiptFormAction,
@@ -1367,6 +1500,9 @@ function Step2Body({
   totalCentavos: bigint;
   courtFeeCentavos: bigint;
   systemFeeCentavos: bigint;
+  paymentMode: "full" | "deposit";
+  depositCentavos: bigint | null;
+  balanceDueCentavos: bigint;
   gcashAccountName: string | null;
   gcashAccountNumber: string | null;
   receiptFormAction: (payload: FormData) => void;
@@ -1383,6 +1519,10 @@ function Step2Body({
   canSubmit: boolean;
   onBack: () => void;
 }) {
+  // When paying a deposit, the "pay exactly" amount IS the deposit, not the
+  // booking total. The balance is collected by the venue at the court.
+  const isDeposit = paymentMode === "deposit" && depositCentavos !== null;
+  const payNowCentavos = isDeposit ? (depositCentavos as bigint) : totalCentavos;
   return (
     <form action={receiptFormAction} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="bookingId" value={bookingId} />
@@ -1390,15 +1530,25 @@ function Step2Body({
       {/* Pay exactly banner */}
       <div className="rounded-[var(--radius-md)] bg-[var(--color-brand-700)] px-4 py-4 text-center text-white">
         <p className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">
-          PAY EXACTLY
+          {isDeposit ? "DEPOSIT — PAY EXACTLY" : "PAY EXACTLY"}
         </p>
         <p className="text-3xl font-extrabold tabular-nums tracking-tight">
-          {formatPHP(totalCentavos)}
+          {formatPHP(payNowCentavos)}
         </p>
         <p className="mt-1 text-xs opacity-70">
           Incorrect payment amounts may delay your booking confirmation
         </p>
       </div>
+
+      {isDeposit && (
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-warning-300)] bg-[var(--color-warning-50)] px-3 py-2.5 text-xs text-[var(--color-warning-700)]">
+          <p className="font-semibold">Balance due at the venue</p>
+          <p>
+            Settle {formatPHP(balanceDueCentavos)} on arrival — the venue accepts cash or GCash.
+            Total booking value: {formatPHP(totalCentavos)}.
+          </p>
+        </div>
+      )}
 
       {/* Send payment to */}
       {gcashAccountNumber ? (

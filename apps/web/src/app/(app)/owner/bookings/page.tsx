@@ -358,6 +358,13 @@ function BookingRow({
               {item.playerDisplayName}
             </span>
             <BookingStatusBadge status={item.booking.status} />
+            {item.booking.paymentMode === "deposit" &&
+              item.booking.balanceCollectedAt === null &&
+              item.booking.status === "confirmed" && (
+                <Badge variant="warning">
+                  Cash due {formatPHP(item.booking.balanceDueCentavos)}
+                </Badge>
+              )}
             <ChevronRight className="ml-auto size-4 shrink-0 text-[var(--color-fg-subtle)]" />
           </Link>
           <p className="mt-0.5 truncate text-xs text-[var(--color-fg-muted)]">

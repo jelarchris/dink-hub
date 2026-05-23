@@ -129,10 +129,21 @@ export function paymentSubmittedEmail(ctx: BookingEmailContext & {
 // ---------------------------------------------------------------------------
 export function paymentVerifiedEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
+  balanceDueCentavos?: bigint;
 }) {
   const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const total = formatPHP(ctx.totalCentavos);
   const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
+  const hasBalance =
+    typeof ctx.balanceDueCentavos === "bigint" && ctx.balanceDueCentavos > 0n;
+  const balanceLine = hasBalance
+    ? `<p style="margin:6px 0 0 0;color:#92400e;"><strong>Balance due at venue:</strong> ${escapeHtml(
+        formatPHP(ctx.balanceDueCentavos as bigint),
+      )} (cash or GCash on arrival)</p>`
+    : "";
+  const balanceTextLine = hasBalance
+    ? `Balance due at venue: ${formatPHP(ctx.balanceDueCentavos as bigint)} (cash or GCash on arrival)\n`
+    : "";
 
   return {
     subject: `Booking confirmed \u2014 ${ctx.venueName} on ${when}`,
@@ -144,7 +155,8 @@ export function paymentVerifiedEmail(ctx: BookingEmailContext & {
           <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
           <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
           <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
-          <p style="margin:0;"><strong>Total paid:</strong> ${escapeHtml(total)}</p>
+          <p style="margin:0;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+          ${balanceLine}
         </div>
         <p style="margin:0;">Bring a friend, bring water, and enjoy your game.</p>
       `,
@@ -154,8 +166,9 @@ export function paymentVerifiedEmail(ctx: BookingEmailContext & {
     text:
       `Booking confirmed\n\n` +
       `Your payment has been verified.\n\n` +
-      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal paid: ${total}\n\n` +
-      `View: ${link}\n`,
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal: ${total}\n` +
+      balanceTextLine +
+      `\nView: ${link}\n`,
   };
 }
 
@@ -758,10 +771,21 @@ export function buildRescheduleIcs(ctx: {
 // ---------------------------------------------------------------------------
 export function sessionReminderEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
+  balanceDueCentavos?: bigint;
 }) {
   const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const total = formatPHP(ctx.totalCentavos);
   const link = `${APP_URL}/me/bookings/${ctx.bookingId}`;
+  const hasBalance =
+    typeof ctx.balanceDueCentavos === "bigint" && ctx.balanceDueCentavos > 0n;
+  const balanceLine = hasBalance
+    ? `<p style="margin:6px 0 0 0;color:#92400e;"><strong>Bring for balance:</strong> ${escapeHtml(
+        formatPHP(ctx.balanceDueCentavos as bigint),
+      )} (cash or GCash on arrival)</p>`
+    : "";
+  const balanceTextLine = hasBalance
+    ? `Bring for balance: ${formatPHP(ctx.balanceDueCentavos as bigint)} (cash or GCash on arrival)\n`
+    : "";
 
   return {
     subject: `Heads up — your game starts in 2 hours at ${ctx.venueName}`,
@@ -773,7 +797,8 @@ export function sessionReminderEmail(ctx: BookingEmailContext & {
           <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
           <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
           <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
-          <p style="margin:0;"><strong>Total paid:</strong> ${escapeHtml(total)}</p>
+          <p style="margin:0;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+          ${balanceLine}
         </div>
         <p style="margin:0;">Bring water, warm up, and enjoy your game!</p>
       `,
@@ -783,8 +808,9 @@ export function sessionReminderEmail(ctx: BookingEmailContext & {
     text:
       `Your court is in 2 hours\n\n` +
       `Hi ${ctx.playerDisplayName}, your pickleball session is coming up soon.\n\n` +
-      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal paid: ${total}\n\n` +
-      `View booking: ${link}\n`,
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal: ${total}\n` +
+      balanceTextLine +
+      `\nView booking: ${link}\n`,
   };
 }
 

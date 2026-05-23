@@ -241,6 +241,8 @@ export async function createVenue(args: {
       gcashAccountNumber: args.input.gcashAccountNumber,
       gcashQrImagePath: args.input.gcashQrImagePath,
       coverImagePath: args.input.coverImagePath,
+      allowPartialPayment: args.input.allowPartialPayment,
+      depositPercent: args.input.allowPartialPayment ? args.input.depositPercent : null,
       status: "draft",
     })
     .returning();
@@ -276,6 +278,8 @@ export async function updateVenue(args: {
       gcashAccountNumber: args.input.gcashAccountNumber,
       gcashQrImagePath: args.input.gcashQrImagePath,
       coverImagePath: args.input.coverImagePath,
+      allowPartialPayment: args.input.allowPartialPayment,
+      depositPercent: args.input.allowPartialPayment ? args.input.depositPercent : null,
       updatedAt: new Date(),
     })
     .where(and(eq(venues.id, args.venueId), eq(venues.version, args.expectedVersion)))

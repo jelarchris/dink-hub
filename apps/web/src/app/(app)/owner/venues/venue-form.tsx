@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
@@ -35,6 +35,8 @@ export interface VenueFormProps {
     | "gcashAccountNumber"
     | "gcashQrImagePath"
     | "coverImagePath"
+    | "allowPartialPayment"
+    | "depositPercent"
     | "version"
   >;
   submitLabel?: string;
@@ -246,11 +248,82 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
         />
       </section>
 
+      <PartialPaymentSection
+        initialEnabled={initial?.allowPartialPayment ?? false}
+        initialPercent={initial?.depositPercent ?? null}
+        percentError={err("depositPercent")}
+      />
+
       <div className="flex items-center gap-3 pt-2">
         <SubmitButton pendingLabel="Saving">
           {submitLabel ?? (mode === "create" ? "Create venue" : "Save changes")}
         </SubmitButton>
       </div>
     </form>
+  );
+}
+
+interface PartialPaymentSectionProps {
+  initialEnabled: boolean;
+  initialPercent: number | null;
+  percentError: string | undefined;
+}
+
+function PartialPaymentSection({
+  initialEnabled,
+  initialPercent,
+  percentError,
+}: PartialPaymentSectionProps) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  return (
+    <section className="space-y-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-fg-subtle)]">
+        Partial payment (optional)
+      </h2>
+      <p className="text-xs text-[var(--color-fg-subtle)]">
+        Let players reserve with a partial GCash deposit and settle the balance in cash or GCash
+        when they arrive. You decide how to collect the balance at the court.
+      </p>
+      <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-subtle)] p-3 text-sm">
+        <input
+          type="checkbox"
+          name="allowPartialPayment"
+          value="on"
+          defaultChecked={initialEnabled}
+          onChange={(e) => setEnabled(e.currentTarget.checked)}
+          className="mt-0.5 size-4 accent-[var(--color-brand)]"
+        />
+        <span>
+          <span className="block font-medium">Accept partial deposit bookings</span>
+          <span className="block text-xs text-[var(--color-fg-subtle)]">
+            When enabled, players can choose to pay only the deposit up-front.
+          </span>
+        </span>
+      </label>
+      {enabled && (
+        <FormField
+          id="depositPercent"
+          label="Deposit percentage"
+          hint="Between 25 and 75. We recommend 50%."
+          error={percentError}
+        >
+          {({ id, describedBy, invalid }) => (
+            <Input
+              id={id}
+              name="depositPercent"
+              type="number"
+              min={25}
+              max={75}
+              step={1}
+              required={enabled}
+              defaultValue={initialPercent ?? 50}
+              aria-describedby={describedBy}
+              invalid={invalid}
+              className="w-32"
+            />
+          )}
+        </FormField>
+      )}
+    </section>
   );
 }

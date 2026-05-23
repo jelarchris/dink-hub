@@ -449,8 +449,73 @@ export async function markNoShowAction(
 }
 
 // ============================================================================
-// Owner cancel booking (Tier 4)
+// Owner mark deposit-booking balance collected at the venue
 // ============================================================================
+
+const markBalanceCollectedFormSchema = z.object({
+  bookingId: z.string().uuid(),
+  expectedVersion: z.coerce.number().int().min(1),
+});
+
+/**
+ * Owner records that the player paid the outstanding balance at the venue
+ * (cash or GCash — DinkHub does NOT track the channel). Only applies to
+ * `payment_mode = 'deposit'` confirmed bookings whose balance has not yet
+ * been collected. Authorization + status check + version are enforced in a
+ * single atomic UPDATE; the WHERE subquery rejects any cross-venue tampering.
+ */
+export async function markBalanceCollectedAction(
+  _prev: ActionResult<never> | null,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const guard = await ensureOwner();
+  if (!guard.ok) return guard.result;
+
+  const parsed = markBalanceCollectedFormSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail("Invalid request.", "validation");
+
+  const { bookingId, expectedVersion } = parsed.data;
+  const { db } = await import("@/db/client");
+  const { bookings } = await import("@/db/schema");
+  const { eq, and, sql, isNull } = await import("drizzle-orm");
+
+  const updated = await db
+    .update(bookings)
+    .set({
+      balanceCollectedAt: new Date(),
+      balanceCollectedBy: guard.userId,
+      version: sql`${bookings.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        eq(bookings.version, expectedVersion),
+        eq(bookings.paymentMode, "deposit"),
+        isNull(bookings.balanceCollectedAt),
+        sql`${bookings.venueId} in (
+          select id from venues
+          where owner_id = ${guard.userId}
+          and deleted_at is null
+        )`,
+      ),
+    )
+    .returning({ id: bookings.id });
+
+  if (updated.length === 0) {
+    return {
+      ok: false,
+      code: "conflict",
+      message:
+        "Could not mark balance collected. The booking may have already been updated — please refresh.",
+    };
+  }
+
+  revalidatePath("/owner");
+  revalidatePath("/owner/bookings");
+  revalidatePath(`/owner/bookings/${bookingId}`);
+  return { ok: true, data: undefined as never };
+}
 
 const cancelBookingFormSchema = z.object({
   bookingId: z.string().uuid(),

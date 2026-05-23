@@ -101,6 +101,13 @@ export const venues = pgTable("venues", {
   gcashQrImagePath: text("gcash_qr_image_path"),
   coverImageUrl: text("cover_image_url"),
   coverImagePath: text("cover_image_path"),
+  // Partial-payment policy. When allow_partial_payment = true the player can
+  // choose to pay deposit_percent of the total via GCash now and settle the
+  // balance at the venue (channel is owner's call — cash, GCash, etc.).
+  // DB CHECK (venues_deposit_percent_consistency) enforces co-presence and
+  // a 25–75 range on the percent.
+  allowPartialPayment: boolean("allow_partial_payment").notNull().default(false),
+  depositPercent: integer("deposit_percent"),
   status: venueStatusEnum("status").notNull().default("draft"),
   rejectionReason: text("rejection_reason"),
   version: integer("version").notNull().default(1),
@@ -220,6 +227,18 @@ export const bookings = pgTable("bookings", {
   rebookOfId: uuid("rebook_of_id").references((): AnyPgColumn => bookings.id, {
     onDelete: "set null",
   }),
+  // Deposit-mode snapshot. payment_mode = 'full' (default) preserves the
+  // legacy behaviour. payment_mode = 'deposit' snapshots how much the player
+  // paid via GCash up-front and how much they owe at the venue. DB CHECK
+  // (bookings_deposit_consistency) enforces deposit + balance = total. The
+  // platform fee is still charged on the FULL total.
+  paymentMode: text("payment_mode").notNull().default("full"),
+  depositCentavos: bigint("deposit_centavos", { mode: "bigint" }),
+  balanceDueCentavos: bigint("balance_due_centavos", { mode: "bigint" }).notNull().default(0n),
+  // Owner-marked when the on-arrival balance is settled. Both columns are
+  // co-required (bookings_balance_collected_pair).
+  balanceCollectedAt: timestamp("balance_collected_at", { withTimezone: true }),
+  balanceCollectedBy: uuid("balance_collected_by").references(() => profiles.id),
 });
 
 // ----------------------------------------------------------------------------

@@ -78,6 +78,60 @@ function computeCourtFeeCentavos(durationMin: number, hourlyRate: bigint): bigin
   return (BigInt(durationMin) * hourlyRate) / 60n;
 }
 
+/**
+ * Translate the player's chosen `paymentMode` plus the venue's deposit policy
+ * into the four snapshot columns the bookings row carries. Throws
+ * BookingError when the player asks for deposit mode but the venue has
+ * disabled it or hasn't configured a percentage.
+ *
+ * Rounding: deposit rounds UP to the nearest whole peso (100 centavos) so
+ * the venue is never short. The DB CHECK constraint
+ * `bookings_deposit_consistency` re-validates `deposit + balance = total`.
+ */
+function computeDepositSnapshot(args: {
+  mode: "full" | "deposit";
+  totalCentavos: bigint;
+  venueAllowsPartial: boolean;
+  venueDepositPercent: number | null;
+}): {
+  paymentMode: "full" | "deposit";
+  depositCentavos: bigint | null;
+  balanceDueCentavos: bigint;
+} {
+  if (args.mode === "full") {
+    return { paymentMode: "full", depositCentavos: null, balanceDueCentavos: 0n };
+  }
+  if (!args.venueAllowsPartial) {
+    throw new BookingError(
+      "deposit_not_allowed",
+      "Venue does not accept deposit payments — pay in full",
+    );
+  }
+  if (args.venueDepositPercent === null) {
+    throw new BookingError(
+      "deposit_not_configured",
+      "Venue has not configured a deposit percentage",
+    );
+  }
+  const percent = BigInt(args.venueDepositPercent);
+  // ceil((total * percent) / 100) → exact centavos, then ceil to nearest peso.
+  const exact = (args.totalCentavos * percent + 99n) / 100n;
+  const deposit = ((exact + 99n) / 100n) * 100n;
+  if (deposit <= 0n || deposit >= args.totalCentavos) {
+    // Total is so small the percentage collapses to 0 or to the full amount.
+    // Force the player back to full payment rather than fail the CHECK.
+    throw new BookingError(
+      "deposit_not_allowed",
+      "Total is too small to split — pay in full",
+    );
+  }
+  return {
+    paymentMode: "deposit",
+    depositCentavos: deposit,
+    balanceDueCentavos: args.totalCentavos - deposit,
+  };
+}
+
 // ============================================================================
 // 1. holdSlot — temporary reservation while user fills the booking form
 // ============================================================================
@@ -153,7 +207,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       issues: parsed.error.flatten(),
     });
   }
-  const { playerId, courtId, startAt, endAt, holdId, notes, voucherCode, contactEmail } = parsed.data;
+  const { playerId, courtId, startAt, endAt, holdId, notes, voucherCode, contactEmail, paymentMode } = parsed.data;
 
   // Use server clock — reliable within < 1ms of DB clock (NTP-synced).
   // Avoids a SELECT NOW() round-trip that added ~20-40ms for nothing.
@@ -322,6 +376,12 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
           voucherCodeSnapshot: voucherCodeToSnapshot,
           discountCentavos,
           contactEmail: contactEmail ?? null,
+          ...computeDepositSnapshot({
+            mode: paymentMode,
+            totalCentavos: courtFee + finalSystemFee,
+            venueAllowsPartial: courtRow.venue.allowPartialPayment,
+            venueDepositPercent: courtRow.venue.depositPercent,
+          }),
         } as Parameters<typeof repo.insertBooking>[0],
         tx,
       );

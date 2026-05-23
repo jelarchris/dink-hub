@@ -22,6 +22,37 @@
 - **`features/booking/schema.ts`** + **`features/open-play/schema.ts`** — service-layer `submitPaymentInputSchema.gcashReferenceNumber` and `submitSignupPaymentInputSchema.gcashReferenceNumber` drop `.optional()` (defence in depth at DB boundary).
 - **`features/booking/__tests__/service.test.ts`** — all 6 `submitPayment` test calls now pass a valid reference number.
 
+## 2026-05-21 — Owner-opt-in deposit / full payment mode
+
+### Feat — Per-venue partial-payment toggle with owner-editable percentage
+
+- **Migration `0029_deposit_payment_mode.sql`** — adds:
+  - `venues.allow_partial_payment boolean default false`, `venues.deposit_percent smallint` + CHECK `venues_deposit_percent_consistency` (25–75, only when enabled).
+  - `bookings.payment_mode text default 'full'`, `deposit_centavos bigint`, `balance_due_centavos bigint default 0`, `balance_collected_at timestamptz`, `balance_collected_by uuid REFERENCES profiles(id)`.
+  - CHECKs `bookings_payment_mode_check`, `bookings_deposit_consistency` (deposit+balance = total when deposit mode), `bookings_balance_collected_pair`.
+  - Partial index `bookings_balance_outstanding_idx (venue_id, start_at) WHERE payment_mode='deposit' AND balance_collected_at IS NULL`.
+- **`features/booking/service.ts`** — `computeDepositSnapshot()` rounds deposit UP to peso favoring the venue: `((((total*pct+99n)/100n)+99n)/100n)*100n`. Same formula mirrored in `PaymentModeChooser` (client).
+- **`features/booking/schema.ts`** — `createBookingInputSchema` adds `paymentMode: z.enum(["full","deposit"]).default("full")`. Service input type uses `z.input<typeof schema>` so callers/tests may omit defaulted fields.
+- **`features/booking/errors.ts`** — new codes `deposit_not_allowed`, `deposit_not_configured`.
+- **`features/owner-venues/actions.ts`** — `markBalanceCollectedAction` (single atomic UPDATE with cross-venue subquery guard + optimistic version check + `paymentMode='deposit' AND balanceCollectedAt IS NULL` predicate). Revalidates `/owner`, `/owner/bookings`, `/owner/bookings/[id]`.
+- **`app/(app)/venues/[slug]/book/booking-flow.tsx`** — `PaymentModeChooser` radio cards (Full / `{pct}% deposit, balance at venue`); Step 2 banner switches to "DEPOSIT — PAY EXACTLY" + warning card for the balance.
+- **`app/(app)/owner/venues/venue-form.tsx`** — `PartialPaymentSection` checkbox + 25–75 percent input.
+- **`app/(app)/owner/bookings/page.tsx`** — list rows show a `warning` "Cash due {PHP X}" badge next to status for confirmed deposit bookings with uncollected balance.
+- **`app/(app)/owner/bookings/[id]/page.tsx`** — summary shows Deposit + Balance rows; Actions card adds `MarkBalanceCollectedForm` while balance is uncollected.
+- **`lib/email/templates.ts`** — `paymentVerifiedEmail` + `sessionReminderEmail` accept optional `balanceDueCentavos`; render an amber "Balance due at venue" / "Bring for balance" line (cash or GCash) when set. `features/booking/notifications.ts` only passes the field when `paymentMode='deposit' AND balanceCollectedAt IS NULL`.
+
+## 2026-05-20 — Social carousel OG route (`/api/og/social/[slide]`)
+
+### Feat — 10-slide FB/IG marketing carousel as server-rendered PNGs
+
+- **`app/api/og/social/[slide]/route.tsx`** — public Satori route; slide ids `1`–`10` (hero, loop, book, flow, open-play, vs-messenger, owners, auto-move, trust, closer); `?format=square|portrait|fb` (1080×1080 / 1080×1350 / 1200×630).
+- Brand palette inlined: bg `#062018` deep forest, accent `#34D399` brand-green, card `#0E2A22`, body `#9AB3A8`.
+- Shared atoms: `Logo`, `Eyebrow`, `Headline`, `SubCopy`, `Check`, `Pill`, `GhostPill`, `Card` (with 4 absolute-positioned corner `Bracket`s — uses explicit `top/left/right/bottom` per Satori rules), `FeatureCard`, `Frame` (radial-gradient bg).
+- Slide-specific mocks: `VenueCardMock`, `SlotGridMock` (chunked rows, no `flexWrap`), `OpenPlayCardMock`, `OwnerDashboardMock`.
+- All currency rendered as `PHP ` (Inter has no ₱ glyph in Satori). Owner pill bakes in current launch offer ("FREE TO LIST · 0% PLATFORM FEE FOR YOUR FIRST 2 MONTHS").
+- Font loading: same Wget-UA Google Fonts TTF trick + `Promise.allSettled` so CDN flake degrades to system font instead of 500.
+- Cache: `public, max-age=300, s-maxage=86400, stale-while-revalidate=604800`.
+
 ## 2026-05-20 — Closure auto-move to sibling court (commit `3b38354`)
 
 ### Feat — Owner-opt-in auto-move bookings to another court at the same time

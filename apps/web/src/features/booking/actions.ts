@@ -35,6 +35,7 @@ const startBookingSchema = z.object({
     .regex(/^[A-Za-z0-9_-]+$/)
     .optional(),
   contactEmail: z.string().trim().toLowerCase().email().max(254).optional(),
+  paymentMode: z.enum(["full", "deposit"]).default("full"),
 });
 
 const cancelSchema = z.object({ bookingId: z.string().uuid() });
@@ -80,6 +81,7 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
     venueSlug: form.get("venueSlug"),
     voucherCode: form.get("voucherCode") || undefined,
     contactEmail: form.get("contactEmail") || undefined,
+    paymentMode: form.get("paymentMode") || undefined,
   });
   if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
 
@@ -95,6 +97,7 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
       courtId: parsed.data.courtId,
       startAt: parsed.data.startAt,
       endAt: parsed.data.endAt,
+      paymentMode: parsed.data.paymentMode,
       ...(parsed.data.voucherCode ? { voucherCode: parsed.data.voucherCode } : {}),
       ...(parsed.data.contactEmail ? { contactEmail: parsed.data.contactEmail } : {}),
     });
@@ -148,6 +151,9 @@ export async function startBookingReturningIdAction(
     systemFeeCentavos: string;
     discountCentavos: string;
     voucherCodeSnapshot: string | null;
+    paymentMode: "full" | "deposit";
+    depositCentavos: string | null;
+    balanceDueCentavos: string;
   }>
 > {
   const user = await getCurrentUser();
@@ -163,6 +169,7 @@ export async function startBookingReturningIdAction(
     venueSlug: form.get("venueSlug"),
     voucherCode: form.get("voucherCode") || undefined,
     contactEmail: form.get("contactEmail") || undefined,
+    paymentMode: form.get("paymentMode") || undefined,
   });
   if (!parsed.success) return fail("Invalid slot selection", "validation_failed");
 
@@ -172,6 +179,7 @@ export async function startBookingReturningIdAction(
       courtId: parsed.data.courtId,
       startAt: parsed.data.startAt,
       endAt: parsed.data.endAt,
+      paymentMode: parsed.data.paymentMode,
       ...(parsed.data.voucherCode ? { voucherCode: parsed.data.voucherCode } : {}),
       ...(parsed.data.contactEmail ? { contactEmail: parsed.data.contactEmail } : {}),
     });
@@ -184,6 +192,9 @@ export async function startBookingReturningIdAction(
         systemFeeCentavos: booking.systemFeeCentavos.toString(),
         discountCentavos: booking.discountCentavos.toString(),
         voucherCodeSnapshot: booking.voucherCodeSnapshot,
+        paymentMode: booking.paymentMode === "deposit" ? "deposit" : "full",
+        depositCentavos: booking.depositCentavos === null ? null : booking.depositCentavos.toString(),
+        balanceDueCentavos: booking.balanceDueCentavos.toString(),
       },
     };
   } catch (err) {

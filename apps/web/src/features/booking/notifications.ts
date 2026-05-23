@@ -30,6 +30,9 @@ interface BookingJoin {
   startAt: Date;
   endAt: Date;
   totalCentavos: bigint;
+  paymentMode: string;
+  balanceDueCentavos: bigint;
+  balanceCollectedAt: Date | null;
   rescheduledCount: number;
   cancellationCategory:
     | "weather"
@@ -61,6 +64,9 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
       startAt: bookings.startAt,
       endAt: bookings.endAt,
       totalCentavos: bookings.totalCentavos,
+      paymentMode: bookings.paymentMode,
+      balanceDueCentavos: bookings.balanceDueCentavos,
+      balanceCollectedAt: bookings.balanceCollectedAt,
       rescheduledCount: bookings.rescheduledCount,
       cancellationCategory: bookings.cancellationCategory,
       playerId: bookings.playerId,
@@ -107,6 +113,9 @@ async function loadBookingJoin(bookingId: string): Promise<BookingJoin | null> {
     startAt: base.startAt,
     endAt: base.endAt,
     totalCentavos: base.totalCentavos,
+    paymentMode: base.paymentMode,
+    balanceDueCentavos: base.balanceDueCentavos,
+    balanceCollectedAt: base.balanceCollectedAt,
     rescheduledCount: base.rescheduledCount,
     cancellationCategory: base.cancellationCategory,
     courtName: base.courtName,
@@ -157,6 +166,9 @@ export async function notifyPaymentVerified(bookingId: string): Promise<void> {
       endAt: ctx.endAt,
       totalCentavos: ctx.totalCentavos,
       playerDisplayName: ctx.playerDisplayName,
+      ...(ctx.paymentMode === "deposit" && ctx.balanceCollectedAt === null
+        ? { balanceDueCentavos: ctx.balanceDueCentavos }
+        : {}),
     });
     await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "payment_verified" });
   } catch (err) {
@@ -402,6 +414,9 @@ export async function notifySessionReminder(bookingId: string): Promise<void> {
       endAt: ctx.endAt,
       totalCentavos: ctx.totalCentavos,
       playerDisplayName: ctx.playerDisplayName,
+      ...(ctx.paymentMode === "deposit" && ctx.balanceCollectedAt === null
+        ? { balanceDueCentavos: ctx.balanceDueCentavos }
+        : {}),
     });
     await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "session_reminder" });
   } catch (err) {

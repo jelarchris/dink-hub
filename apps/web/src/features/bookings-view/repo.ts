@@ -473,6 +473,9 @@ export interface OwnerBookingListItem {
     endAt: Date;
     totalCentavos: bigint;
     createdAt: Date;
+    paymentMode: Booking["paymentMode"];
+    balanceDueCentavos: bigint;
+    balanceCollectedAt: Date | null;
   };
   venue: { id: string; name: string; slug: string };
   court: { name: string };
@@ -546,6 +549,9 @@ export async function listBookingsForOwner(args: {
         endAt: bookings.endAt,
         totalCentavos: bookings.totalCentavos,
         createdAt: bookings.createdAt,
+        paymentMode: bookings.paymentMode,
+        balanceDueCentavos: bookings.balanceDueCentavos,
+        balanceCollectedAt: bookings.balanceCollectedAt,
       },
       venue: { id: venues.id, name: venues.name, slug: venues.slug },
       court: { name: courts.name },

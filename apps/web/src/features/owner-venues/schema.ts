@@ -13,8 +13,9 @@ const phpAmountSchema = z
   .refine((s) => Number(s) >= 0, "Must be zero or more")
   .refine((s) => Number(s) <= 1_000_000, "Looks too high");
 
-export const venueUpsertSchema = z.object({
-  name: z.string().trim().min(2, "Name is too short").max(120, "Name is too long"),
+export const venueUpsertSchema = z
+  .object({
+    name: z.string().trim().min(2, "Name is too short").max(120, "Name is too long"),
   description: z
     .string()
     .trim()
@@ -73,7 +74,36 @@ export const venueUpsertSchema = z.object({
     .max(500)
     .optional()
     .transform((v) => (v && v.length > 0 ? v : null)),
-});
+  /**
+   * When true the venue accepts a partial up-front payment via GCash and
+   * the player settles the balance on arrival. `depositPercent` is then
+   * required and must fall in [25, 75]. DB CHECK constraint
+   * `venues_deposit_percent_consistency` is the source of truth.
+   */
+  allowPartialPayment: z
+    .union([z.literal("on"), z.literal("true"), z.literal("false"), z.literal("")])
+    .optional()
+    .transform((v) => v === "on" || v === "true"),
+  depositPercent: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null))
+    .refine(
+      (v) => v === null || (/^\d{2,3}$/.test(v) && Number(v) >= 25 && Number(v) <= 75),
+      { message: "Pick a value between 25 and 75" },
+    )
+    .transform((v) => (v === null ? null : Number(v))),
+})
+  .superRefine((d, ctx) => {
+    if (d.allowPartialPayment && d.depositPercent === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["depositPercent"],
+        message: "Required when partial payment is enabled",
+      });
+    }
+  });
 
 export type VenueUpsertInput = z.infer<typeof venueUpsertSchema>;
 
