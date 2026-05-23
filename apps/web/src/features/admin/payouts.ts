@@ -4,6 +4,8 @@ import { db } from "@/db/client";
 import {
   bookings,
   ledgerEntries,
+  openPlaySessions,
+  openPlaySignups,
   profiles,
   venuePayouts,
   venues,
@@ -148,31 +150,58 @@ export async function generatePayout(
       );
     }
 
-    const aggRows = await tx
-      .select({
-        n: count(),
-        gross: sql<string>`coalesce(sum(${bookings.courtFeeCentavos}), 0)`.mapWith(String),
-        fees: sql<string>`coalesce(sum(${bookings.systemFeeCentavos}), 0)`.mapWith(String),
-      })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.venueId, input.venueId),
-          eq(bookings.status, "confirmed"),
-          gte(bookings.startAt, periodStart),
-          lt(bookings.startAt, periodEnd),
+    const [aggRows, opsAggRows] = await Promise.all([
+      tx
+        .select({
+          n: count(),
+          gross: sql<string>`coalesce(sum(${bookings.courtFeeCentavos}), 0)`.mapWith(String),
+          fees: sql<string>`coalesce(sum(${bookings.systemFeeCentavos}), 0)`.mapWith(String),
+        })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.venueId, input.venueId),
+            eq(bookings.status, "confirmed"),
+            gte(bookings.startAt, periodStart),
+            lt(bookings.startAt, periodEnd),
+          ),
         ),
-      );
+      // Open-play parity (migration 0031): confirmed signups settle via
+      // ledger_entries.open_play_signup_id; mirror them into the payout
+      // aggregation so venues are paid for open-play court fees.
+      tx
+        .select({
+          n: count(),
+          gross: sql<string>`coalesce(sum(${openPlaySignups.courtFeeCentavos}), 0)`.mapWith(String),
+          fees: sql<string>`coalesce(sum(${openPlaySignups.systemFeeCentavos}), 0)`.mapWith(String),
+        })
+        .from(openPlaySignups)
+        .innerJoin(openPlaySessions, eq(openPlaySessions.id, openPlaySignups.sessionId))
+        .where(
+          and(
+            eq(openPlaySessions.venueId, input.venueId),
+            eq(openPlaySignups.status, "confirmed"),
+            gte(openPlaySessions.startAt, periodStart),
+            lt(openPlaySessions.startAt, periodEnd),
+          ),
+        ),
+    ]);
     const agg = aggRows[0];
-    if (!agg || agg.n === 0) {
+    const opsAgg = opsAggRows[0];
+    const bookingN = agg?.n ?? 0;
+    const opsN = opsAgg?.n ?? 0;
+    const totalN = bookingN + opsN;
+    if (totalN === 0) {
       throw new AdminError(
         "no_bookings",
-        "No confirmed bookings in this period for this venue.",
+        "No confirmed bookings or open-play signups in this period for this venue.",
       );
     }
 
-    const gross = BigInt(agg.gross);
-    const fees = BigInt(agg.fees);
+    const gross =
+      BigInt(agg?.gross ?? "0") + BigInt(opsAgg?.gross ?? "0");
+    const fees =
+      BigInt(agg?.fees ?? "0") + BigInt(opsAgg?.fees ?? "0");
     const net = gross - fees;
 
     const [created] = await tx
@@ -185,7 +214,7 @@ export async function generatePayout(
         feesCentavos: fees,
         netCentavos: net,
         carryoverCentavos: 0n,
-        bookingCount: agg.n,
+        bookingCount: totalN,
         status: "pending",
         notes: input.notes,
       })

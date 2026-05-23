@@ -313,6 +313,12 @@ export const payments = pgTable("payments", {
 export const ledgerEntries = pgTable("ledger_entries", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   bookingId: uuid("booking_id").references(() => bookings.id),
+  // When set, this entry settles an Open Play signup (analogous to bookingId
+  // for regular bookings). Lazy ref via AnyPgColumn — openPlaySignups is
+  // declared further down in this file.
+  openPlaySignupId: uuid("open_play_signup_id").references(
+    (): AnyPgColumn => openPlaySignups.id,
+  ),
   payoutId: uuid("payout_id"),
   ownerInvoiceId: uuid("owner_invoice_id"),
   account: ledgerAccountEnum("account").notNull(),
@@ -597,6 +603,8 @@ export const openPlaySignups = pgTable("open_play_signups", {
   cancelledBy: uuid("cancelled_by").references(() => profiles.id),
   cancellationReason: text("cancellation_reason"),
   reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+  // SLA auto-confirm deadline; mirrors bookings.autoConfirmAt.
+  autoConfirmAt: timestamp("auto_confirm_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -619,6 +627,19 @@ export const openPlaySignupPayments = pgTable("open_play_signup_payments", {
   verifiedBy: uuid("verified_by").references(() => profiles.id),
   verifiedAt: timestamp("verified_at", { withTimezone: true }),
   rejectionReason: text("rejection_reason"),
+  // Heuristic auto-validation outcomes at receipt-submit time (migration 0031).
+  autoValidatedAt: timestamp("auto_validated_at", { withTimezone: true }),
+  autoValidationFailures: text("auto_validation_failures").array().notNull().default(sql`'{}'::text[]`),
+  // SLA auto-confirm audit (cron path).
+  autoConfirmedAt: timestamp("auto_confirmed_at", { withTimezone: true }),
+  autoConfirmedReason: text("auto_confirmed_reason"),
+  // Owner nudge dispatch timestamps.
+  ownerNudge1SentAt: timestamp("owner_nudge1_sent_at", { withTimezone: true }),
+  ownerNudge2SentAt: timestamp("owner_nudge2_sent_at", { withTimezone: true }),
+  // Admin late-confirm audit (force-verify after session end).
+  lateConfirmedAt: timestamp("late_confirmed_at", { withTimezone: true }),
+  lateConfirmedBy: uuid("late_confirmed_by").references(() => profiles.id),
+  lateConfirmedReason: text("late_confirmed_reason"),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

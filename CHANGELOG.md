@@ -1,5 +1,29 @@
 ﻿# Changelog
 
+## 2026-05-24 — Open Play payment parity (Phase A)
+
+### Feat — Ledger entries on Open Play signup confirm + UNION into payouts and weekly owner invoices
+
+- **Bug fixed:** `verifySignupPayment` flipped a signup to `confirmed` without writing any ledger entries, so every confirmed Open Play signup was invisible to `venue_payouts` and `owner_invoices`. Venues were short-paid the entire Open Play take; the platform never recognised Open Play system-fee revenue.
+- **Migration `0031_open_play_payment_parity.sql`** (forward-only, additive):
+  - `ledger_entries.open_play_signup_id uuid REFERENCES open_play_signups(id)` + partial index `ledger_entries_open_play_signup_idx`.
+  - Drops the implicit `NOT NULL` on `ledger_entries.booking_id`; existing rows are unaffected.
+  - New `ledger_entries_subject_present` CHECK: every row must reference at least one of `(booking_id, open_play_signup_id, payout_id, owner_invoice_id)`. Intentionally "at-least-one" rather than strict XOR — `markPayoutPaid` settlement rows set only `payout_id`, and owner-invoice settlements set only `owner_invoice_id`.
+  - Phase-B-shape columns (`open_play_signups.auto_confirm_at`, 9 audit columns on `open_play_signup_payments`, partial indexes for nudges/lookup/SLA queue) added now so the Phase B slice ships without another migration. All nullable / empty-array defaults — zero behavioural change until Phase B code lights them up.
+- **`features/open-play/service.ts`** — new `confirmSignupAndWriteLedger(tx, signup, payment, now, actor, options?)` mirrors the booking-side helper. Writes 3 entries keyed on `signup.id`: `venue_payable` CREDIT court fee, `platform_revenue` CREDIT system fee, `platform_cash` DEBIT total. Filters `amountCentavos > 0n`. Idempotency prefix defaults to `ops:` (analogue to `bk:` for bookings). `verifySignupPayment` now delegates to this helper after the existing auth + status checks. Phase B will introduce `auto:` (SLA cron) and `late:` (admin) prefixes.
+- **`features/open-play/repo.ts`** — adds `insertLedgerEntries(entries, exec)` and `getDatabaseNow(exec)` — duplicated from `features/booking/repo.ts` to keep feature boundaries clean (1:1 against the same table).
+- **`features/admin/payouts.ts` — `generatePayout`** runs a second aggregation against confirmed `open_play_signups` joined to `open_play_sessions` (filtered by `session.startAt ∈ [periodStart, periodEnd)`), then sums into combined gross / fees / count. Error code `no_bookings` now refers to combined emptiness and includes Open Play in its message.
+- **`features/owner-invoices/repo.ts`** — `aggregateBookingFeesForPeriod` merges per-venue booking and Open Play fees through an in-memory `Map<venueId, …>`. `getCarryoverForVenue` adds a third parallel query for prior-period confirmed signups and folds them into `total` before subtracting `billed`.
+- **Validation:** `tsc --noEmit` 0 errors, `eslint --max-warnings 0` 0 problems, `next build` 67 routes.
+- **Migration applied** to the live Supabase project (`uffuyavfpvoendvpvypy`).
+
+### Deferred to Phase B (next slice)
+
+- Heuristic auto-validation on Open Play receipt submit (mirrors `0030`).
+- SLA auto-confirm cron + owner nudges (T-2h / T-30m) for `open_play_signup_payments`.
+- Admin late-confirm Server Action for post-session recovery.
+- UI surfaces: semi-confirmed badge, admin queue, owner verification dashboard parity.
+
 ## 2026-05-23 — Receipt auto-validation + SLA auto-confirm + owner nudges
 
 ### Feat — Heuristic checks on every receipt, owner-silent SLA auto-confirm, admin late-confirm fallback

@@ -3,6 +3,8 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
+  openPlaySessions,
+  openPlaySignups,
   ownerInvoices,
   venues,
   type NewOwnerInvoice,
@@ -28,27 +30,72 @@ export async function aggregateBookingFeesForPeriod(args: {
   periodStart: Date;
   periodEnd: Date;
 }): Promise<PeriodAggregateRow[]> {
-  const rows = await db
-    .select({
-      venueId: bookings.venueId,
-      bookingCount: sql<number>`count(*)::int`,
-      feesCentavos: sql<bigint>`coalesce(sum(${bookings.systemFeeCentavos}), 0)::bigint`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.status, "confirmed"),
-        sql`${bookings.startAt} >= ${args.periodStart}`,
-        sql`${bookings.startAt} <  ${args.periodEnd}`,
-      ),
-    )
-    .groupBy(bookings.venueId);
+  const [bookingRows, opsRows] = await Promise.all([
+    db
+      .select({
+        venueId: bookings.venueId,
+        bookingCount: sql<number>`count(*)::int`,
+        feesCentavos: sql<bigint>`coalesce(sum(${bookings.systemFeeCentavos}), 0)::bigint`,
+      })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.status, "confirmed"),
+          sql`${bookings.startAt} >= ${args.periodStart}`,
+          sql`${bookings.startAt} <  ${args.periodEnd}`,
+        ),
+      )
+      .groupBy(bookings.venueId),
+    // Open-play parity (migration 0031): confirmed signups now owe system fees
+    // too. Group on the session's venue_id (signups have no direct venue ref).
+    db
+      .select({
+        venueId: openPlaySessions.venueId,
+        bookingCount: sql<number>`count(*)::int`,
+        feesCentavos: sql<bigint>`coalesce(sum(${openPlaySignups.systemFeeCentavos}), 0)::bigint`,
+      })
+      .from(openPlaySignups)
+      .innerJoin(openPlaySessions, eq(openPlaySessions.id, openPlaySignups.sessionId))
+      .where(
+        and(
+          eq(openPlaySignups.status, "confirmed"),
+          sql`${openPlaySessions.startAt} >= ${args.periodStart}`,
+          sql`${openPlaySessions.startAt} <  ${args.periodEnd}`,
+        ),
+      )
+      .groupBy(openPlaySessions.venueId),
+  ]);
 
-  return rows.map((r) => ({
-    venueId: r.venueId,
-    bookingCount: Number(r.bookingCount),
-    feesCentavos: BigInt(r.feesCentavos as unknown as string | number | bigint),
-  }));
+  // Merge by venueId.
+  const merged = new Map<string, PeriodAggregateRow>();
+  const add = (
+    venueId: string,
+    bookingCount: number,
+    feesCentavos: bigint,
+  ): void => {
+    const existing = merged.get(venueId);
+    if (existing) {
+      existing.bookingCount += bookingCount;
+      existing.feesCentavos += feesCentavos;
+    } else {
+      merged.set(venueId, { venueId, bookingCount, feesCentavos });
+    }
+  };
+  for (const r of bookingRows) {
+    add(
+      r.venueId,
+      Number(r.bookingCount),
+      BigInt(r.feesCentavos as unknown as string | number | bigint),
+    );
+  }
+  for (const r of opsRows) {
+    add(
+      r.venueId,
+      Number(r.bookingCount),
+      BigInt(r.feesCentavos as unknown as string | number | bigint),
+    );
+  }
+  return Array.from(merged.values());
 }
 
 /**
@@ -65,7 +112,7 @@ export async function getCarryoverForVenue(args: {
   venueId: string;
   periodStart: Date;
 }): Promise<bigint> {
-  const [totalFees, alreadyBilled] = await Promise.all([
+  const [totalFees, opsTotalFees, alreadyBilled] = await Promise.all([
     db
       .select({
         total: sql<string>`coalesce(sum(${bookings.systemFeeCentavos}), 0)`.mapWith(String),
@@ -76,6 +123,20 @@ export async function getCarryoverForVenue(args: {
           eq(bookings.venueId, args.venueId),
           eq(bookings.status, "confirmed"),
           sql`${bookings.startAt} < ${args.periodStart}`,
+        ),
+      ),
+    // Open-play parity (migration 0031).
+    db
+      .select({
+        total: sql<string>`coalesce(sum(${openPlaySignups.systemFeeCentavos}), 0)`.mapWith(String),
+      })
+      .from(openPlaySignups)
+      .innerJoin(openPlaySessions, eq(openPlaySessions.id, openPlaySignups.sessionId))
+      .where(
+        and(
+          eq(openPlaySessions.venueId, args.venueId),
+          eq(openPlaySignups.status, "confirmed"),
+          sql`${openPlaySessions.startAt} < ${args.periodStart}`,
         ),
       ),
     db
@@ -91,7 +152,8 @@ export async function getCarryoverForVenue(args: {
       ),
   ]);
 
-  const total = BigInt(totalFees[0]?.total ?? "0");
+  const total =
+    BigInt(totalFees[0]?.total ?? "0") + BigInt(opsTotalFees[0]?.total ?? "0");
   const billed = BigInt(alreadyBilled[0]?.billed ?? "0");
   return total > billed ? total - billed : 0n;
 }

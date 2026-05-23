@@ -5,6 +5,7 @@ import { openPlaySessions, openPlaySignups, venues } from "@/db/schema";
 import type {
   Booking,
   NewBooking,
+  NewLedgerEntry,
   NewOpenPlaySession,
   NewOpenPlaySignup,
   NewOpenPlaySignupPayment,
@@ -516,6 +517,107 @@ export async function submitSignupPayment(
 // ============================================================================
 // 8. verifySignupPayment — owner marks a payment as verified
 // ============================================================================
+
+/**
+ * Open-play analogue of features/booking/service.ts → confirmBookingAndWriteLedger.
+ *
+ * Atomically flips the payment to 'verified' and the signup to 'confirmed',
+ * then writes the three ledger entries that credit the venue + platform
+ * revenue and debit platform cash. Before migration 0031 the open-play
+ * verify path skipped the ledger entirely, so every confirmed open-play
+ * signup was invisible to payouts and owner invoices.
+ *
+ * Callers MUST:
+ *   - run inside a single transaction (`tx`)
+ *   - re-check authorization before calling
+ *   - pass freshly-read `signup` + `payment` rows from inside `tx`
+ *   - ensure `payment.status` is in a verifiable state (i.e. 'submitted')
+ *
+ * Idempotency keys include `prefix` so the same signup can carry an audit
+ * trail across owner/auto/late confirm paths without colliding (mirrors
+ * the booking path's `bk:` / `auto:` / `late:` prefixes).
+ */
+type LedgerActor = { id: string | null; kind: "owner" | "system" | "admin" };
+
+async function confirmSignupAndWriteLedger(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  signup: OpenPlaySignup,
+  payment: OpenPlaySignupPayment,
+  now: Date,
+  actor: LedgerActor,
+  options?: { idempotencyPrefix?: string; descriptionTag?: string },
+): Promise<{ signup: OpenPlaySignup; payment: OpenPlaySignupPayment }> {
+  const idemPrefix = options?.idempotencyPrefix ?? "ops";
+  const tag = options?.descriptionTag ? `${options.descriptionTag} ` : "";
+
+  const verifiedPayment = await repo.updateSignupPayment(
+    payment.id,
+    payment.version,
+    {
+      status: "verified",
+      verifiedBy: actor.id,
+      verifiedAt: now,
+    },
+    tx,
+  );
+  if (!verifiedPayment) {
+    throw new OpenPlayError(
+      "concurrent_modification",
+      "Payment was modified by another request",
+    );
+  }
+
+  const confirmedSignup = await repo.updateSignup(
+    signup.id,
+    signup.version,
+    { status: "confirmed" },
+    tx,
+  );
+  if (!confirmedSignup) {
+    throw new OpenPlayError(
+      "concurrent_modification",
+      "Signup was modified by another request",
+    );
+  }
+
+  // Double-entry: venue is owed the court fee; platform earns the system fee.
+  // Sum of debits === sum of credits === total_centavos. Zero-amount entries
+  // are filtered (e.g. waived system fee) — the ledger CHECK requires >= 1.
+  const allEntries: NewLedgerEntry[] = [
+    {
+      openPlaySignupId: signup.id,
+      account: "venue_payable",
+      direction: "credit",
+      amountCentavos: signup.courtFeeCentavos,
+      description: `${tag}Court fee owed to venue for open play signup ${signup.id}`,
+      idempotencyKey: `${idemPrefix}:${signup.id}:venue_payable`,
+      createdBy: actor.id,
+    },
+    {
+      openPlaySignupId: signup.id,
+      account: "platform_revenue",
+      direction: "credit",
+      amountCentavos: signup.systemFeeCentavos,
+      description: `${tag}System fee revenue for open play signup ${signup.id}`,
+      idempotencyKey: `${idemPrefix}:${signup.id}:platform_revenue`,
+      createdBy: actor.id,
+    },
+    {
+      openPlaySignupId: signup.id,
+      account: "platform_cash",
+      direction: "debit",
+      amountCentavos: signup.totalCentavos,
+      description: `${tag}Cash received (held by venue) for open play signup ${signup.id}`,
+      idempotencyKey: `${idemPrefix}:${signup.id}:platform_cash`,
+      createdBy: actor.id,
+    },
+  ];
+  const entries = allEntries.filter((e) => e.amountCentavos > 0n);
+  await repo.insertLedgerEntries(entries, tx);
+
+  return { signup: confirmedSignup, payment: verifiedPayment };
+}
+
 export async function verifySignupPayment(
   input: VerifySignupPaymentInput,
 ): Promise<OpenPlaySignupPayment> {
@@ -537,23 +639,15 @@ export async function verifySignupPayment(
       throw new OpenPlayError("not_authorized", "Only the venue owner can verify payments");
     }
 
-    const updatedPayment = await repo.updateSignupPayment(payment.id, payment.version, {
-      status: "verified",
-      verifiedBy: parsed.data.verifierId,
-      verifiedAt: new Date(),
-    }, tx);
-    if (!updatedPayment) {
-      throw new OpenPlayError("concurrent_modification", "Payment was modified by another request");
-    }
-
-    const updatedSignup = await repo.updateSignup(signup.id, signup.version, {
-      status: "confirmed",
-    }, tx);
-    if (!updatedSignup) {
-      throw new OpenPlayError("concurrent_modification", "Signup was modified by another request");
-    }
-
-    return updatedPayment;
+    const now = await repo.getDatabaseNow(tx);
+    const { payment: verifiedPayment } = await confirmSignupAndWriteLedger(
+      tx,
+      signup,
+      payment,
+      now,
+      { id: parsed.data.verifierId, kind: "owner" },
+    );
+    return verifiedPayment;
   });
 }
 

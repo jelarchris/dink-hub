@@ -6,6 +6,7 @@ import {
   bookings,
   courtClosures,
   courts,
+  ledgerEntries,
   openPlaySessionCourts,
   openPlaySessions,
   openPlaySignupPayments,
@@ -15,6 +16,7 @@ import {
   type Booking,
   type Court,
   type NewBooking,
+  type NewLedgerEntry,
   type NewOpenPlaySession,
   type NewOpenPlaySignup,
   type NewOpenPlaySignupPayment,
@@ -802,4 +804,26 @@ export async function cancelShadowBooking(
       cancellationReason: reason,
     })
     .where(eq(bookings.id, shadowBookingId));
+}
+
+// ----------------------------------------------------------------------------
+// Ledger writes (used by confirmSignupAndWriteLedger in service.ts).
+// Duplicated from features/booking/repo so feature boundaries stay clean —
+// the inserts are 1:1 against the same table.
+// ----------------------------------------------------------------------------
+
+export async function insertLedgerEntries(
+  entries: NewLedgerEntry[],
+  exec: Executor = db,
+): Promise<void> {
+  if (entries.length === 0) return;
+  await exec.insert(ledgerEntries).values(entries);
+}
+
+/** Return the database's current time (single source of truth inside a tx). */
+export async function getDatabaseNow(exec: Executor = db): Promise<Date> {
+  const rows = await exec.execute<{ now: Date }>(sql`select now() as now`);
+  const row = rows[0];
+  if (!row) throw new Error("getDatabaseNow: no row returned");
+  return new Date(row.now);
 }
