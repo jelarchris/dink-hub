@@ -562,7 +562,7 @@ function ActionPanel({
           urgent={venueHealth.needsWork > 0}
         />
         <ActionItem
-          href="/owner"
+          href="/owner/bookings?status=no_show"
           icon={<UserRound className="size-4" />}
           title={noShowsThisWeek > 0 ? `${noShowsThisWeek} no-show${noShowsThisWeek === 1 ? "" : "s"} this week` : "No no-shows this week"}
           subtitle={noShowsThisWeek > 0 ? "Review player history" : "Player attendance is clean"}
