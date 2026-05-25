@@ -64,7 +64,9 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="mailto:support@dinkhub.ph"
+                  href="https://www.facebook.com/jelarjoychristian"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors"
                 >
                   Contact
