@@ -552,3 +552,41 @@ export async function notifyLateConfirmed(bookingId: string, reason: string): Pr
     captureException(err, { scope: "notify.late_confirmed", extra: { bookingId } });
   }
 }
+
+// ---------------------------------------------------------------------------
+// notifyGuestBookingMagicLink - new silent-account guest player
+// ---------------------------------------------------------------------------
+// Sent immediately after a guest's booking is reserved (status pending_payment).
+// Carries a Supabase magic-link so the player can sign into /me/bookings
+// without setting a password, plus the direct /book/{id}/pay link as a
+// fallback if magic-link generation failed.
+export async function notifyGuestBookingMagicLink(
+  bookingId: string,
+  opts: { isNewAccount: boolean },
+): Promise<void> {
+  try {
+    const ctx = await loadBookingJoin(bookingId);
+    if (!ctx) return;
+    const { generateMagicSignInLink } = await import("@/features/auth/guest");
+    const { guestBookingMagicLinkEmail } = await import("@/lib/email/templates");
+    const { env } = await import("@/lib/env");
+    const appUrl = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+    const payUrl = `${appUrl}/book/${ctx.bookingId}/pay`;
+    const magicLinkUrl = await generateMagicSignInLink(ctx.playerEmail, "/me/bookings");
+    const tpl = guestBookingMagicLinkEmail({
+      bookingId: ctx.bookingId,
+      venueName: ctx.venueName,
+      courtName: ctx.courtName,
+      startAt: ctx.startAt,
+      endAt: ctx.endAt,
+      totalCentavos: ctx.totalCentavos,
+      playerDisplayName: ctx.playerDisplayName,
+      magicLinkUrl,
+      payUrl,
+      isNewAccount: opts.isNewAccount,
+    });
+    await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "guest_booking_magic_link" });
+  } catch (err) {
+    captureException(err, { scope: "notify.guest_magic_link", extra: { bookingId } });
+  }
+}

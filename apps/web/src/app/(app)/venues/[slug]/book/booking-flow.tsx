@@ -58,6 +58,12 @@ export interface BookingFlowProps {
   playerPhone: string;
   /** When false, Continue redirects to sign-up with current pick preserved in URL. */
   isAuthenticated: boolean;
+  /**
+   * Per-venue opt-in for silent-account guest checkout. When true AND the
+   * player is unauthenticated, the modal collects name/email/phone instead
+   * of redirecting to sign-up.
+   */
+  allowGuestCheckout: boolean;
   days: ReadonlyArray<{ isoDate: string; label: string; isToday: boolean }>;
   courts: ReadonlyArray<{
     id: string;
@@ -133,6 +139,7 @@ export function BookingFlow({
   playerEmail,
   playerPhone,
   isAuthenticated,
+  allowGuestCheckout,
   days,
   courts,
   occupancy,
@@ -217,6 +224,9 @@ export function BookingFlow({
   const [editName, setEditName] = useState(playerName);
   const [editEmail, setEditEmail] = useState(playerEmail);
   const [editPhone, setEditPhone] = useState(playerPhone);
+  // Guest-checkout typo guard: confirm email field. Empty for authenticated
+  // users (Step1Body skips rendering it when isGuestCheckout=false).
+  const [editEmailConfirm, setEditEmailConfirm] = useState("");
 
   // Step 1 → Step 2 transition
   const [isCreating, setIsCreating] = useState(false);
@@ -546,7 +556,10 @@ export function BookingFlow({
       void submitRebook(pickedStartIso, pickedEndDate);
       return;
     }
-    if (isAuthenticated) {
+    // Guest path: when the venue accepts guest checkout we open the modal
+    // for everyone — step 1 collects contact details (already in the form
+    // for authenticated users; we just make them required for guests).
+    if (isAuthenticated || allowGuestCheckout) {
       openModal();
       return;
     }
@@ -655,10 +668,18 @@ export function BookingFlow({
     form.set("endAt", pickedEndDate.toISOString());
     if (appliedVoucher) form.set("voucherCode", appliedVoucher.code);
     form.set("paymentMode", paymentMode);
+    const trimmedEmail = editEmail.trim();
+    // Guest checkout: send name + email + phone so the server can resolve
+    // or silently create a profile. The server re-validates and enforces
+    // the venue's allow_guest_checkout opt-in.
+    if (!isAuthenticated) {
+      form.set("guestName", editName.trim());
+      form.set("guestEmail", trimmedEmail);
+      form.set("guestPhone", editPhone.trim());
+    }
     // Per-booking notification email override. Only sent when the player
     // edited the email to something different from their account email.
     // The server validates the format; account email is left untouched.
-    const trimmedEmail = editEmail.trim();
     if (
       trimmedEmail.length > 0 &&
       trimmedEmail.toLowerCase() !== playerEmail.trim().toLowerCase()
@@ -935,20 +956,41 @@ export function BookingFlow({
                   </div>
                   {!isAuthenticated && (
                     <div className="mt-0.5 text-[11px] text-[var(--color-fg-subtle)]">
-                      Create an account next to confirm ·{" "}
-                      <Link
-                        href={`/sign-in?next=${encodeURIComponent(
-                          `${pathname}?${new URLSearchParams({
-                            court: selectedCourtId,
-                            date: selectedDateIso,
-                            start: pickedStartIso ?? "",
-                            count: String(pickedCount),
-                          }).toString()}`,
-                        )}`}
-                        className="font-medium text-[var(--color-brand-600)] hover:underline"
-                      >
-                        Sign in
-                      </Link>
+                      {allowGuestCheckout ? (
+                        <>
+                          No account needed · already have one?{" "}
+                          <Link
+                            href={`/sign-in?next=${encodeURIComponent(
+                              `${pathname}?${new URLSearchParams({
+                                court: selectedCourtId,
+                                date: selectedDateIso,
+                                start: pickedStartIso ?? "",
+                                count: String(pickedCount),
+                              }).toString()}`,
+                            )}`}
+                            className="font-medium text-[var(--color-brand-600)] hover:underline"
+                          >
+                            Sign in
+                          </Link>
+                        </>
+                      ) : (
+                        <>
+                          Create an account next to confirm ·{" "}
+                          <Link
+                            href={`/sign-in?next=${encodeURIComponent(
+                              `${pathname}?${new URLSearchParams({
+                                court: selectedCourtId,
+                                date: selectedDateIso,
+                                start: pickedStartIso ?? "",
+                                count: String(pickedCount),
+                              }).toString()}`,
+                            )}`}
+                            className="font-medium text-[var(--color-brand-600)] hover:underline"
+                          >
+                            Sign in
+                          </Link>
+                        </>
+                      )}
                     </div>
                   )}
                 </>
@@ -1039,9 +1081,12 @@ export function BookingFlow({
                   editName={editName}
                   editEmail={editEmail}
                   editPhone={editPhone}
+                  editEmailConfirm={editEmailConfirm}
                   onNameChange={setEditName}
                   onEmailChange={setEditEmail}
                   onPhoneChange={setEditPhone}
+                  onEmailConfirmChange={setEditEmailConfirm}
+                  isGuestCheckout={!isAuthenticated}
                   createError={createError}
                   isCreating={isCreating}
                   onCancel={closeModal}
@@ -1131,9 +1176,12 @@ function Step1Body({
   editName,
   editEmail,
   editPhone,
+  editEmailConfirm,
   onNameChange,
   onEmailChange,
   onPhoneChange,
+  onEmailConfirmChange,
+  isGuestCheckout,
   createError,
   isCreating,
   onCancel,
@@ -1161,9 +1209,13 @@ function Step1Body({
   editName: string;
   editEmail: string;
   editPhone: string;
+  editEmailConfirm: string;
   onNameChange: (v: string) => void;
   onEmailChange: (v: string) => void;
   onPhoneChange: (v: string) => void;
+  onEmailConfirmChange: (v: string) => void;
+  /** True when the player is NOT signed in: phone + email-confirm required. */
+  isGuestCheckout: boolean;
   createError: string | null;
   isCreating: boolean;
   onCancel: () => void;
@@ -1190,7 +1242,16 @@ function Step1Body({
     pickedStartDate && pickedEndDate
       ? `${formatTimeManila(pickedStartDate)} – ${formatTimeManila(pickedEndDate)}`
       : "–";
-  const canProceed = editName.trim().length > 0 && editEmail.trim().length > 0;
+
+  const trimmedEmail = editEmail.trim().toLowerCase();
+  const trimmedEmailConfirm = editEmailConfirm.trim().toLowerCase();
+  const phoneOk = /^\+63\d{10}$/.test(editPhone.trim());
+  const emailConfirmMismatch =
+    isGuestCheckout && trimmedEmailConfirm.length > 0 && trimmedEmail !== trimmedEmailConfirm;
+  const canProceed =
+    editName.trim().length > 0 &&
+    editEmail.trim().length > 0 &&
+    (!isGuestCheckout || (phoneOk && trimmedEmail === trimmedEmailConfirm && trimmedEmailConfirm.length > 0));
 
   return (
     <div className="flex flex-col gap-4">
@@ -1301,6 +1362,15 @@ function Step1Body({
         <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-fg-muted)]">
           Your Details
         </p>
+        {isGuestCheckout && (
+          <div className="mb-3 rounded-[var(--radius-md)] border border-[var(--color-brand-300)] bg-[var(--color-brand-50)] px-3 py-2.5 text-xs text-[var(--color-brand-800)]">
+            <p className="font-semibold">No account needed.</p>
+            <p className="mt-0.5">
+              We&rsquo;ll email you a one-click sign-in link so you can pay, see your receipt, and
+              manage this booking later.
+            </p>
+          </div>
+        )}
         <div className="flex flex-col gap-3">
           <FormField id="modal-name" label="Full Name">
             {({ id }) => (
@@ -1316,7 +1386,7 @@ function Step1Body({
           <FormField
             id="modal-email"
             label="Email Address"
-            hint="We'll send your booking confirmation to this email"
+            hint="We'll send your booking confirmation and sign-in link to this email"
           >
             {({ id }) => (
               <Input
@@ -1326,17 +1396,49 @@ function Step1Body({
                 onChange={(e) => onEmailChange(e.target.value)}
                 placeholder="you@example.com"
                 required
+                autoComplete="email"
               />
             )}
           </FormField>
-          <FormField id="modal-phone" label="Mobile Number" hint="Required for booking updates">
+          {isGuestCheckout && (
+            <FormField
+              id="modal-email-confirm"
+              label="Confirm Email Address"
+              {...(emailConfirmMismatch ? { error: "Emails don't match" } : {})}
+            >
+              {({ id }) => (
+                <Input
+                  id={id}
+                  type="email"
+                  value={editEmailConfirm}
+                  onChange={(e) => onEmailConfirmChange(e.target.value)}
+                  placeholder="Re-enter your email"
+                  required
+                  autoComplete="off"
+                  onPaste={(e) => e.preventDefault()}
+                />
+              )}
+            </FormField>
+          )}
+          <FormField
+            id="modal-phone"
+            label="Mobile Number"
+            hint={
+              isGuestCheckout
+                ? "Required. Format: +63 followed by 10 digits (e.g. +639171234567)"
+                : "Required for booking updates"
+            }
+          >
             {({ id }) => (
               <Input
                 id={id}
                 type="tel"
                 value={editPhone}
                 onChange={(e) => onPhoneChange(e.target.value)}
-                placeholder="+63 9XX XXX XXXX"
+                placeholder="+639171234567"
+                required={isGuestCheckout}
+                autoComplete="tel"
+                inputMode="tel"
               />
             )}
           </FormField>

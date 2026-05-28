@@ -50,6 +50,12 @@ export const limiters = {
   auth: makeLimiter("auth", 5, "1 m"),
   /** Booking creation by an authenticated player. Keyed by user id. */
   bookingCreate: makeLimiter("booking", 10, "1 m"),
+  /**
+   * Booking creation by an UNAUTHENTICATED guest (silent-account checkout).
+   * Keyed by IP. Tighter window because guest checkout is a higher fraud
+   * surface — every request silently creates an auth user.
+   */
+  guestBookingCreate: makeLimiter("guest-booking", 5, "10 m"),
   /** Receipt upload by an authenticated player. Keyed by user id. */
   receiptUpload: makeLimiter("receipt", 5, "1 m"),
   /** Public marketing email captures (e.g. open-play interest). Keyed by IP. */

@@ -1347,3 +1347,56 @@ export function openPlaySignupLateConfirmedEmail(ctx: OpenPlayEmailContext & {
   };
 }
 
+
+
+
+// ---------------------------------------------------------------------------
+// guest_booking_magic_link -> guest player (silent-account checkout)
+// ---------------------------------------------------------------------------
+export function guestBookingMagicLinkEmail(ctx: BookingEmailContext & {
+  playerDisplayName: string;
+  magicLinkUrl: string | null;
+  payUrl: string;
+  isNewAccount: boolean;
+}) {
+  const when = formatBookingWindow(ctx.startAt, ctx.endAt);
+  const total = formatPHP(ctx.totalCentavos);
+  const headingText = ctx.isNewAccount
+    ? "Your booking is reserved"
+    : "We linked your booking to your existing account";
+  const introHtml = ctx.isNewAccount
+    ? `<p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, your court is held. We created a quick DinkHub account for you so you can manage this booking and rebook faster next time.</p>`
+    : `<p style="margin:0 0 12px 0;">Hi ${escapeHtml(ctx.playerDisplayName)}, your court is held. We linked this booking to your existing DinkHub account so you can manage it from /me/bookings.</p>`;
+  const magicHtml = ctx.magicLinkUrl
+    ? `<p style="margin:0 0 12px 0;">Tap the button below to sign in instantly (no password needed) and view your booking.</p>`
+    : `<p style="margin:0 0 12px 0;">Visit <a href="${escapeHtml(ctx.payUrl)}">your payment page</a> to upload your GCash receipt and confirm the booking.</p>`;
+  const ctaHref = ctx.magicLinkUrl ?? ctx.payUrl;
+  const ctaLabel = ctx.magicLinkUrl ? "Sign in & view booking" : "Open payment page";
+
+  return {
+    subject: `Your booking at ${ctx.venueName} - reserved`,
+    html: shell({
+      heading: headingText,
+      bodyHtml: `
+        ${introHtml}
+        <div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 6px 0;"><strong>Venue:</strong> ${escapeHtml(ctx.venueName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Court:</strong> ${escapeHtml(ctx.courtName)}</p>
+          <p style="margin:0 0 6px 0;"><strong>When:</strong> ${escapeHtml(when)}</p>
+          <p style="margin:0 0 6px 0;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+        </div>
+        <p style="margin:0 0 12px 0;"><strong>Next step:</strong> transfer the total via GCash to the venue and upload your receipt on the payment page. Your slot is held for 15 minutes.</p>
+        ${magicHtml}
+      `,
+      ctaHref,
+      ctaLabel,
+    }),
+    text:
+      `${headingText}\n\n` +
+      `Venue: ${ctx.venueName}\nCourt: ${ctx.courtName}\nWhen: ${when}\nTotal: ${total}\n\n` +
+      `Next step: pay via GCash and upload your receipt within 15 minutes.\n\n` +
+      (ctx.magicLinkUrl
+        ? `Sign in & view booking: ${ctx.magicLinkUrl}\n`
+        : `Open payment page: ${ctx.payUrl}\n`),
+  };
+}

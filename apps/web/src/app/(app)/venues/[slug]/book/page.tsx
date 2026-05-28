@@ -149,6 +149,7 @@ export default async function BookCourtPage({
         gcashAccountNumber={venue.gcashAccountNumber}
         allowPartialPayment={venue.allowPartialPayment}
         depositPercent={venue.depositPercent}
+        allowGuestCheckout={venue.allowGuestCheckout}
         systemFeeEstimateCentavos={(systemFee ?? 0n).toString()}
         playerName={player?.displayName ?? ""}
         playerEmail={player?.email ?? ""}

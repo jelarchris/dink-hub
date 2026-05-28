@@ -28,6 +28,7 @@ import {
   payoutStatusEnum,
   skillLevelEnum,
   userRoleEnum,
+  userSignupMethodEnum,
   venueStatusEnum,
   voucherDiscountTypeEnum,
   voucherStatusEnum,
@@ -54,6 +55,13 @@ export const profiles = pgTable("profiles", {
   phoneE164: text("phone_e164"),
   avatarUrl: text("avatar_url"),
   role: userRoleEnum("role").notNull().default("player"),
+  /**
+   * How this account was created. 'password' (default) means the user went
+   * through the classic sign-up form. 'guest_magic_link' means we silently
+   * created the account at booking time and the user has not yet set a
+   * password — onboarding happens via the magic link emailed to them.
+   */
+  signupMethod: userSignupMethodEnum("signup_method").notNull().default("password"),
   city: text("city"),
   province: text("province"),
   ratingGlicko: numeric("rating_glicko", { precision: 6, scale: 2 }).default("1500.00"),
@@ -108,6 +116,13 @@ export const venues = pgTable("venues", {
   // a 25–75 range on the percent.
   allowPartialPayment: boolean("allow_partial_payment").notNull().default(false),
   depositPercent: integer("deposit_percent"),
+  /**
+   * Per-venue opt-out for silent-account guest checkout (default ON). When
+   * false, an unauthenticated player visiting the booking page is redirected
+   * to sign-up instead of being offered the guest-checkout fields. Owners
+   * burned by fraud can disable it without code change.
+   */
+  allowGuestCheckout: boolean("allow_guest_checkout").notNull().default(true),
   status: venueStatusEnum("status").notNull().default("draft"),
   rejectionReason: text("rejection_reason"),
   version: integer("version").notNull().default(1),

@@ -7,6 +7,17 @@ import { pgEnum } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["player", "venue_owner", "admin"]);
 
+/**
+ * How a profile row was created. `password` is the classic sign-up flow with
+ * an interactive form + password. `guest_magic_link` is the silent account
+ * created at booking time — onboarding happens via the magic-link email we
+ * send right after the booking is reserved.
+ */
+export const userSignupMethodEnum = pgEnum("user_signup_method", [
+  "password",
+  "guest_magic_link",
+]);
+
 export const genderEnum = pgEnum("gender", [
   "male",
   "female",

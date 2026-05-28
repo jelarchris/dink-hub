@@ -37,6 +37,7 @@ export interface VenueFormProps {
     | "coverImagePath"
     | "allowPartialPayment"
     | "depositPercent"
+    | "allowGuestCheckout"
     | "version"
   >;
   submitLabel?: string;
@@ -254,6 +255,8 @@ export function VenueForm({ action, mode, initial, submitLabel }: VenueFormProps
         percentError={err("depositPercent")}
       />
 
+      <GuestCheckoutSection initialEnabled={initial?.allowGuestCheckout ?? true} />
+
       <div className="flex items-center gap-3 pt-2">
         <SubmitButton pendingLabel="Saving">
           {submitLabel ?? (mode === "create" ? "Create venue" : "Save changes")}
@@ -324,6 +327,46 @@ function PartialPaymentSection({
           )}
         </FormField>
       )}
+    </section>
+  );
+}
+
+interface GuestCheckoutSectionProps {
+  initialEnabled: boolean;
+}
+
+/**
+ * Per-venue opt-in for silent-account guest checkout. Hidden `value="false"`
+ * pairs with checkbox `value="true"` so `Object.fromEntries(form)` resolves
+ * to the checkbox state regardless of checked/unchecked.
+ */
+function GuestCheckoutSection({ initialEnabled }: GuestCheckoutSectionProps) {
+  return (
+    <section className="space-y-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-fg-subtle)]">
+        Guest checkout
+      </h2>
+      <p className="text-xs text-[var(--color-fg-subtle)]">
+        Let players book without creating an account first. We&rsquo;ll email them a one-click
+        sign-in link so they can pay, see their receipt, and manage the booking later. Most venues
+        see fewer drop-offs with this on.
+      </p>
+      <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-subtle)] p-3 text-sm">
+        <input type="hidden" name="allowGuestCheckout" value="false" />
+        <input
+          type="checkbox"
+          name="allowGuestCheckout"
+          value="true"
+          defaultChecked={initialEnabled}
+          className="mt-0.5 size-4 accent-[var(--color-brand)]"
+        />
+        <span>
+          <span className="block font-medium">Allow guest checkout</span>
+          <span className="block text-xs text-[var(--color-fg-subtle)]">
+            When off, players must sign in or create an account before booking.
+          </span>
+        </span>
+      </label>
     </section>
   );
 }

@@ -243,6 +243,7 @@ export async function createVenue(args: {
       coverImagePath: args.input.coverImagePath,
       allowPartialPayment: args.input.allowPartialPayment,
       depositPercent: args.input.allowPartialPayment ? args.input.depositPercent : null,
+      allowGuestCheckout: args.input.allowGuestCheckout,
       status: "draft",
     })
     .returning();
@@ -280,6 +281,7 @@ export async function updateVenue(args: {
       coverImagePath: args.input.coverImagePath,
       allowPartialPayment: args.input.allowPartialPayment,
       depositPercent: args.input.allowPartialPayment ? args.input.depositPercent : null,
+      allowGuestCheckout: args.input.allowGuestCheckout,
       updatedAt: new Date(),
     })
     .where(and(eq(venues.id, args.venueId), eq(venues.version, args.expectedVersion)))

@@ -84,6 +84,16 @@ export const venueUpsertSchema = z
     .union([z.literal("on"), z.literal("true"), z.literal("false"), z.literal("")])
     .optional()
     .transform((v) => v === "on" || v === "true"),
+  /**
+   * Per-venue opt-in for silent-account guest checkout. When true (the
+   * default) unauthenticated players can complete a booking by supplying
+   * name/email/phone; the server creates a profile and emails a magic-link
+   * sign-in. When false the booking action redirects to /sign-in.
+   */
+  allowGuestCheckout: z
+    .union([z.literal("on"), z.literal("true"), z.literal("false"), z.literal("")])
+    .optional()
+    .transform((v) => v !== "false"),
   depositPercent: z
     .string()
     .trim()
