@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { and, eq, inArray } from "drizzle-orm";
@@ -74,6 +74,14 @@ export default async function BookCourtPage({
     originalCourtName: string;
     totalCentavos: string;
   } | undefined;
+  if (rebookParam && !player) {
+    // Free-rebook is bound to the player who owns the parent booking — we
+    // need a session to verify ownership before locking in the no-pay flow.
+    // Without this, an expired session silently degraded to a full-price
+    // fresh booking. Punt to sign-in and bring them back to this exact URL.
+    const next = encodeURIComponent(`/venues/${slug}/book?rebook=${rebookParam}`);
+    redirect(`/sign-in?next=${next}`);
+  }
   if (rebookParam && player) {
     const parentRows = await db
       .select({
