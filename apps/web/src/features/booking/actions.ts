@@ -59,10 +59,23 @@ const startBookingSchema = z.object({
 const guestBlockSchema = z.object({
   displayName: z.string().trim().min(1).max(80),
   email: z.string().trim().toLowerCase().email().max(254),
+  /**
+   * Accepts the two PH mobile formats players actually type:
+   *   - "+639171234567" (E.164)
+   *   - "09171234567"   (national)
+   * Whitespace and hyphens are tolerated. Always normalised to "+63XXXXXXXXXX"
+   * so downstream code (Supabase profile, owner CRM exports) is uniform.
+   */
   phoneE164: z
     .string()
     .trim()
-    .regex(/^\+63\d{10}$/, "Use Philippine format: +63XXXXXXXXXX"),
+    .transform((v) => v.replace(/[\s-]/g, ""))
+    .pipe(
+      z
+        .string()
+        .regex(/^(?:\+63\d{10}|09\d{9})$/, "Enter a valid PH mobile (e.g. 09171234567)")
+        .transform((v) => (v.startsWith("0") ? `+63${v.slice(1)}` : v)),
+    ),
 });
 
 const cancelSchema = z.object({ bookingId: z.string().uuid() });

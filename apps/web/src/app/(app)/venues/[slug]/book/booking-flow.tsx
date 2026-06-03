@@ -1245,7 +1245,11 @@ function Step1Body({
 
   const trimmedEmail = editEmail.trim().toLowerCase();
   const trimmedEmailConfirm = editEmailConfirm.trim().toLowerCase();
-  const phoneOk = /^\+63\d{10}$/.test(editPhone.trim());
+  // Accept both PH mobile formats players actually type:
+  //   "09171234567" (national) and "+639171234567" (E.164).
+  // Server normalises to +63 — keep client lenient so Continue enables on
+  // the more common "09..." input. Whitespace and hyphens are stripped.
+  const phoneOk = /^(?:\+63\d{10}|09\d{9})$/.test(editPhone.replace(/[\s-]/g, "").trim());
   const emailConfirmMismatch =
     isGuestCheckout && trimmedEmailConfirm.length > 0 && trimmedEmail !== trimmedEmailConfirm;
   const canProceed =
@@ -1425,7 +1429,7 @@ function Step1Body({
             label="Mobile Number"
             hint={
               isGuestCheckout
-                ? "Required. Format: +63 followed by 10 digits (e.g. +639171234567)"
+                ? "Required. e.g. 09171234567 or +639171234567"
                 : "Required for booking updates"
             }
           >
@@ -1435,7 +1439,7 @@ function Step1Body({
                 type="tel"
                 value={editPhone}
                 onChange={(e) => onPhoneChange(e.target.value)}
-                placeholder="+639171234567"
+                placeholder="09171234567"
                 required={isGuestCheckout}
                 autoComplete="tel"
                 inputMode="tel"
