@@ -289,7 +289,6 @@ export const payments = pgTable("payments", {
   receiptHash: text("receipt_hash").notNull(),
   amountCentavos: bigint("amount_centavos", { mode: "bigint" }).notNull(),
   gcashReferenceNumber: text("gcash_reference_number"),
-  gcashSenderMobile: text("gcash_sender_mobile"),
   status: paymentStatusEnum("status").notNull().default("submitted"),
   submittedBy: uuid("submitted_by")
     .notNull()
@@ -637,7 +636,6 @@ export const openPlaySignupPayments = pgTable("open_play_signup_payments", {
   receiptHash: text("receipt_hash").notNull(),
   amountCentavos: bigint("amount_centavos", { mode: "bigint" }).notNull(),
   gcashReferenceNumber: text("gcash_reference_number"),
-  gcashSenderMobile: text("gcash_sender_mobile"),
   status: paymentStatusEnum("status").notNull().default("submitted"),
   submittedBy: uuid("submitted_by").notNull().references(() => profiles.id),
   submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),

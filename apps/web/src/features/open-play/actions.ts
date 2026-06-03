@@ -342,10 +342,6 @@ const submitReceiptSchema = z.object({
     .min(1, "GCash reference number is required")
     .min(6, "GCash reference must be at least 6 characters")
     .max(20, "GCash reference must be 20 characters or less"),
-  gcashSenderMobile: z
-    .string()
-    .trim()
-    .regex(/^09\d{9}$/, "Enter a valid GCash number (e.g. 09171234567)"),
 });
 
 export async function submitSignupReceiptAction(
@@ -359,11 +355,9 @@ export async function submitSignupReceiptAction(
   if (!rl.allowed) return fail(rateLimitMessage(rl.resetMs), "rate_limited");
 
   const ref = form.get("gcashReferenceNumber");
-  const mobile = form.get("gcashSenderMobile");
   const parsed = submitReceiptSchema.safeParse({
     signupId: form.get("signupId"),
     gcashReferenceNumber: typeof ref === "string" ? ref : "",
-    gcashSenderMobile: typeof mobile === "string" ? mobile : "",
   });
   if (!parsed.success) {
     return {
@@ -400,7 +394,6 @@ export async function submitSignupReceiptAction(
       receiptHash: upload.data.hashHex,
       amountCentavos: signup.totalCentavos,
       gcashReferenceNumber: parsed.data.gcashReferenceNumber,
-      gcashSenderMobile: parsed.data.gcashSenderMobile,
     });
   } catch (err) {
     return unwrap(err);

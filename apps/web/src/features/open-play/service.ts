@@ -493,7 +493,6 @@ export async function submitSignupPayment(
           receiptHash: data.receiptHash,
           amountCentavos: data.amountCentavos,
           gcashReferenceNumber: data.gcashReferenceNumber ?? null,
-          gcashSenderMobile: data.gcashSenderMobile ?? null,
           status: "submitted",
           submittedBy: data.playerId,
         } as NewOpenPlaySignupPayment,
