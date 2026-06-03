@@ -415,7 +415,7 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<Payment>
       issues: parsed.error.flatten(),
     });
   }
-  const { bookingId, playerId, receiptImagePath, receiptHash, amountCentavos, gcashReferenceNumber } =
+  const { bookingId, playerId, receiptImagePath, receiptHash, amountCentavos, gcashReferenceNumber, gcashSenderMobile } =
     parsed.data;
 
   return db.transaction(async (tx) => {
@@ -450,6 +450,7 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<Payment>
           receiptHash,
           amountCentavos,
           gcashReferenceNumber: gcashReferenceNumber ?? null,
+          gcashSenderMobile: gcashSenderMobile ?? null,
           submittedBy: playerId,
         } as Parameters<typeof repo.insertPayment>[0],
         tx,

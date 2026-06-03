@@ -148,6 +148,7 @@ export const submitSignupPaymentInputSchema = z.object({
   receiptHash: z.string().min(1),
   amountCentavos: z.bigint().positive(),
   gcashReferenceNumber: z.string().trim().min(6).max(20),
+  gcashSenderMobile: z.string().regex(/^09\d{9}$/, "Enter a valid GCash number (e.g. 09171234567)"),
 });
 export type SubmitSignupPaymentInput = z.infer<typeof submitSignupPaymentInputSchema>;
 

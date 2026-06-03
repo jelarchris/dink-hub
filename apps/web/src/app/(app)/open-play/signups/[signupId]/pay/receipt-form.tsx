@@ -163,6 +163,29 @@ export function OpenPlayReceiptForm({
         )}
       </FormField>
 
+      {/* GCash sender mobile (required) */}
+      <FormField
+        id="gcashSenderMobile"
+        label="GCash mobile number"
+        hint="The number you sent from (e.g. 09171234567)"
+        error={fieldErrors?.gcashSenderMobile?.[0]}
+      >
+        {({ id, describedBy, invalid }) => (
+          <Input
+            id={id}
+            name="gcashSenderMobile"
+            type="tel"
+            inputMode="numeric"
+            placeholder="e.g. 09171234567"
+            required
+            minLength={11}
+            maxLength={11}
+            aria-describedby={describedBy}
+            invalid={invalid}
+          />
+        )}
+      </FormField>
+
       {/* GCash reference (required) */}
       <FormField
         id="gcashReferenceNumber"
