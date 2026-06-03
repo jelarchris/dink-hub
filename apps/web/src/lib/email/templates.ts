@@ -1355,9 +1355,11 @@ export function openPlaySignupLateConfirmedEmail(ctx: OpenPlayEmailContext & {
 // ---------------------------------------------------------------------------
 export function guestBookingMagicLinkEmail(ctx: BookingEmailContext & {
   playerDisplayName: string;
+  playerEmail: string;
   magicLinkUrl: string | null;
   payUrl: string;
   isNewAccount: boolean;
+  tempPassword?: string;
 }) {
   const when = formatBookingWindow(ctx.startAt, ctx.endAt);
   const total = formatPHP(ctx.totalCentavos);
@@ -1373,6 +1375,23 @@ export function guestBookingMagicLinkEmail(ctx: BookingEmailContext & {
   const ctaHref = ctx.magicLinkUrl ?? ctx.payUrl;
   const ctaLabel = ctx.magicLinkUrl ? "Sign in & view booking" : "Open payment page";
 
+  // Only NEW accounts get a password (existing accounts already have one set
+  // by the player). Render a clearly-labelled credentials block so the user
+  // can copy-paste into the sign-in form later.
+  const credentialsHtml = ctx.isNewAccount && ctx.tempPassword
+    ? `
+        <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;">
+          <p style="margin:0 0 8px 0;"><strong>Your DinkHub login</strong></p>
+          <p style="margin:0 0 4px 0;">Email: <strong>${escapeHtml(ctx.playerEmail)}</strong></p>
+          <p style="margin:0 0 8px 0;">Password: <strong style="font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:0.5px;">${escapeHtml(ctx.tempPassword)}</strong></p>
+          <p style="margin:0;color:#065f46;font-size:13px;">Save this email or change your password later in your profile settings.</p>
+        </div>
+      `
+    : "";
+  const credentialsText = ctx.isNewAccount && ctx.tempPassword
+    ? `Your DinkHub login\nEmail: ${ctx.playerEmail}\nPassword: ${ctx.tempPassword}\n(Save this email or change the password later in your profile settings.)\n\n`
+    : "";
+
   return {
     subject: `Your booking at ${ctx.venueName} - reserved`,
     html: shell({
@@ -1387,6 +1406,7 @@ export function guestBookingMagicLinkEmail(ctx: BookingEmailContext & {
         </div>
         <p style="margin:0 0 12px 0;"><strong>Next step:</strong> transfer the total via GCash to the venue and upload your receipt on the payment page. Your slot is held for 15 minutes.</p>
         ${magicHtml}
+        ${credentialsHtml}
       `,
       ctaHref,
       ctaLabel,
@@ -1397,6 +1417,7 @@ export function guestBookingMagicLinkEmail(ctx: BookingEmailContext & {
       `Next step: pay via GCash and upload your receipt within 15 minutes.\n\n` +
       (ctx.magicLinkUrl
         ? `Sign in & view booking: ${ctx.magicLinkUrl}\n`
-        : `Open payment page: ${ctx.payUrl}\n`),
+        : `Open payment page: ${ctx.payUrl}\n`) +
+      (credentialsText ? `\n${credentialsText}` : ""),
   };
 }

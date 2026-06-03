@@ -1,8 +1,10 @@
 import "server-only";
+import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { profiles } from "@/db/schema";
 import { createServiceClient } from "@/lib/supabase/service";
+import { createClient as createSsrClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { captureException } from "@/lib/observability";
 
@@ -19,6 +21,29 @@ export interface GuestPlayerResolution {
   isNew: boolean;
   /** True if the existing profile was created via guest checkout (no password yet). */
   isGuest: boolean;
+  /**
+   * Auto-generated password set on the new auth user, so the player can log
+   * in with email + password later (in addition to the magic link). Only
+   * populated when `isNew === true`. NEVER log this value.
+   */
+  tempPassword: string | null;
+}
+
+/**
+ * Generate a human-readable, copy-paste-friendly temp password for guest
+ * accounts. ~71 bits of entropy — plenty for an account whose primary auth
+ * is the magic link delivered to the same inbox. Avoids ambiguous chars
+ * (0/O, 1/l/I) so users don't mistype when copying from email.
+ */
+function generateGuestPassword(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = randomBytes(12);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    const byte = bytes[i] ?? 0;
+    out += alphabet[byte % alphabet.length];
+  }
+  return out;
 }
 
 export class GuestCheckoutError extends Error {
@@ -77,6 +102,7 @@ export async function resolveOrCreateGuestPlayer(
       id: existingRow.id,
       isNew: false,
       isGuest: existingRow.signupMethod === "guest_magic_link",
+      tempPassword: null,
     };
   }
 
@@ -85,9 +111,15 @@ export async function resolveOrCreateGuestPlayer(
   // in without an extra verification step (their email is implicitly
   // verified by the fact that the magic link itself can only reach the
   // inbox they typed).
+  //
+  // We ALSO set an auto-generated password so the player has a second
+  // login mechanism (email + password) in addition to the magic link.
+  // The password is emailed to them once and not stored anywhere else.
   const admin = createServiceClient();
+  const tempPassword = generateGuestPassword();
   const { data, error } = await admin.auth.admin.createUser({
     email,
+    password: tempPassword,
     email_confirm: true,
     user_metadata: {
       display_name: displayName,
@@ -110,6 +142,7 @@ export async function resolveOrCreateGuestPlayer(
         id: racedRow.id,
         isNew: false,
         isGuest: racedRow.signupMethod === "guest_magic_link",
+        tempPassword: null,
       };
     }
     captureException(error ?? new Error("createUser returned no user"), {
@@ -145,7 +178,56 @@ export async function resolveOrCreateGuestPlayer(
     );
   }
 
-  return { id: authUserId, isNew: true, isGuest: true };
+  return { id: authUserId, isNew: true, isGuest: true, tempPassword };
+}
+
+/**
+ * Sign the guest into the current request's Supabase session by generating
+ * a one-time magic-link token (admin API) and immediately verifying it via
+ * the SSR cookie-bound client. This writes the auth cookies so the very
+ * next Server Action (e.g. receipt upload) sees a real `getCurrentUser()`.
+ *
+ * Best-effort: returns `false` on any failure. The booking is already saved
+ * and the player can still finish via the magic-link email or by signing in
+ * with their auto-generated password — we never block the booking flow on
+ * a flaky token round-trip.
+ *
+ * MUST only be called from a Server Action (cookie writes are silently
+ * dropped from Server Components).
+ */
+export async function signInGuestServerSide(email: string): Promise<boolean> {
+  try {
+    const admin = createServiceClient();
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+    });
+    const tokenHash = data?.properties?.hashed_token;
+    if (error || !tokenHash) {
+      captureException(error ?? new Error("generateLink returned no token_hash"), {
+        scope: "guest.autoSignIn.generateLink",
+        extra: { email },
+      });
+      return false;
+    }
+
+    const ssr = await createSsrClient();
+    const { error: verifyError } = await ssr.auth.verifyOtp({
+      type: "email",
+      token_hash: tokenHash,
+    });
+    if (verifyError) {
+      captureException(verifyError, {
+        scope: "guest.autoSignIn.verifyOtp",
+        extra: { email },
+      });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    captureException(err, { scope: "guest.autoSignIn", extra: { email } });
+    return false;
+  }
 }
 
 /**

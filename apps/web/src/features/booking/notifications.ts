@@ -562,7 +562,7 @@ export async function notifyLateConfirmed(bookingId: string, reason: string): Pr
 // fallback if magic-link generation failed.
 export async function notifyGuestBookingMagicLink(
   bookingId: string,
-  opts: { isNewAccount: boolean },
+  opts: { isNewAccount: boolean; tempPassword?: string },
 ): Promise<void> {
   try {
     const ctx = await loadBookingJoin(bookingId);
@@ -581,9 +581,11 @@ export async function notifyGuestBookingMagicLink(
       endAt: ctx.endAt,
       totalCentavos: ctx.totalCentavos,
       playerDisplayName: ctx.playerDisplayName,
+      playerEmail: ctx.playerEmail,
       magicLinkUrl,
       payUrl,
       isNewAccount: opts.isNewAccount,
+      ...(opts.tempPassword ? { tempPassword: opts.tempPassword } : {}),
     });
     await sendEmail({ to: ctx.playerEmail, ...tpl, tag: "guest_booking_magic_link" });
   } catch (err) {

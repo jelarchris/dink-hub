@@ -18,7 +18,7 @@ import {
   notifyGuestBookingMagicLink,
 } from "@/features/booking/notifications";
 import { getCurrentUser } from "@/features/auth/service";
-import { resolveOrCreateGuestPlayer, GuestCheckoutError } from "@/features/auth/guest";
+import { resolveOrCreateGuestPlayer, signInGuestServerSide, GuestCheckoutError } from "@/features/auth/guest";
 import { findActiveVenueBySlug } from "@/features/venues";
 import { getClientIp } from "@/lib/client-ip";
 import { type ActionResult } from "@/features/auth";
@@ -113,7 +113,14 @@ async function resolvePlayerForBooking(
   venueSlug: string,
 ):
   Promise<
-    | { ok: true; playerId: string; isGuest: boolean; isNewGuest: boolean }
+    | {
+        ok: true;
+        playerId: string;
+        isGuest: boolean;
+        isNewGuest: boolean;
+        guestEmail: string | null;
+        guestTempPassword: string | null;
+      }
     | { ok: false; error: Extract<ActionResult<never>, { ok: false }> }
   > {
   const user = await getCurrentUser();
@@ -125,7 +132,14 @@ async function resolvePlayerForBooking(
         error: { ok: false, code: "rate_limited", message: rateLimitMessage(rl.resetMs) },
       };
     }
-    return { ok: true, playerId: user.id, isGuest: false, isNewGuest: false };
+    return {
+      ok: true,
+      playerId: user.id,
+      isGuest: false,
+      isNewGuest: false,
+      guestEmail: null,
+      guestTempPassword: null,
+    };
   }
 
   // Guest path. Venue must opt in.
@@ -167,11 +181,17 @@ async function resolvePlayerForBooking(
 
   try {
     const resolution = await resolveOrCreateGuestPlayer(parsedGuest.data);
+    // Auto sign-in: write Supabase session cookies so the upcoming receipt
+    // upload (which calls getCurrentUser()) sees a real user. Best-effort —
+    // the booking is saved either way; the magic-link email is the fallback.
+    await signInGuestServerSide(parsedGuest.data.email);
     return {
       ok: true,
       playerId: resolution.id,
       isGuest: true,
       isNewGuest: resolution.isNew,
+      guestEmail: parsedGuest.data.email.trim().toLowerCase(),
+      guestTempPassword: resolution.tempPassword,
     };
   } catch (err) {
     return { ok: false, error: unwrap(err) };
@@ -233,8 +253,12 @@ export async function startBookingAction(form: FormData): Promise<ActionResult> 
   }
 
   if (resolved.isGuest) {
+    const tempPassword = resolved.guestTempPassword;
     after(() =>
-      notifyGuestBookingMagicLink(bookingId, { isNewAccount: resolved.isNewGuest }),
+      notifyGuestBookingMagicLink(bookingId, {
+        isNewAccount: resolved.isNewGuest,
+        ...(tempPassword ? { tempPassword } : {}),
+      }),
     );
   }
 
@@ -328,8 +352,12 @@ export async function startBookingReturningIdAction(
   }
 
   if (resolved.isGuest) {
+    const tempPassword = resolved.guestTempPassword;
     after(() =>
-      notifyGuestBookingMagicLink(bookingId, { isNewAccount: resolved.isNewGuest }),
+      notifyGuestBookingMagicLink(bookingId, {
+        isNewAccount: resolved.isNewGuest,
+        ...(tempPassword ? { tempPassword } : {}),
+      }),
     );
   }
 
